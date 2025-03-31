@@ -68,6 +68,8 @@ Refer to the section [Initializing NovaAct](#initializing-novaact) to learn abou
 
 ### Interactive mode
 
+_**NOTE**: NovaAct does not yet support `ipython`; for now, use your standard Python shell._
+
 Using interactive Python is a nice way to experiment:
 
 ```sh
@@ -105,37 +107,31 @@ When prompting Nova Act:
 **1. Be prescriptive and succinct in what the agent should do**
 
 ❌ DON'T
-
 ```python
 n.act("From my order history, find my most recent order from India Palace and reorder it")
 ```
 
 ✅ DO
-
 ```python
 n.act("Click the hamburger menu icon, go to Order History, find my most recent order from India Palace and reorder it")
 ```
 
 ❌ DON'T
-
 ```python
 n.act("Let's see what routes vta offers")
 ```
 
 ✅ DO
-
 ```python
 n.act("Navigate to the routes tab")
 ```
 
 ❌ DON'T
-
 ```python
 n.act("I want to go and meet a friend. I should figure out when the Orange Line comes next.")
 ```
 
 ✅ DO
-
 ```python
 n.act(f"Find the next departure time for the Orange Line from Government Center after {time}")
 ```
@@ -143,13 +139,11 @@ n.act(f"Find the next departure time for the Orange Line from Government Center 
 **2. Break up large acts into smaller ones**
 
 ❌ DON'T
-
 ```python
 n.act("book me a hotel that costs less than $100 with the highest star rating")
 ```
 
 ✅ DO
-
 ```python
 n.act(f"search for hotels in Houston between {startdate} and {enddate}")
 n.act("sort by avg customer review")
