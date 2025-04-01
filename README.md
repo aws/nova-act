@@ -56,10 +56,10 @@ pip install nova-act
 ```python
 from nova_act import NovaAct
 
-with NovaAct(starting_page="https://www.amazon.com") as n:
-    n.act("search for a coffee maker")
-    n.act("select the first result")
-    n.act("scroll down or up until you see 'add to cart' and then click 'add to cart'")
+with NovaAct(starting_page="https://www.amazon.com") as nova:
+    nova.act("search for a coffee maker")
+    nova.act("select the first result")
+    nova.act("scroll down or up until you see 'add to cart' and then click 'add to cart'")
 ```
 
 The SDK will (1) open Chrome, (2) navigate to a coffee maker product detail page on Amazon.com and add it to the cart, and then (3) close Chrome. Details of the run will be printed as console log messages.
@@ -77,15 +77,15 @@ Using interactive Python is a nice way to experiment:
 Python 3.10.16 (main, Dec  3 2024, 17:27:57) [Clang 16.0.0 (clang-1600.0.26.4)] on darwin
 Type "help", "copyright", "credits" or "license" for more information.
 >>> from nova_act import NovaAct
->>> n = NovaAct(starting_page="https://www.amazon.com")
->>> n.start()
->>> n.act("search for a coffee maker")
+>>> nova = NovaAct(starting_page="https://www.amazon.com")
+>>> nova.start()
+>>> nova.act("search for a coffee maker")
 ```
 
 Once the agent completes the step above, you can enter the next step:
 
 ```sh
->>> n.act("select the first result")
+>>> nova.act("select the first result")
 ```
 
 Feel free to manipulate the browser in between these `act()` calls as well, but please don't interact with the browser when an `act()` is running because the underlying model will not know what you've changed!
@@ -108,47 +108,47 @@ When prompting Nova Act:
 
 ❌ DON'T
 ```python
-n.act("From my order history, find my most recent order from India Palace and reorder it")
+nova.act("From my order history, find my most recent order from India Palace and reorder it")
 ```
 
 ✅ DO
 ```python
-n.act("Click the hamburger menu icon, go to Order History, find my most recent order from India Palace and reorder it")
+nova.act("Click the hamburger menu icon, go to Order History, find my most recent order from India Palace and reorder it")
 ```
 
 ❌ DON'T
 ```python
-n.act("Let's see what routes vta offers")
+nova.act("Let's see what routes vta offers")
 ```
 
 ✅ DO
 ```python
-n.act("Navigate to the routes tab")
+nova.act("Navigate to the routes tab")
 ```
 
 ❌ DON'T
 ```python
-n.act("I want to go and meet a friend. I should figure out when the Orange Line comes next.")
+nova.act("I want to go and meet a friend. I should figure out when the Orange Line comes next.")
 ```
 
 ✅ DO
 ```python
-n.act(f"Find the next departure time for the Orange Line from Government Center after {time}")
+nova.act(f"Find the next departure time for the Orange Line from Government Center after {time}")
 ```
 
 **2. Break up large acts into smaller ones**
 
 ❌ DON'T
 ```python
-n.act("book me a hotel that costs less than $100 with the highest star rating")
+nova.act("book me a hotel that costs less than $100 with the highest star rating")
 ```
 
 ✅ DO
 ```python
-n.act(f"search for hotels in Houston between {startdate} and {enddate}")
-n.act("sort by avg customer review")
-n.act("hit book on the first hotel that is $100 or less")
-n.act(f"fill in my name, address, and DOB according to {blob}")
+nova.act(f"search for hotels in Houston between {startdate} and {enddate}")
+nova.act("sort by avg customer review")
+nova.act("hit book on the first hotel that is $100 or less")
+nova.act(f"fill in my name, address, and DOB according to {blob}")
 ...
 ```
 
@@ -181,8 +181,8 @@ def get_books(year: int) -> BookList | None:
     """
     with NovaAct(
         starting_page=f"https://en.wikipedia.org/wiki/List_of_The_New_York_Times_number-one_books_of_{year}#Fiction"
-    ) as n:
-        result = n.act("Return the books in the Fiction list",
+    ) as nova:
+        result = nova.act("Return the books in the Fiction list",
                        # Specify the schema for parsing.
                        schema=BookList.model_json_schema())
         if not result.matches_schema:
@@ -199,8 +199,8 @@ Example:
 ```python
 from nova_act import NovaAct, BOOL_SCHEMA
 
-with NovaAct(starting_page="https://www.amazon.com") as n:
-    result = n.act("Am I logged in?", schema=BOOL_SCHEMA)
+with NovaAct(starting_page="https://www.amazon.com") as nova:
+    result = nova.act("Am I logged in?", schema=BOOL_SCHEMA)
     if not result.matches_schema:
         # act response did not match the schema ¯\_(ツ)_/¯
         print(f"Invalid result: {result=}")
@@ -284,17 +284,17 @@ To enter a password or sensitive information (credit card, social security numbe
 
 ```python
 # Sign in.
-n.act("enter username janedoe and click on the password field")
+nova.act("enter username janedoe and click on the password field")
 # Collect the password from the command line and enter it via playwright. (Does not get sent over the network.)
-n.page.keyboard.type(getpass())
+nova.page.keyboard.type(getpass())
 # Now that username and password is filled in, ask NovaAct to proceed.
-n.act("sign in")
+nova.act("sign in")
 ```
 
 > **NOTE:** We are aware of an issue where sometimes a page element can not be put into focus by the agent. We are actively working on a fix for this. In the interim, to work around this you can instruct Nova Act in this way:
 > ```python
-> n.act("enter '' in the password field")
-> n.page.keyboard.type(getpass())
+> nova.act("enter '' in the password field")
+> nova.page.keyboard.type(getpass())
 > ```
 
 ### Captchas
@@ -305,7 +305,7 @@ NovaAct will not solve captchas. It is up to the user to do that. If your script
 2. If so, pause the workflow and ask the user to get past the captcha, e.g. using `input()` for a workflow launched from a terminal, and then let the user resume once the flow is past the captcha.
 
 ```python
-result = n.act("Is there a captcha on the screen?", schema=BOOL_SCHEMA)
+result = nova.act("Is there a captcha on the screen?", schema=BOOL_SCHEMA)
 if result.matches_schema and result.parsed_response:
     input("Please solve the captcha and hit return when done")
 ...
@@ -314,14 +314,14 @@ if result.matches_schema and result.parsed_response:
 ### Search on a website
 
 ```python
-n.page.goto(website_url)
-n.act("search for cats")
+nova.page.goto(website_url)
+nova.act("search for cats")
 ```
 
 If the model has trouble finding the search button, you can instruct it to press enter to initiate the search.
 
 ```python
-n.act("search for cats. type enter to initiate the search.")
+nova.act("search for cats. type enter to initiate the search.")
 ```
 
 ### File download
@@ -330,8 +330,8 @@ You can use playwright to download a file on a web page.
 
 ```python
 # Ask playwright to capture any downloads, then actuate the page to initiate it.
-with n.page.expect_download() as download_info:
-    n.act("click on the download button")
+with nova.page.expect_download() as download_info:
+    nova.act("click on the download button")
 
 # Temp path for the download is available.
 print(f"Downloaded file {download_info.value.path()}")
@@ -345,7 +345,7 @@ download_info.value.save_as("my_downloaded_file")
 Specifying the start and end dates in absolute time works best.
 
 ```python
-n.act("select dates march 23 to march 28")
+nova.act("select dates march 23 to march 28")
 ```
 
 ### Setting the browser user agent
@@ -353,7 +353,7 @@ n.act("select dates march 23 to march 28")
 Nova Act comes with Playwright's Chrome and Chromium browsers. These use the default User Agent set by Playwright. You can override this with the `user_agent` option:
 
 ```python
-n = NovaAct(..., user_agent="MyUserAgent/2.7")
+nova = NovaAct(..., user_agent="MyUserAgent/2.7")
 ```
 
 ### Logging
@@ -438,9 +438,9 @@ When using interactive mode, ctrl+x can exit the agent action leaving the browse
 This can be used to retrieve current state of the browser, for example a screenshot or the DOM, or actuate it:
 
 ```python
-screenshot_bytes = n.page.screenshot()
-dom_string = n.page.content()
-n.page.keyboard.type("hello")
+screenshot_bytes = nova.page.screenshot()
+dom_string = nova.page.content()
+nova.page.keyboard.type("hello")
 ```
 
 ## Report a Bug

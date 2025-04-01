@@ -51,16 +51,14 @@ def add_biking_distance(apartment: Apartment, caltrain_city: str, headless: bool
     with NovaAct(
         starting_page="https://maps.google.com/",
         headless=headless,
-    ) as client:
-        client.act(
+    ) as nova:
+        nova.act(
             f"Search for {caltrain_city} Caltrain station and press enter. "
             "Click Directions. "
             f"Enter '{apartment.address}' into the starting point field and press enter. "
             "Click the bicycle icon for cycling directions."
         )
-        result = client.act(
-            "Return the shortest time and distance for biking", schema=CaltrainBiking.model_json_schema()
-        )
+        result = nova.act("Return the shortest time and distance for biking", schema=CaltrainBiking.model_json_schema())
         if not result.matches_schema:
             print(f"Invalid JSON {result=}")
             return None
@@ -80,9 +78,9 @@ def main(
     with NovaAct(
         starting_page="https://zumper.com/",
         headless=headless,
-    ) as client:
+    ) as nova:
 
-        client.act(
+        nova.act(
             "Close any cookie banners. "
             f"Search for apartments near {caltrain_city}, CA, "
             f"then filter for {bedrooms} bedrooms and {baths} bathrooms. "
@@ -91,7 +89,7 @@ def main(
         )
 
         for _ in range(5):  # Scroll down a max of 5 times.
-            result = client.act(
+            result = nova.act(
                 "Return the currently visible list of apartments", schema=ApartmentList.model_json_schema()
             )
             if not result.matches_schema:
@@ -101,7 +99,7 @@ def main(
             all_apartments.extend(apartment_list.apartments)
             if len(all_apartments) >= min_apartments_to_find:
                 break
-            client.act("Scroll down once")
+            nova.act("Scroll down once")
 
         print(f"Found apartments: {all_apartments}")
 

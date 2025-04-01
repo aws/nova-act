@@ -32,8 +32,8 @@ def main(user_data_dir: str, order: str = "Shroomami", headless: bool = False):
         starting_page="https://order.sweetgreen.com",
         user_data_dir=user_data_dir,
         headless=headless,
-    ) as client:
-        client.act(
+    ) as nova:
+        nova.act(
             "If there is a cookie banner, close it. "
             "Click Menu at the top of the page. "
             "Click Delivery on the sidebar. "

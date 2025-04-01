@@ -26,10 +26,10 @@ def main(record_video: bool = False):
     with NovaAct(
         starting_page="https://www.amazon.com",
         record_video=record_video,
-    ) as n:
-        n.act("search for a coffee maker")
-        n.act("select the first result")
-        n.act("scroll down or up until you see 'add to cart' and then click 'add to cart'")
+    ) as nova:
+        nova.act("search for a coffee maker")
+        nova.act("select the first result")
+        nova.act("scroll down or up until you see 'add to cart' and then click 'add to cart'")
 
 
 if __name__ == "__main__":
