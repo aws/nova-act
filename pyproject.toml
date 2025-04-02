@@ -14,7 +14,7 @@ requires-python = ">=3.10"
 authors = [
   {name = "Amazon Nova Act", email="nova-act@amazon.com"},
 ]
-license = {file = "LICENSE"}
+license = "Apache-2.0"
 readme = "README.md"
 
 [project.optional-dependencies]
