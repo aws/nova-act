@@ -5,7 +5,7 @@ jsonschema
 pandas
 pillow
 playwright==1.48.0
-pydantic
+pydantic>=2.10.6
 requests
 retry
 pytz
