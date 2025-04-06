@@ -72,7 +72,7 @@ def validate_url(url: str, state: str) -> None:
         raise InvalidURL(f"{state} URL provided is not a string.")
 
     result = urlparse(url)
-    if not all([result.scheme, result.netloc]):
+    if result.scheme != "file" and not all([result.scheme, result.netloc]):
         raise InvalidURL(f"{state} URL provided is invalid. Did you include http:// or https:// ?")
 
 
