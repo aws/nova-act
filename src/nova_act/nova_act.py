@@ -315,6 +315,7 @@ class NovaAct:
                 self._playwright._session_id = session_id
                 _TRACE_LOGGER.info(f"\nstart session {session_id} on {self._starting_page}\n")
                 set_logging_session(session_id)
+            self._dispatcher.wait_for_page_to_settle()
         except Exception as e:
             self.stop()
             raise StartFailed from e

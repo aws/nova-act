@@ -13,10 +13,12 @@
 # limitations under the License.
 from nova_act.impl.message_encrypter import ENCRYPTED_MESSAGE_TYPE, MessageEncrypter
 from nova_act.types.state.act import Act
+from nova_act.types.state.page import PageState
 from nova_act.types.state.step import Step
 from nova_act.util.logging import setup_logging
 
 CANCEL_PROMPT_TYPE = "autonomy-cancel-prompt"
+WAIT_FOR_PAGE_TO_SETTLE_PROMPT_TYPE = "autonomy-pending-wait-for-page-to-settle"
 REQUEST_ACCEPTED_PROMPT_TYPE = "autonomy-request-accepted"
 COMPLETION_PROMPT_TYPE = "autonomy-prompt-completion"
 DISPATCH_PROMPT_TYPE = "autonomy-pending-prompt"
@@ -57,6 +59,7 @@ class WindowMessageHandler:
 
     def __init__(self, encrypter: MessageEncrypter) -> None:
         self._act: Act | None = None
+        self._page_state: PageState | None = None
         self._encrypter: MessageEncrypter = encrypter
 
     def bind(self, act: Act):
@@ -64,23 +67,34 @@ class WindowMessageHandler:
         if act.is_complete:
             raise ValueError("Cannot bind a completed act for more observations")
         self._act = act
+        self._page_state = None
+
+    def bind_page(self, page_state: PageState):
+        if page_state.is_settled:
+            raise ValueError("Cannot bind a settled page for more observations")
+        self._act = None
+        self._page_state = page_state
 
     def handle_message(self, encrypted_message: dict | str):
         """Register observations in bound Act, if any"""
-        if self._act is not None:
-            try:
-                _LOGGER.debug("Got message %s", encrypted_message)
-                if isinstance(encrypted_message, str) and encrypted_message == "ping":
-                    return
-                if not isinstance(encrypted_message, dict):
-                    raise ValueError("Message must be a dict")
+        try:
+            _LOGGER.debug("Got message %s", encrypted_message)
+            if isinstance(encrypted_message, str) and encrypted_message == "ping":
+                return
+            if not isinstance(encrypted_message, dict):
+                raise ValueError("Message must be a dict")
 
-                message = self._encrypter.decrypt(encrypted_message)
-                if message is None:
-                    return
-                _LOGGER.debug("Decrypted %s", message)
-                message_type = message.get("type")
+            message = self._encrypter.decrypt(encrypted_message)
+            if message is None:
+                return
+            _LOGGER.debug("Decrypted %s", message)
+            message_type = message.get("type")
 
+            if self._page_state is not None:
+                if message_type == COMPLETION_PROMPT_TYPE:
+                    self._page_state.is_settled = True
+
+            if self._act is not None:
                 if message_type == COMPLETION_PROMPT_TYPE:
 
                     response = message.get("response")
@@ -102,6 +116,6 @@ class WindowMessageHandler:
                 if message_type == STEP_OBSERVATION_PROMPT_TYPE:
                     self._act.add_step(Step.from_message(message))
 
-            except Exception as ex:
-                _LOGGER.error("Error handling message in dispatcher: %s", ex, exc_info=True)
-                raise
+        except Exception as ex:
+            _LOGGER.error("Error handling message in dispatcher: %s", ex, exc_info=True)
+            raise

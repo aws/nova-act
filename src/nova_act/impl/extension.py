@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import time
+import uuid
 from contextlib import nullcontext
 from dataclasses import replace
 from typing import ContextManager, cast
@@ -25,10 +26,17 @@ from nova_act.impl.keyboard_event_watcher import KeyboardEventWatcher
 from nova_act.impl.playwright import PlaywrightInstanceManager
 from nova_act.impl.protocol import parse_errors
 from nova_act.impl.run_info_compiler import RunInfoCompiler
-from nova_act.impl.window_messages import CANCEL_PROMPT_TYPE, DISPATCH_PROMPT_TYPE, POST_MESSAGE_EXPRESSION
+from nova_act.impl.window_messages import (
+    CANCEL_PROMPT_TYPE,
+    DISPATCH_PROMPT_TYPE,
+    POST_MESSAGE_EXPRESSION,
+    WAIT_FOR_PAGE_TO_SETTLE_PROMPT_TYPE,
+)
 from nova_act.types.act_errors import ActCanceledError, ActClientError, ActDispatchError, ActError
 from nova_act.types.act_result import ActResult
+from nova_act.types.errors import InvalidPageState
 from nova_act.types.state.act import Act, ActCanceled, ActFailed, ActSucceeded
+from nova_act.types.state.page import PageState
 from nova_act.util.logging import LoadScroller, get_session_id_prefix, is_quiet, make_trace_logger, setup_logging
 
 # Check every 0.5 seconds, for a total of 30 seconds.
@@ -38,6 +46,7 @@ DEFAULT_TIMEOUT_S = 30.0
 # Give Extension 2s to accept the request; it should be instant
 EXTENSION_POLL_SLEEP_S = 0.1
 EXTENSION_TIMEOUT_S = 2.0
+MAX_WAIT_FOR_PAGE_TO_SETTLE_TIMEOUT = 60
 
 DEFAULT_ENDPOINT_NAME = "alpha-sunshine"
 
@@ -117,6 +126,41 @@ class ExtensionDispatcher:
             message="Failed to cancel Act",
             metadata=act.metadata,
         )
+
+    def wait_for_page_to_settle(self) -> None:
+        """
+        Dispatch a page state query to extension and wait for confirmation of settled.
+        """
+        page_state = PageState(self._session_id)
+
+        self._playwright_manager.window_message_handler.bind_page(page_state)
+        request_wait_for_page_state_message = {
+            "type": WAIT_FOR_PAGE_TO_SETTLE_PROMPT_TYPE,
+            "apiKey": self._nova_act_api_key,
+            "uuid": str(uuid.uuid4()),
+            "hostname": self._backend_info.api_uri,
+            "sessionId": self._session_id,
+            "useBedrock": True,
+            "maxTimeout": MAX_WAIT_FOR_PAGE_TO_SETTLE_TIMEOUT,
+        }
+
+
+        encrypted_message = self._playwright_manager.encrypter.encrypt(request_wait_for_page_state_message)
+
+        try:
+            self._playwright_manager.main_page.evaluate(POST_MESSAGE_EXPRESSION, encrypted_message)
+        except PlaywrightError:
+            if self._verbose_errors:
+                _LOGGER.error("Encountered PlaywrightError", exc_info=True)
+
+        end_time = time.time() + EXTENSION_TIMEOUT_S + MAX_WAIT_FOR_PAGE_TO_SETTLE_TIMEOUT
+        while time.time() < end_time:
+            if page_state.is_settled:
+                return
+            else:
+                self._poll_playwright(EXTENSION_POLL_SLEEP_S)
+
+        raise InvalidPageState(f"Page not settled after {MAX_WAIT_FOR_PAGE_TO_SETTLE_TIMEOUT}s, aborting")
 
     def _dispatch_prompt_and_wait_for_ack(self, act: Act):
         """Dispatch an act prompt to the extension.

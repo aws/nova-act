@@ -11,4 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-VERSION = "1.0.2277.0"  # pragma: no cover
+from attrs import define, field
+from attrs.setters import frozen
+
+
+@define
+class PageState:
+    # Required constructor params (immutable)
+    session_id: str = field(on_setattr=frozen)
+    is_settled: bool = field(factory=lambda: False, init=False)

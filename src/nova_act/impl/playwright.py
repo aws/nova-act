@@ -55,7 +55,7 @@ class PlaywrightInstanceManager:
 
     @staticmethod
     def _initialize_page(page: Page):
-        page.on("load", PlaywrightInstanceManager._add_listeners)
+        page.on("domcontentloaded", PlaywrightInstanceManager._add_listeners)
 
     def __init__(
         self,
@@ -144,7 +144,7 @@ class PlaywrightInstanceManager:
 
         # Navigate to the starting page, from the default (about:blank).
         self._initialize_page(first_page)
-        first_page.goto(self._starting_page)
+        first_page.goto(self._starting_page, wait_until="domcontentloaded")
         first_page.wait_for_selector("#autonomy-listeners-registered", state="attached")
 
         if first_video_path and os.path.exists(first_video_path):

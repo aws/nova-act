@@ -61,6 +61,10 @@ class InvalidPlaywrightState(NovaActError):
     pass
 
 
+class InvalidPageState(NovaActError):
+    pass
+
+
 class UnsupportedOperatingSystem(ValidationFailed):
     pass
 
