@@ -24,7 +24,13 @@ from playwright.sync_api import Page, Playwright
 from nova_act.impl.backend import Backend, get_urls_for_backend
 from nova_act.impl.common import get_default_extension_path, get_extension_version
 from nova_act.impl.extension import DEFAULT_ENDPOINT_NAME, ExtensionDispatcher
-from nova_act.impl.inputs import validate_base_parameters, validate_length, validate_prompt, validate_timeout
+from nova_act.impl.inputs import (
+    validate_base_parameters,
+    validate_length,
+    validate_prompt,
+    validate_timeout,
+    validate_url,
+)
 from nova_act.impl.playwright import PlaywrightInstanceManager
 from nova_act.types.act_errors import ActError
 from nova_act.types.act_result import ActResult
@@ -417,3 +423,15 @@ class NovaAct:
             response = populate_json_schema_response(response, schema)
 
         return response
+
+    def go_to_url(self, url: str) -> None:
+        """Navigates to the specified URL and waits for the page to settle."""
+
+        validate_url(url, "go_to_url")
+
+        if not self.page or not self.dispatcher:
+            raise ClientNotStarted("Run start() to start the client before running go_to_url")
+
+        self.page.goto(url, wait_until="domcontentloaded")
+        self.page.wait_for_selector("#autonomy-listeners-registered", state="attached")
+        self.dispatcher.wait_for_page_to_settle()
