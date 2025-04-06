@@ -420,6 +420,7 @@ This creates one browser session. You can create as many browser sessions as you
 `act()` takes a natural language prompt from the user and will actuate on the browser window on behalf of the user to achieve the goal. Arguments:
 
 * `max_steps` (int): Configure the maximum number of steps (browser actuations) `act()` will take before giving up on the task. Use this to make sure the agent doesn't get stuck forever trying different paths. Default is 30.
+* `timeout` (int): Number of seconds timeout for the entire act call. Prefer using `max_steps` as time per step can vary based on model server load and website latency.
 
 Returns an `ActResult`.
 
