@@ -99,7 +99,6 @@ class PlaywrightInstanceManager:
                 raise ValidationFailed("Cannot specify a user agent when connecting over CDP")
 
         self._context: BrowserContext | None = None
-        self._page: Page | None = None
         self._encrypter = MessageEncrypter()
         self._window_message_handler = WindowMessageHandler(self._encrypter)
 
@@ -233,9 +232,8 @@ class PlaywrightInstanceManager:
                 )
                 trusted_page = context.pages[0]
 
-            first_page = self._init_browser_context(context, trusted_page)
+            self._init_browser_context(context, trusted_page)
             self._context = context
-            self._page = first_page
 
         except StartFailed:
             raise
@@ -273,12 +271,14 @@ class PlaywrightInstanceManager:
         self._context = None
 
     @property
+    def _active_page(self):
+        assert self._context is not None and len(self._context.pages) > 0
+        return self._context.pages[-1]
+
+    @property
     def main_page(self):
         """Get an open page on which to send messages"""
-        if self._context is None:
-            raise ClientNotStarted("Playwright not attached, run start() to start")
-
-        return self._page
+        return self.get_page(-1)
 
     def get_page(self, index: int) -> Page:
         """Get an open page by its index in the browser context"""
@@ -286,8 +286,7 @@ class PlaywrightInstanceManager:
             raise ClientNotStarted("Playwright not attached, run start() to start")
 
         if index == -1:
-            assert self._page is not None
-            return self._page
+            return self._active_page
 
         num_pages = len(self._context.pages)
 
