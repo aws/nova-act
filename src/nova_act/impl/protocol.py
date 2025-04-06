@@ -64,6 +64,13 @@ def parse_errors(act: Act, backend_info: BackendInfo):
     return ActProtocolError(metadata=act.metadata, message=out)
 
 
+QUOTA_MESSAGE = (
+    "We have quota limits to ensure sufficient capacity for all users. If you need dedicated "
+    "quota for a more ambitious project, please get in touch at nova-act@amazon.com. "
+    "We're excited to see what you build!"
+)
+
+
 def handle_nova_act_service_error(error_string: str, act: Act, backend_info: BackendInfo):
     message = NOVA_ACT_SERVICE_PREFIX
 
@@ -86,15 +93,12 @@ def handle_nova_act_service_error(error_string: str, act: Act, backend_info: Bac
     if 429 == code:
         if "DAILY_QUOTA_LIMIT_EXCEEDED" == error_dict.get("throttleType"):
             return ActRateLimitExceededError(
-                message=(
-                    "Daily API limit exceeded; please contact nova-act@amazon.com "
-                    "with a use case justification if you need a higher daily limit"
-                ),
+                message="Daily API limit exceeded. " + QUOTA_MESSAGE,
                 metadata=act.metadata,
             )
         if "RATE_LIMIT_EXCEEDED" == error_dict.get("throttleType"):
             return ActRateLimitExceededError(
-                message="Too many requests in a short time period",
+                message="Too many requests in a short time period. " + QUOTA_MESSAGE,
                 metadata=act.metadata,
             )
         return ActRateLimitExceededError(message=message, metadata=act.metadata)

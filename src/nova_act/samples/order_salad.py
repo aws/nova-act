@@ -27,7 +27,7 @@ import fire  # type: ignore
 from nova_act import NovaAct
 
 
-def main(user_data_dir: str, order: str = "Shroomami", headless: bool = False):
+def main(user_data_dir: str, order: str = "Shroomami", headless: bool = False) -> None:
     with NovaAct(
         starting_page="https://order.sweetgreen.com",
         user_data_dir=user_data_dir,

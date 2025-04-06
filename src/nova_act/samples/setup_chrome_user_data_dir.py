@@ -26,7 +26,7 @@ import fire  # type: ignore
 from nova_act import NovaAct
 
 
-def main(user_data_dir):
+def main(user_data_dir: str) -> None:
     os.makedirs(user_data_dir, exist_ok=True)
 
     with NovaAct(starting_page="https://amazon.com/", user_data_dir=user_data_dir, clone_user_data_dir=False):

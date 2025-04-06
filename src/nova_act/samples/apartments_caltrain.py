@@ -72,7 +72,7 @@ def main(
     baths: int = 1,
     headless: bool = False,
     min_apartments_to_find: int = 5,
-):
+) -> None:
     all_apartments: list[Apartment] = []
 
     with NovaAct(

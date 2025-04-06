@@ -22,7 +22,7 @@ import fire  # type: ignore
 from nova_act import NovaAct
 
 
-def main(record_video: bool = False):
+def main(record_video: bool = False) -> None:
     with NovaAct(
         starting_page="https://www.amazon.com",
         record_video=record_video,
