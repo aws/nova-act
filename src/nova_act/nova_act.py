@@ -317,23 +317,27 @@ class NovaAct:
                 set_logging_session(session_id)
             self._dispatcher.wait_for_page_to_settle()
         except Exception as e:
-            self.stop()
+            self._stop()
             raise StartFailed from e
 
-    def stop(self) -> None:
-        """Stop the client."""
+    def _stop(self) -> None:
         try:
-            if not self.started:
-                _LOGGER.warning("Attention: Client is already stopped.")
-                return
-            assert self._dispatcher is not None
-            self._dispatcher.cancel_prompt()
-            self._playwright.stop()
+            if self._dispatcher is not None:
+                self._dispatcher.cancel_prompt()
+            if self._playwright.started:
+                self._playwright.stop()
             self._dispatcher = None
             _TRACE_LOGGER.info("\nend session\n")
             set_logging_session(None)
         except Exception as e:
             raise StopFailed from e
+
+    def stop(self) -> None:
+        """Stop the client."""
+        if not self.started:
+            _LOGGER.warning("Attention: Client is already stopped.")
+            return
+        self._stop()
 
     def act(
         self,
