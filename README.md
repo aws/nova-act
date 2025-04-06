@@ -328,6 +328,8 @@ nova.act("search for cats. type enter to initiate the search.")
 
 You can use playwright to download a file on a web page.
 
+Through a download action button:
+
 ```python
 # Ask playwright to capture any downloads, then actuate the page to initiate it.
 with nova.page.expect_download() as download_info:
@@ -338,6 +340,15 @@ print(f"Downloaded file {download_info.value.path()}")
 
 # Now save the downloaded file permanently to a location of your choice.
 download_info.value.save_as("my_downloaded_file")
+```
+
+Download the current page (e.g. a pdf) that you have navigated to using `act()`:
+
+```python
+# Download the content using Playwright's request.
+response = nova.page.request.get(nova.page.url)
+with open("downloaded.pdf", "wb") as f:
+    f.write(response.body())
 ```
 
 ### Picking dates
