@@ -188,7 +188,11 @@ def validate_base_parameters(
     screen_width: int,
     screen_height: int,
     chrome_channel: str,
+    ignore_https_errors: bool
 ):
+    if ignore_https_errors not in [True, False]:
+        raise ValueError(f"ignore_https_errors must be True or False")
+
     validate_path(extension_path, "extension_path")
     validate_url(starting_page, "starting_page")
     validate_url(backend_uri, "backend_uri")

@@ -102,6 +102,7 @@ class NovaAct:
         user_agent: str | None = None,
         logs_directory: str | None = None,
         record_video: bool = False,
+        ignore_https_errors: bool = False,
     ):
         """Initialize a client object.
 
@@ -149,6 +150,8 @@ class NovaAct:
             Output directory for video and agent run output. Will default to a temp dir.
         record_video: bool
             Whether to record video
+        ignore_https_errors: bool
+            Whether to allow website with self-signed certificates
         """
 
         self._backend = Backend.PROD
@@ -196,6 +199,7 @@ class NovaAct:
             screen_height=screen_height,
             logs_directory=self._logs_directory,
             chrome_channel=_chrome_channel,
+            ignore_https_errors=ignore_https_errors
         )
 
         nova_act_api_key = nova_act_api_key or os.environ.get("NOVA_ACT_API_KEY")
@@ -237,6 +241,7 @@ class NovaAct:
             user_agent=user_agent,
             logs_directory=self._logs_directory,
             record_video=record_video,
+            ignore_https_errors=ignore_https_errors
         )
 
         self._dispatcher: ExtensionDispatcher | None = None
