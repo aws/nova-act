@@ -3,19 +3,19 @@
 ## Getting Access
 
 ### Question 1: How do I get access to Nova Act?
-You can request access to Nova Act through: https://nova.amazon.com/act. Sign in with your amazon.com account and click the button Sign up. You will be included in the waitlist; our team is actively working to allowlist all users in the waitlist. Currently, Nova Act is only available for US-based users.
+Go to nova.amazon.com/act and sign in with your amazon.com account. You can generate your API key and get started building workflows. Currently, Nova Act is only available for US-based users.
 
-### Question 2: I signed up yesterday and it said something like "check back in an hour" for the Api Key. However, it still says "Signed up" and I still haven't received any type of email. About how long did you all have to wait for access?
-We are actively allowlisting users mostly during business hours. If you signed up during business hours, you should be allowlisted within couple hours. If you signed up after business hours, you should expect to be allowlisted in the next business day. Note that the email confirmation may take longer to reach.
-
-### Question 3: Can I connect Nova Act with my AWS account?
+### Question 2: Can I connect Nova Act with my AWS account?
 No, Nova Act is not available as an AWS product, but AWS employees are more than welcome to try it out. During this experimental phase, you need to sign up using your amazon.com account. Refer to Question 1 to check how to access Nova Act. 
 
-### Question 4: I have an external customer. Can my customer join the Nova Act preview?
+### Question 3: I have an external customer. Can my customer join the Nova Act preview?
 Yes, everybody can join Nova Act preview. Ask you customer to request sign up following the steps described in Question 1.
 
-### Question 5: Do we have details about pricing?
-Nova act is a research preview which is free to use. Customers get a daily quota of requests.
+### Question 4: Do we have details about pricing?
+Nova Act is a research preview which is free to use. Customers get a daily quota of requests.
+
+### Question 5: In which regions is Nova Act available?
+Nova Act is currently available in the US. If you are interested in using Nova Act in a different region, please let us know. We are tracking feature requests in our GitHub repo, so please +1 and add a comment where you'd like to see us expand to next.
 
 ## Technical Questions
 
