@@ -49,7 +49,7 @@ pip install nova-act
 
 ## Quick Start: ordering a coffee maker on Amazon
 
-*Note: The first time you run NovaAct, it may take 1 to 2 minutes to start. This is because NovaAct needs to install Playwright modules. Subsequent runs will only take a few seconds to start.*
+*Note: The first time you run NovaAct, it may take 1 to 2 minutes to start. This is because NovaAct needs to [install Playwright modules](https://playwright.dev/python/docs/browsers#install-browsers). Subsequent runs will only take a few seconds to start. This functionality can be toggled off by setting the `NOVA_ACT_SKIP_PLAYWRIGHT_INSTALL` environment variable.*
 
 ### Script mode
 

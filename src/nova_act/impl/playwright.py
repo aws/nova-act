@@ -183,7 +183,16 @@ class PlaywrightInstanceManager:
             else:
                 if not os.environ.get("NOVA_ACT_SKIP_PLAYWRIGHT_INSTALL"):
                     with_deps = should_install_chromium_dependencies()
-                    assert install(self._playwright.chromium, with_deps=with_deps)
+                    if not install(self._playwright.chromium, with_deps=with_deps):
+                        raise StartFailed(
+                            "Failed to install Playwright browser binaries. If you have "
+                            "already installed these, you may skip this step by specifying the "
+                            "NOVA_ACT_SKIP_PLAYWRIGHT_INSTALL environment variable. Otherwise, "
+                            "the binaries can be installed with "
+                            f"`python -m playwright install {'--with-deps ' if with_deps else ''}chromium`. "
+                            "For more information, please consult Playwright's documentation: "
+                            "https://playwright.dev/python/docs/browsers"
+                        )
 
                 user_browser_args = os.environ.get("NOVA_ACT_BROWSER_ARGS", "").split()
 
