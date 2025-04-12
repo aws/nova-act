@@ -261,7 +261,7 @@ from nova_act import NovaAct
 
 os.makedirs(user_data_dir, exist_ok=True)
 
-with NovaAct(starting_page="https://amazon.com/", user_data_dir=user_data_dir, clone_user_data_dir=False):
+with NovaAct(starting_page="https://amazon.com/", user_data_dir=user_data_dir, clone_user_data_dir=False) as nova:
     input("Log into your websites, then press enter...")
 
 print(f"User data dir saved to {user_data_dir=}")
