@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import dataclasses
+from abc import ABC
 
 from nova_act.types.act_metadata import ActMetadata
 from nova_act.types.errors import NovaActError
@@ -21,12 +22,14 @@ from nova_act.types.errors import NovaActError
 def act_error_class(default_message: str):
     def decorator(cls):
         @dataclasses.dataclass(frozen=True, repr=False)
-        class wrapped(ActError):
+        class wrapped(cls):
             _DEFAULT_MESSAGE = default_message
 
-            def __init__(self, *, metadata: ActMetadata, message: str | None = None):
+            def __init__(self, *, metadata: ActMetadata, message: str | None = None, **kwargs):
                 super().__init__(metadata=metadata, message=message)
                 wrapped.__name__ = cls.__name__
+                for key, value in kwargs.items():
+                    object.__setattr__(self, key, value)
 
         wrapped.__qualname__ = cls.__qualname__
         return wrapped
@@ -52,21 +55,58 @@ class ActError(NovaActError):
         object.__setattr__(self, "message", final_message)
 
     def __str__(self) -> str:
-        # Format metadata string with indentation
-        metadata_str = str(self.metadata).replace("\n", "\n    ")
-        return (
-            f"\n\n{self.__class__.__name__}(\n"
-            f"    message = {self.message}\n"
-            f"    metadata = {metadata_str}\n"
-            f")"
-            "\n\nPlease consider providing feedback: "
-            "https://amazonexteu.qualtrics.com/jfe/form/SV_bd8dHa7Em6kNkMe"
-        )
+        try:
+            # Get all dataclass fields
+            field_strings = []
+            for field in dataclasses.fields(self):
+                value = getattr(self, field.name)
+                if value is not None:  # Only include non-None values
+                    if field.name == "metadata":
+                        line_break = "\n"
+                        metadata_str = f"    {field.name} = {str(value).replace(line_break, line_break + '    ')}"
+                    else:
+                        field_strings.append(f"    {field.name} = {str(value)}")
+
+            if metadata_str:
+                field_strings.append(metadata_str)
+            fields_str = "\n".join(field_strings)
+
+            return (
+                f"\n\n{self.__class__.__name__}(\n"
+                f"{fields_str}\n"
+                f")"
+                "\n\nPlease consider providing feedback: "
+                "https://amazonexteu.qualtrics.com/jfe/form/SV_bd8dHa7Em6kNkMe"
+            )
+        except Exception as e:
+            return f"Error in __str__: {e}"
+
+
+@dataclasses.dataclass(frozen=True, repr=False)
+class ActServerError(ActError, ABC):
+    failed_request_id: str | None = None
+
+    def __init__(
+        self,
+        *,
+        metadata: ActMetadata,
+        message: str | None = None,
+        failed_request_id: str | None = None,
+        raw_message: str | None = None,
+    ):
+        super().__init__(metadata=metadata, message=message)
+        object.__setattr__(self, "failed_request_id", failed_request_id)
 
 
 """
 Concrete Errors
+
 """
+
+
+@act_error_class("Error in client implementation")
+class ActClientError(ActError):
+    pass
 
 
 @act_error_class("The requested action was not possible")
@@ -76,7 +116,13 @@ class ActAgentError(ActError):
 
 @act_error_class("I'm sorry, but I can't engage in unsafe or inappropriate actions. Please try a different request.")
 class ActGuardrailsError(ActError):
-    pass
+    def __init__(self, *, metadata: ActMetadata, message: dict):
+
+        fields = message.get("fields", [])
+        if fields is not None and len(fields) > 0:
+            super().__init__(message=fields[0].get("message"), metadata=metadata)
+        else:
+            super().__init__(metadata=metadata)
 
 
 @act_error_class("Timed out, you can modify the 'timeout' kwarg on the 'act' call")
@@ -95,30 +141,75 @@ class ActCanceledError(ActError):
 
 
 @act_error_class("Failed to dispatch act")
-class ActDispatchError(ActError):
+class ActDispatchError(ActClientError):
     pass
 
 
 @act_error_class("Internal Server Error")
-class ActInternalServerError(ActError):
+class ActInternalServerError(ActServerError):
     pass
 
 
 @act_error_class("Server Unavailable")
-class ActServiceUnavailableError(ActError):
-    pass
-
-
-@act_error_class("NovaAct Client Error")
-class ActClientError(ActError):
+class ActServiceUnavailableError(ActServerError):
     pass
 
 
 @act_error_class("Rate Limit Error")
-class ActRateLimitExceededError(ActError):
-    pass
+class ActRateLimitExceededError(ActServerError):
+    _QUOTA_MESSAGE = (
+        "We have quota limits to ensure sufficient capacity for all users. If you need dedicated "
+        "quota for a more ambitious project, please get in touch at nova-act@amazon.com. "
+        "We're excited to see what you build!"
+    )
+
+    def __init__(
+        self,
+        *,
+        metadata: ActMetadata,
+        message: dict | None,
+        failed_request_id: str | None = None,
+        raw_message: str | None = None,
+    ):
+
+        if message is not None and "DAILY_QUOTA_LIMIT_EXCEEDED" == message.get("throttleType"):
+            super().__init__(
+                metadata=metadata,
+                message="Daily API limit exceeded. " + self._QUOTA_MESSAGE,
+                failed_request_id=failed_request_id,
+                raw_message=raw_message,
+            )
+        elif message is not None and "RATE_LIMIT_EXCEEDED" == message.get("throttleType"):
+            super().__init__(
+                message="Too many requests in a short time period. " + self._QUOTA_MESSAGE,
+                metadata=metadata,
+                failed_request_id=failed_request_id,
+                raw_message=raw_message,
+            )
+        else:
+            super().__init__(
+                metadata=metadata,
+                message=self._QUOTA_MESSAGE,
+                failed_request_id=failed_request_id,
+                raw_message=raw_message,
+            )
 
 
 @act_error_class("Failed to parse response")
-class ActProtocolError(ActError):
+class ActProtocolError(ActServerError, ActClientError):
+    pass
+
+
+@act_error_class("Invalid Input")
+class ActInvalidInputError(ActClientError):
+    pass
+
+
+@act_error_class("Bad Request")
+class ActBadRequestError(ActProtocolError):
+    pass
+
+
+@act_error_class("Bad Response")
+class ActBadResponseError(ActProtocolError):
     pass

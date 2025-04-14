@@ -21,7 +21,9 @@ from nova_act.types.act_errors import (
     ActExceededMaxStepsError,
     ActGuardrailsError,
     ActInternalServerError,
+    ActProtocolError,
     ActRateLimitExceededError,
+    ActServerError,
     ActTimeoutError,
 )
 from nova_act.types.act_metadata import ActMetadata

@@ -13,16 +13,18 @@
 # limitations under the License.
 import json
 from enum import Enum
-from typing import cast
+from typing import Any, cast
 
 from nova_act.impl.backend import BackendInfo
 from nova_act.types.act_errors import (
     ActAgentError,
+    ActBadRequestError,
+    ActBadResponseError,
     ActCanceledError,
-    ActClientError,
     ActExceededMaxStepsError,
     ActGuardrailsError,
     ActInternalServerError,
+    ActInvalidInputError,
     ActProtocolError,
     ActRateLimitExceededError,
     ActServiceUnavailableError,
@@ -31,8 +33,8 @@ from nova_act.types.act_errors import (
 from nova_act.types.errors import AuthError
 from nova_act.types.state.act import Act, ActFailed
 
-NOVA_ACT_SERVICE_PREFIX = "NovaActService"
-NOVA_ACT_CLIENT_PREFIX = "NovaActClient"
+NOVA_ACT_SERVICE = "NovaActService"
+NOVA_ACT_CLIENT = "NovaActClient"
 
 
 class NovaActClientErrors(Enum):
@@ -50,81 +52,126 @@ def parse_errors(act: Act, backend_info: BackendInfo):
 
     if act.did_timeout:
         return ActTimeoutError(metadata=act.metadata)
-
-    if error.startswith(NOVA_ACT_SERVICE_PREFIX):
-        return handle_nova_act_service_error(error, act, backend_info)
-    elif error.startswith(NOVA_ACT_CLIENT_PREFIX):
-        return handle_nova_act_client_error(error, act)
-    elif message.get("subErrorCode") == "AGENT_ERROR":
+    if message.get("subErrorCode") == "AGENT_ERROR":
         return ActAgentError(message=error, metadata=act.metadata)
-    elif error == "Canceled.":
+    if error == "Canceled.":
         return ActCanceledError(metadata=act.metadata)
 
-    out = "unhandled failure type"
-    return ActProtocolError(metadata=act.metadata, message=out)
-
-
-QUOTA_MESSAGE = (
-    "We have quota limits to ensure sufficient capacity for all users. If you need dedicated "
-    "quota for a more ambitious project, please get in touch at nova-act@amazon.com. "
-    "We're excited to see what you build!"
-)
-
-
-def handle_nova_act_service_error(error_string: str, act: Act, backend_info: BackendInfo):
-    message = NOVA_ACT_SERVICE_PREFIX
-
     try:
-        prefix_part, json_part = error_string.split(" - ", 1)
-        code = int(prefix_part.split(": ")[1])
-        error_dict = json.loads(json_part)
-    except (json.JSONDecodeError, ValueError, IndexError):
-        return ActProtocolError(metadata=act.metadata, message=message)
+        error_message = json.loads(error)
+        request_id = error_message.get("requestId", "")
+    except json.JSONDecodeError:
+        return ActProtocolError(
+            metadata=act.metadata,
+            message="failed to load error message as json",
+            raw_message=json.dumps(error),
+        )
 
-    if 403 == code:
-        raise AuthError(backend_info)
+    if "type" not in error_message:
+        return ActProtocolError(
+            metadata=act.metadata,
+            message="missing type in error message",
+            failed_request_id=request_id,
+            raw_message=json.dumps(error),
+        )
+
+    if error_message.get("type") == NOVA_ACT_SERVICE:
+        return handle_nova_act_service_error(error_message, act, backend_info)
+    if error_message.get("type") == NOVA_ACT_CLIENT:
+        return handle_nova_act_client_error(error_message, act)
+
+    return ActProtocolError(
+        metadata=act.metadata,
+        message="unhandled failure type",
+        failed_request_id=request_id,
+        raw_message=error,
+    )
+
+
+def handle_nova_act_service_error(error: dict, act: Act, backend_info: BackendInfo):
+    request_id = error.get("requestId", "")
+    code = error.get("code")
+
+    if not isinstance(code, int) or code == -1:
+        return ActProtocolError(
+            metadata=act.metadata,
+            message="invalid error code in Server Response",
+            failed_request_id=request_id,
+            raw_message=json.dumps(error),
+        )
+
+    message = error.get("message")
+
     if 400 == code:
+        error_dict = check_error_is_json(message)
+        if error_dict is None:
+            return ActBadRequestError(
+                metadata=act.metadata, failed_request_id=request_id, raw_message=json.dumps(error)
+            )
         if "AGENT_GUARDRAILS_TRIGGERED" == error_dict.get("reason"):
-            fields = error_dict.get("fields")
-            if fields is not None and len(fields) > 0:
-                return ActGuardrailsError(message=fields[0].get("message"), metadata=act.metadata)
-            else:
-                return ActGuardrailsError(metadata=act.metadata)
+            return ActGuardrailsError(message=error_dict, metadata=act.metadata)
+        if "INVALID_INPUT" == error_dict.get("reason"):
+            return ActInvalidInputError(metadata=act.metadata)
+    if 403 == code:
+        raise AuthError(backend_info, request_id=request_id)
     if 429 == code:
-        if "DAILY_QUOTA_LIMIT_EXCEEDED" == error_dict.get("throttleType"):
-            return ActRateLimitExceededError(
-                message="Daily API limit exceeded. " + QUOTA_MESSAGE,
-                metadata=act.metadata,
-            )
-        if "RATE_LIMIT_EXCEEDED" == error_dict.get("throttleType"):
-            return ActRateLimitExceededError(
-                message="Too many requests in a short time period. " + QUOTA_MESSAGE,
-                metadata=act.metadata,
-            )
-        return ActRateLimitExceededError(message=message, metadata=act.metadata)
-    if 503 == code:
-        return ActServiceUnavailableError(message=message, metadata=act.metadata)
+        maybe_error_dict = check_error_is_json(message)
+        return ActRateLimitExceededError(
+            message=maybe_error_dict,
+            metadata=act.metadata,
+            failed_request_id=request_id,
+            raw_message=json.dumps(error),
+        )
     # 4xx
     if code < 500 and code >= 400:
-        return ActClientError(message=message, metadata=act.metadata)
+        return ActBadRequestError(metadata=act.metadata, failed_request_id=request_id, raw_message=json.dumps(error))
+    if 503 == code:
+        return ActServiceUnavailableError(
+            metadata=act.metadata, failed_request_id=request_id, raw_message=json.dumps(error)
+        )
     # 5xx
     if code < 600 and code >= 500:
-        return ActInternalServerError(message=message, metadata=act.metadata)
-    return ActProtocolError(message=message, metadata=act.metadata)
+        return ActInternalServerError(
+            metadata=act.metadata, failed_request_id=request_id, raw_message=json.dumps(error)
+        )
+
+    return ActProtocolError(
+        message="Unhandled NovaActService error",
+        metadata=act.metadata,
+        failed_request_id=request_id,
+        raw_message=json.dumps(error),
+    )
 
 
-def handle_nova_act_client_error(error_string: str, act: Act):
-    message = NOVA_ACT_CLIENT_PREFIX
+def handle_nova_act_client_error(error: dict, act: Act):
+    request_id = error.get("requestId")
+    code = error.get("code", "")
 
     try:
-        prefix_part, message_part = error_string.split(" - ", 1)
-        enum = prefix_part.split(": ")[1]
-        error_type = NovaActClientErrors[enum]
-    except (KeyError, TypeError, ValueError, IndexError):
-        return ActProtocolError(message=message, metadata=act.metadata)
+        error_type = NovaActClientErrors[code]
+    except (KeyError, TypeError, ValueError, IndexError) as e:
+        return ActProtocolError(
+            message="invalid NovaActClient error code",
+            metadata=act.metadata,
+            failed_request_id=request_id,
+            raw_message=str(e),
+        )
 
     if error_type == NovaActClientErrors.BAD_RESPONSE:
-        return ActProtocolError(message=message, metadata=act.metadata)
+        return ActBadResponseError(metadata=act.metadata, failed_request_id=request_id, raw_message=json.dumps(error))
     if error_type == NovaActClientErrors.MAX_STEPS_EXCEEDED:
         return ActExceededMaxStepsError(metadata=act.metadata)
-    return ActProtocolError(message=message, metadata=act.metadata)
+
+    return ActProtocolError(
+        message="Unhandled NovaActClient error",
+        metadata=act.metadata,
+        failed_request_id=request_id,
+        raw_message=json.dumps(error),
+    )
+
+
+def check_error_is_json(message: Any) -> dict | None:
+    try:
+        return json.loads(message)
+    except (json.JSONDecodeError, TypeError):
+        return None

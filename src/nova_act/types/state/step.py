@@ -27,6 +27,7 @@ class ModelInput:
 @dataclass(frozen=True)
 class ModelOutput:
     awl_raw_program: str
+    request_id: str
 
 
 @dataclass(frozen=True)
@@ -49,7 +50,9 @@ class Step:
 
         # Extract output data
         output_data = message.get("output", {})
-        model_output = ModelOutput(awl_raw_program=output_data.get("rawProgramBody", ""))
+        model_output = ModelOutput(
+            awl_raw_program=output_data.get("rawProgramBody", ""), request_id=output_data.get("requestId", "")
+        )
 
         # Extract timing data
         observed_time = dt.fromtimestamp(time.time())

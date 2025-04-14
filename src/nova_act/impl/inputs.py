@@ -234,4 +234,4 @@ def validate_length(
             raise InvalidInputLength(f"{field_name} exceeds max length of {MAX_PARAM_LENGTH}")
 
     if nova_act_api_key is not None and len(nova_act_api_key) != _get_key_length_by_backend(backend):
-        raise AuthError(backend_info=get_urls_for_backend(backend))
+        raise AuthError(backend_info=get_urls_for_backend(backend), message="Invalid API key length")

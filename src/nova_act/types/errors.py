@@ -42,10 +42,22 @@ Known Usage Errors
 class AuthError(NovaActError):
     """Indicates there's error with user auth"""
 
-    def __init__(self, backend_info: BackendInfo):
+    def __init__(self, backend_info: BackendInfo, *, message: str = "Authentication failed.", request_id: str = ""):
+
         warning = create_warning_box(
-            ["Authentication failed. Please ensure you are using a key from:", f"{backend_info.keygen_uri}"]
+            [
+                message,
+                "",
+                f"Please ensure you are using a key from: {backend_info.keygen_uri}",
+                "and accessing NovaAct from within the United States.",
+            ]
         )
+
+        if request_id:
+            warning += (
+                "\nIf you are sure the above requirements are satisfied and you are still facing AuthError, "
+                f"please submit an issue with this request ID: {request_id}"
+            )
         super().__init__(warning)
 
 
