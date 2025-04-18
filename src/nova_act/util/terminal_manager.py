@@ -16,10 +16,10 @@ import sys
 
 DEFAULT_TERMINAL_COLS = 80
 
-if os.name == "nt":
-    # Windows-specific keyboard handling
-    import msvcrt  # noqa: F401
+if sys.platform == "win32":
+    import msvcrt
 else:
+    import select
     import termios
 
 
@@ -41,7 +41,7 @@ class TerminalInputManager:
         if not self.is_interactive:
             return self
 
-        if os.name == "nt":
+        if sys.platform == "win32":
             # No equivalent setup required for Windows.
             pass
         else:
@@ -64,8 +64,36 @@ class TerminalInputManager:
         if not self.is_interactive:
             return
 
-        if os.name != "nt":
+        if sys.platform != "win32":
             try:
                 termios.tcsetattr(self.fd, termios.TCSAFLUSH, self.old_term)
             except termios.error:
                 pass  # Ignore errors when restoring terminal settings
+
+    def get_char(self, block: bool) -> str | None:
+        """Get a single character
+
+        Parameters
+        ----------
+        block: bool
+            Whether the function should block until a character is received.
+
+        Returns
+        -------
+        str | None
+            The character received, or None if no character was received and block is False.
+        """
+        if sys.platform == "win32":
+            if block:
+                return msvcrt.getch().decode("utf-8")
+            elif msvcrt.kbhit():
+                return msvcrt.getch().decode("utf-8")
+        else:
+            if block:
+                return sys.stdin.read(1)
+            else:
+                i, _, _ = select.select([sys.stdin], [], [], 0)
+                if i != []:
+                    return sys.stdin.read(1)
+
+        return None

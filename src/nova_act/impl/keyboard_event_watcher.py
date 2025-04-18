@@ -11,8 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import select
-import sys
 import threading
 
 from nova_act.util.terminal_manager import TerminalInputManager
@@ -44,8 +42,8 @@ class KeyboardEventWatcher:
 
     def _watch_for_trigger(self):
         while not self.final_stop:
-            i, _, _ = select.select([sys.stdin], [], [], 0)
-            if i != [] and self.key == sys.stdin.read(1):
+            key = self.terminal_manager.get_char(block=False)
+            if self.key == key:
                 if self.trigger.is_set():
                     continue
                 self.trigger.set()
