@@ -153,6 +153,29 @@ class PlaywrightInstanceManager:
 
         return first_page
 
+    def _launch_browser(self, context_options):
+        """Launches a Playwright Chromium based browser with Chromium as fallback."""
+        if (channel := context_options.get("channel")) != "chromium":
+            try:
+                context = self._playwright.chromium.launch_persistent_context(
+                    self._user_data_dir, **context_options  # type: ignore[arg-type]
+                )
+                return context
+            except PlaywrightError:
+                _LOGGER.warning(
+                    f"The Nova Act SDK is unable to run with `chrome_channel='{channel}'` and is "
+                    "falling back to 'chromium'. If you wish to use an alternate `chrome_channel`, "
+                    f"please install it with `python -m playwright install {channel}`. For more information, "
+                    "please consult Playwright's documentation: https://playwright.dev/python/docs/browsers."
+                )
+                context_options["channel"] = "chromium"
+
+        context = self._playwright.chromium.launch_persistent_context(
+            self._user_data_dir,
+            **context_options,  # type: ignore[arg-type]
+        )
+        return context
+
     def start(self) -> None:
         """Start and attach the Browser"""
         if self._context is not None:
@@ -236,9 +259,7 @@ class PlaywrightInstanceManager:
                     context_options["record_video_dir"] = os.path.join(self._logs_directory)
                     context_options["record_video_size"] = {"width": self.screen_width, "height": self.screen_height}
 
-                context = self._playwright.chromium.launch_persistent_context(
-                    self._user_data_dir, **context_options  # type: ignore[arg-type]
-                )
+                context = self._launch_browser(context_options)
                 trusted_page = context.pages[0]
 
             self._init_browser_context(context, trusted_page)

@@ -170,13 +170,6 @@ def validate_chrome_channel(chrome_channel: str) -> None:
             f"Invalid Chrome channel provided. Supported channels: {', '.join(sorted(SUPPORTED_CHANNELS))}."
         )
 
-    if chrome_channel not in {"chrome", "chromium"}:
-        _LOGGER.warning(
-            f"You specified '{chrome_channel}' for chrome_channel, "
-            "but only Chrome and Chromium are installed by NovaAct. "
-            f"Please ensure that '{chrome_channel}' is installed before proceeding."
-        )
-
 
 def validate_base_parameters(
     extension_path: str,
