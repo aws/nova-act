@@ -35,15 +35,6 @@ HANDLE_ENCRYPTED_MESSAGE_FUNCTION_NAME = "handleEncryptedMessage"
 
 ADD_COMPLETION_LISTENER_EXPRESSION = f"""
 () => {{
-    var _json_stringify = JSON.stringify;
-    JSON.stringify = function(value) {{
-        var _array_tojson = Array.prototype.toJSON;
-        delete Array.prototype.toJSON;
-        var r=_json_stringify(value);
-        Array.prototype.toJSON = _array_tojson;
-        return r;
-    }};
-
     window.addEventListener("{ENCRYPTED_MESSAGE_TYPE}", (event) => {{
         const encryptedMessage = event.detail.encryptedMessage;
         {HANDLE_ENCRYPTED_MESSAGE_FUNCTION_NAME}(encryptedMessage);
