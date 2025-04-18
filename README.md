@@ -247,12 +247,19 @@ print(f"Found {len(all_books)} books:\n{all_books}")
 
 ### Authentication, cookies, and persistent browser state
 
-You can specify an existing Chrome profile that is already logged in to desired websites to help with authentication.
-By default, each NovaAct starts with a fresh temporary directory as its Chrome `user_data_dir`. But you can point
-to an existing one by using the `user_data_dir` argument.
+Nova Act supports working with authenticated browser sessions by overriding its default settings. By default, when Nova Act runs, it clones the Chromium user data directory and deletes it at the end of the run. To use authenticated sessions, you need to specify an existing directory containing the authenticated sessions, and disable the cloning (which in turn disables deletion of the directory).
 
-The recommended approach is to set up a fresh `user_data_dir` for NovaAct usage and then update it as needed
-to reauthenticate or log in to more websites. Here's an example script to help set or modify a `user_data_dir`.
+Specifically, you need to:
+1. (optional) Create a new local directory for the user data directory For example, `/tmp/user-data-dir`. You can skip this step to use an existing Chromium profile.
+2. specify this directory when instantiating `NovaAct` via the `user_data_dir` parameter
+3. disable cloning this directory when instantiating `NovaAct` by passing in the parameter `clone_user_data_dir=False`
+4. instruct Nova Act to open the site(s) into which you want to authenticate
+5. authenticate into the sites. See [Entering sensitive information](#entering-sensitive-information) below for more information on entering sensitive data
+6. stop your Nova Act session
+
+The next time you run Nova Act with `user_data_dir` set to the directory you created in step 1, you will start from an authenticated session. In subsequent runs, you can decide if you want to enable or disable cloning. If you are running multiple `NovaAct` instances in parallel, they must each create their own copy so you must enable cloning in that use case (`clone_user_data_dir=True`).
+
+Here's an example script that shows how to pass in these parameters.
 
 ```python
 import os
@@ -269,12 +276,6 @@ print(f"User data dir saved to {user_data_dir=}")
 ```
 
 The script is included in the installation: `python -m nova_act.samples.setup_chrome_user_data_dir`.
-
-Each NovaAct instance requires its own `user_data_dir`, so if you provide an existing `user_data_dir`, a copy will
-be made in a temporary directory for each NovaAct. If needed, this can be disabled by setting the
-`clone_user_data_dir` argument to `False`, but you will need to be sure that only one session is accessing that dir at a given time.
-
-If you are running multiple `NovaAct` instances in parallel, they must each create their own copy so leave cloning turned on in that use case.
 
 
 ### Entering sensitive information
