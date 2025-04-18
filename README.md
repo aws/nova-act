@@ -46,6 +46,12 @@ export NOVA_ACT_API_KEY="your_api_key"
 pip install nova-act
 ```
 
+#### [Optional] Install Google Chrome
+Nova Act works best with Google Chrome but does not have permission to install this browser. You may skip this step if you already have Google Chrome installed or are fine with using Chromium. Otherwise, you can install Google Chrome by running the following command in the same environment where you installed Nova Act. For more information, visit https://playwright.dev/python/docs/browsers#google-chrome--microsoft-edge.
+```bash
+playwright install chrome
+```
+
 
 ## Quick Start: ordering a coffee maker on Amazon
 
