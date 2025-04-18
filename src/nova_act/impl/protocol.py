@@ -25,6 +25,7 @@ from nova_act.types.act_errors import (
     ActGuardrailsError,
     ActInternalServerError,
     ActInvalidInputError,
+    ActModelError,
     ActProtocolError,
     ActRateLimitExceededError,
     ActServiceUnavailableError,
@@ -114,6 +115,11 @@ def handle_nova_act_service_error(error: dict, act: Act, backend_info: BackendIn
             return ActInvalidInputError(metadata=act.metadata)
     if 403 == code:
         raise AuthError(backend_info, request_id=request_id)
+    if 424 == code:
+        maybe_error_dict = check_error_is_json(message)
+        if maybe_error_dict and "MODEL_ERROR" == maybe_error_dict.get("reason"):
+            return ActModelError(message=maybe_error_dict, metadata=act.metadata)
+        # else continue, fall back to generic 4xx
     if 429 == code:
         maybe_error_dict = check_error_is_json(message)
         return ActRateLimitExceededError(

@@ -98,6 +98,18 @@ class ActServerError(ActError, ABC):
         object.__setattr__(self, "failed_request_id", failed_request_id)
 
 
+class ActPromptError(ActError, ABC):
+    """Represents an error specific to the given prompt."""
+
+    def __init__(self, *, metadata: ActMetadata, message: dict):
+
+        fields = message.get("fields", [])
+        if fields is not None and len(fields) > 0:
+            super().__init__(message=fields[0].get("message"), metadata=metadata)
+        else:
+            super().__init__(metadata=metadata)
+
+
 """
 Concrete Errors
 
@@ -114,15 +126,14 @@ class ActAgentError(ActError):
     pass
 
 
-@act_error_class("I'm sorry, but I can't engage in unsafe or inappropriate actions. Please try a different request.")
-class ActGuardrailsError(ActError):
-    def __init__(self, *, metadata: ActMetadata, message: dict):
+@act_error_class("The model output could not be processed. Please try a different request.")
+class ActModelError(ActPromptError):
+    pass
 
-        fields = message.get("fields", [])
-        if fields is not None and len(fields) > 0:
-            super().__init__(message=fields[0].get("message"), metadata=metadata)
-        else:
-            super().__init__(metadata=metadata)
+
+@act_error_class("I'm sorry, but I can't engage in unsafe or inappropriate actions. Please try a different request.")
+class ActGuardrailsError(ActPromptError):
+    pass
 
 
 @act_error_class("Timed out, you can modify the 'timeout' kwarg on the 'act' call")
