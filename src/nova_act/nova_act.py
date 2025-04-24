@@ -338,7 +338,6 @@ class NovaAct:
                     extension_version=self._extension_version,
                     session_logs_directory=session_logs_directory,
                 )
-                _TRACE_LOGGER.info(f"\nstart session {session_id} on {self._starting_page}\n")
                 set_logging_session(session_id)
             self._dispatcher.wait_for_page_to_settle(go_to_url_timeout=self.go_to_url_timeout)
             session_logs_str = f" logs dir {session_logs_directory}" if session_logs_directory else ""
