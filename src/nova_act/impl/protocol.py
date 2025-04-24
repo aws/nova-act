@@ -113,12 +113,10 @@ def handle_nova_act_service_error(error: dict, act: Act, backend_info: BackendIn
             return ActGuardrailsError(message=error_dict, metadata=act.metadata)
         if "INVALID_INPUT" == error_dict.get("reason"):
             return ActInvalidInputError(metadata=act.metadata)
+        if "MODEL_ERROR" == error_dict.get("reason"):
+            return ActModelError(message=error_dict, metadata=act.metadata)
     if 403 == code:
         raise AuthError(backend_info, request_id=request_id)
-    if 424 == code:
-        maybe_error_dict = check_error_is_json(message)
-        if maybe_error_dict and "MODEL_ERROR" == maybe_error_dict.get("reason"):
-            return ActModelError(message=maybe_error_dict, metadata=act.metadata)
         # else continue, fall back to generic 4xx
     if 429 == code:
         maybe_error_dict = check_error_is_json(message)
