@@ -34,7 +34,6 @@ from nova_act.impl.window_messages import (
 )
 from nova_act.types.act_errors import ActCanceledError, ActClientError, ActDispatchError, ActError
 from nova_act.types.act_result import ActResult
-from nova_act.types.errors import InvalidPageState
 from nova_act.types.state.act import Act, ActCanceled, ActFailed, ActSucceeded
 from nova_act.types.state.page import PageState
 from nova_act.util.logging import LoadScroller, get_session_id_prefix, is_quiet, make_trace_logger, setup_logging
@@ -46,7 +45,7 @@ DEFAULT_TIMEOUT_S = 30.0
 # Give Extension 2s to accept the request; it should be instant
 EXTENSION_POLL_SLEEP_S = 0.1
 EXTENSION_TIMEOUT_S = 2.0
-MAX_WAIT_FOR_PAGE_TO_SETTLE_TIMEOUT = 60
+MAX_WAIT_FOR_PAGE_TO_SETTLE_TIMEOUT = 15
 
 DEFAULT_ENDPOINT_NAME = "alpha-sunshine"
 
@@ -131,11 +130,14 @@ class ExtensionDispatcher:
             metadata=act.metadata,
         )
 
-    def wait_for_page_to_settle(self) -> None:
+    def wait_for_page_to_settle(self, go_to_url_timeout: int | None = None) -> None:
         """
         Dispatch a page state query to extension and wait for confirmation of settled.
         """
         page_state = PageState(self._session_id)
+
+        if go_to_url_timeout is None:
+            go_to_url_timeout = MAX_WAIT_FOR_PAGE_TO_SETTLE_TIMEOUT
 
         self._playwright_manager.window_message_handler.bind_page(page_state)
         request_wait_for_page_state_message = {
@@ -145,7 +147,7 @@ class ExtensionDispatcher:
             "hostname": self._backend_info.api_uri,
             "sessionId": self._session_id,
             "useBedrock": True,
-            "maxTimeout": MAX_WAIT_FOR_PAGE_TO_SETTLE_TIMEOUT,
+            "maxTimeout": go_to_url_timeout,
         }
 
 
@@ -157,14 +159,14 @@ class ExtensionDispatcher:
             if self._verbose_errors:
                 _LOGGER.error("Encountered PlaywrightError", exc_info=True)
 
-        end_time = time.time() + EXTENSION_TIMEOUT_S + MAX_WAIT_FOR_PAGE_TO_SETTLE_TIMEOUT
+        end_time = time.time() + EXTENSION_TIMEOUT_S + go_to_url_timeout
         while time.time() < end_time:
             if page_state.is_settled:
                 return
             else:
                 self._poll_playwright(EXTENSION_POLL_SLEEP_S)
 
-        raise InvalidPageState(f"Page not settled after {MAX_WAIT_FOR_PAGE_TO_SETTLE_TIMEOUT}s, aborting")
+        _LOGGER.warning(f"Page not settled after {go_to_url_timeout}s")
 
     def _dispatch_prompt_and_wait_for_ack(self, act: Act):
         """Dispatch an act prompt to the extension.

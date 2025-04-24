@@ -102,6 +102,7 @@ class NovaAct:
         user_agent: str | None = None,
         logs_directory: str | None = None,
         record_video: bool = False,
+        go_to_url_timeout: int | None = None,
     ):
         """Initialize a client object.
 
@@ -149,6 +150,8 @@ class NovaAct:
             Output directory for video and agent run output. Will default to a temp dir.
         record_video: bool
             Whether to record video
+        go_to_url_timeout : int, optional
+            Max wait time on initial page load in seconds
         """
 
         self._backend = Backend.PROD
@@ -197,6 +200,9 @@ class NovaAct:
             logs_directory=logs_directory,
             chrome_channel=_chrome_channel,
         )
+        if go_to_url_timeout is not None:
+            validate_timeout(go_to_url_timeout)
+        self.go_to_url_timeout = go_to_url_timeout
 
         nova_act_api_key = nova_act_api_key or os.environ.get("NOVA_ACT_API_KEY")
 
@@ -334,7 +340,7 @@ class NovaAct:
                 )
                 _TRACE_LOGGER.info(f"\nstart session {session_id} on {self._starting_page}\n")
                 set_logging_session(session_id)
-            self._dispatcher.wait_for_page_to_settle()
+            self._dispatcher.wait_for_page_to_settle(go_to_url_timeout=self.go_to_url_timeout)
             session_logs_str = f" logs dir {session_logs_directory}" if session_logs_directory else ""
             _TRACE_LOGGER.info(f"\nstart session {session_id} on {self._starting_page}{session_logs_str}\n")
         except Exception as e:
@@ -446,4 +452,4 @@ class NovaAct:
 
         self.page.goto(url, wait_until="domcontentloaded")
         self.page.wait_for_selector("#autonomy-listeners-registered", state="attached")
-        self.dispatcher.wait_for_page_to_settle()
+        self.dispatcher.wait_for_page_to_settle(go_to_url_timeout=self.go_to_url_timeout)
