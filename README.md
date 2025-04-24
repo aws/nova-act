@@ -332,7 +332,7 @@ If the model has trouble finding the search button, you can instruct it to press
 nova.act("search for cats. type enter to initiate the search.")
 ```
 
-### File download
+### File upload and download
 
 You can use playwright to download a file on a web page.
 
@@ -350,13 +350,26 @@ print(f"Downloaded file {download_info.value.path()}")
 download_info.value.save_as("my_downloaded_file")
 ```
 
-Download the current page (e.g. a pdf) that you have navigated to using `act()`:
+To download the current page:
+
+1. If it's HTML, then accessing `nova.page.content()` will give you the rendered DOM. You can save that to a file.
+2. If it is another content type, like a pdf, you can download it using `nova.page.request`:
 
 ```python
 # Download the content using Playwright's request.
 response = nova.page.request.get(nova.page.url)
 with open("downloaded.pdf", "wb") as f:
     f.write(response.body())
+```
+
+To upload a file on a site that uses the `file` `input` type, you can use Playwright's `set_input_files` facility. For a page with a single file upload affordance, the following sample will work but if you need to select among multiple input elements, please see Playwright documentation.
+
+```python
+# This starts the upload but does not block on its completion.
+nova.page.set_input_files('input[type="file"]', upload_filename)
+
+# Use act to wait for the upload completion. MODIFY THIS TO MATCH THE UPLOAD INDICATOR ON YOUR SITE.
+nova.act("wait for the upload spinner to finish")
 ```
 
 ### Picking dates
