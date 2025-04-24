@@ -70,7 +70,7 @@ class ExtensionDispatcher:
         backend_info: BackendInfo,
         nova_act_api_key: str,
         playwright_manager: PlaywrightInstanceManager,
-        logs_directory: str,
+        session_logs_directory: str | None,
         extension_version: str,
         tty: bool,
         session_id: str,
@@ -86,7 +86,7 @@ class ExtensionDispatcher:
         self._verbose_errors = verbose_errors
         self._retry = retry
 
-        self._run_info_compiler = RunInfoCompiler(self._session_id, logs_directory)
+        self._run_info_compiler = RunInfoCompiler(session_logs_directory) if session_logs_directory else None
 
     def _poll_playwright(self, timeout_s: float):
         try:
@@ -96,6 +96,10 @@ class ExtensionDispatcher:
             if self._verbose_errors:
                 _LOGGER.error(f"{type(e).__name__}", exc_info=True)
         time.sleep(timeout_s)
+
+    @property
+    def session_id(self) -> str:
+        return self._session_id
 
     def cancel_prompt(self, act: Act | None = None):
         """Dispatch a cancel message to the extension.
@@ -278,8 +282,8 @@ class ExtensionDispatcher:
                 act.did_timeout = True
                 self.cancel_prompt(act)
 
-            file_path = self._run_info_compiler.compile(act)
-            _TRACE_LOGGER.info(f"\n{get_session_id_prefix()}** View your act run here: {file_path}\n")
+            if self._run_info_compiler:
+                self._run_info_compiler.compile(act)
 
             result = act.result
             output: ActResult | ActError

@@ -70,7 +70,6 @@ class PlaywrightInstanceManager:
         screen_width: int,
         screen_height: int,
         user_agent: str | None,
-        logs_directory: str,
         record_video: bool,
     ):
         self._playwright = maybe_playwright
@@ -86,9 +85,7 @@ class PlaywrightInstanceManager:
         self.screen_width = screen_width
         self.screen_height = screen_height
         self.user_agent = user_agent
-        self._record_video = bool(record_video and logs_directory)
-        self._logs_directory = logs_directory
-        self._session_id: str | None = None
+        self._record_video = record_video
 
         if self._cdp_endpoint_url:
             if self._record_video:
@@ -99,6 +96,7 @@ class PlaywrightInstanceManager:
                 raise ValidationFailed("Cannot specify a user agent when connecting over CDP")
 
         self._context: BrowserContext | None = None
+        self._session_logs_directory: str | None = None
         self._encrypter = MessageEncrypter()
         self._window_message_handler = WindowMessageHandler(self._encrypter)
 
@@ -176,12 +174,16 @@ class PlaywrightInstanceManager:
         )
         return context
 
-    def start(self) -> None:
+    def start(self, session_logs_directory: str | None) -> None:
         """Start and attach the Browser"""
         if self._context is not None:
             _LOGGER.warning("Playwright already attached, to start over, stop the client")
             return
 
+        if self._record_video:
+            assert session_logs_directory is not None, "Started without a logs dir when record_video is True"
+
+        self._session_logs_directory = session_logs_directory
         try:
             # Start a new playwright instance if one was not provided by the user
             if self._playwright is None:
@@ -256,7 +258,8 @@ class PlaywrightInstanceManager:
 
 
                 if self._record_video:
-                    context_options["record_video_dir"] = os.path.join(self._logs_directory)
+                    assert self._session_logs_directory is not None
+                    context_options["record_video_dir"] = self._session_logs_directory
                     context_options["record_video_size"] = {"width": self.screen_width, "height": self.screen_height}
 
                 context = self._launch_browser(context_options)
@@ -278,11 +281,11 @@ class PlaywrightInstanceManager:
                 if page.video:
                     video_path = page.video.path()
                     if video_path:
+                        assert self._record_video
+                        assert self._session_logs_directory is not None
                         page_index = self._context.pages.index(page)
-                        assert self._session_id is not None
                         new_path = os.path.join(
-                            self._logs_directory,
-                            self._session_id,
+                            self._session_logs_directory,
                             f"session_video_tab-{page_index}.webm",
                         )
                         try:
@@ -299,6 +302,7 @@ class PlaywrightInstanceManager:
             self._playwright = None
 
         self._context = None
+        self._session_logs_directory = None
 
     @property
     def _active_page(self):

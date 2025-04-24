@@ -194,7 +194,7 @@ class NovaAct:
             user_data_dir=self._session_user_data_dir,
             screen_width=screen_width,
             screen_height=screen_height,
-            logs_directory=self._logs_directory,
+            logs_directory=logs_directory,
             chrome_channel=_chrome_channel,
         )
 
@@ -215,7 +215,7 @@ class NovaAct:
             endpoint_name=self.endpoint_name,
             cdp_endpoint_url=cdp_endpoint_url,
             user_agent=user_agent,
-            logs_directory=self._logs_directory,
+            logs_directory=logs_directory,
             backend=self._backend,
         )
         self._tty = tty
@@ -235,8 +235,7 @@ class NovaAct:
             screen_width=self.screen_width,
             screen_height=self.screen_height,
             user_agent=user_agent,
-            logs_directory=self._logs_directory,
-            record_video=record_video,
+            record_video=bool(record_video and self._logs_directory),
         )
 
         self._dispatcher: ExtensionDispatcher | None = None
@@ -244,7 +243,7 @@ class NovaAct:
     def __del__(self) -> None:
         if hasattr(self, "_session_user_data_dir_is_temp") and self._session_user_data_dir_is_temp:
             _LOGGER.debug(f"Deleting {self._session_user_data_dir}")
-            shutil.rmtree(self._session_user_data_dir)
+            shutil.rmtree(self._session_user_data_dir, ignore_errors=True)
 
     def __enter__(self) -> NovaAct:
         self.start()
@@ -307,7 +306,22 @@ class NovaAct:
 
         try:
             session_id = str(uuid.uuid4())
-            self._playwright.start()
+            set_logging_session(session_id)
+            if self._logs_directory:
+                session_logs_directory = os.path.join(self._logs_directory, session_id)
+            else:
+                session_logs_directory = ""
+
+            if session_logs_directory:
+                try:
+                    os.mkdir(session_logs_directory)
+                except Exception as e:
+                    _LOGGER.error(
+                        f"Failed to create directory: {session_logs_directory} with Error: {e} "
+                        f"of type {type(e).__name__}"
+                    )
+
+            self._playwright.start(session_logs_directory)
             if self._dispatcher is None:
                 self._dispatcher = ExtensionDispatcher(
                     backend_info=self._backend_info,
@@ -316,12 +330,13 @@ class NovaAct:
                     session_id=session_id,
                     playwright_manager=self._playwright,
                     extension_version=self._extension_version,
-                    logs_directory=self._logs_directory,
+                    session_logs_directory=session_logs_directory,
                 )
-                self._playwright._session_id = session_id
                 _TRACE_LOGGER.info(f"\nstart session {session_id} on {self._starting_page}\n")
                 set_logging_session(session_id)
             self._dispatcher.wait_for_page_to_settle()
+            session_logs_str = f" logs dir {session_logs_directory}" if session_logs_directory else ""
+            _TRACE_LOGGER.info(f"\nstart session {session_id} on {self._starting_page}{session_logs_str}\n")
         except Exception as e:
             self._stop()
             raise StartFailed from e
@@ -385,9 +400,6 @@ class NovaAct:
         if not self.started:
             raise ClientNotStarted("Run start() to start the client before calling act().")
 
-        if not self._playwright._session_id:
-            raise ValueError("Missing Session ID")
-
         validate_timeout(timeout)
         validate_prompt(prompt)
 
@@ -400,7 +412,7 @@ class NovaAct:
 
         act = Act(
             prompt,
-            session_id=self._playwright._session_id,
+            session_id=self.dispatcher.session_id,
             endpoint_name=endpoint_name,
             timeout=timeout or float("inf"),
             max_steps=max_steps,

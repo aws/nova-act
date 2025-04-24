@@ -115,26 +115,24 @@ def format_run_info(steps: int, url: str, time: str, image: str, response: str):
 
 
 class RunInfoCompiler:
+    _FILENAME_SUB_RE = re.compile(r'[<>:"/\\|?*\x00-\x1F\s]')
+
     def __init__(
         self,
-        session_id: str,
-        logs_directory: str,
+        session_logs_directory: str,
     ):
-        self._session_id = session_id
-        self._logs_directory = logs_directory
+        self._session_logs_directory = session_logs_directory
+        if not self._session_logs_directory:
+            raise ValidationFailed(f"Invalid logs directory: {self._session_logs_directory}")
 
-        if logs_directory and os.path.isdir(logs_directory):
-            try:
-                session_path = os.path.join(self._logs_directory, self._session_id)
-                os.mkdir(session_path)
-                self._logs_directory = session_path
-            except Exception as e:
-                _LOGGER.error(
-                    f"Failed to create directory: {session_path} with Error: {e} of type {type(e).__name__}. "
-                    f"Using default directory: {self._logs_directory}"
-                )
-        else:
-            raise ValidationFailed(f"Invalid logs directory: {logs_directory}")
+    @staticmethod
+    def _safe_filename(s: str, max_length: int) -> str:
+        # Replace invalid filename characters and whitespace with underscores.
+        safe = RunInfoCompiler._FILENAME_SUB_RE.sub("_", s)
+        # Strip leading/trailing underscores.
+        safe = safe.strip("_")
+
+        return safe[:max_length]
 
     def compile(self, act: Act) -> str:
         run_info = ""
@@ -153,16 +151,18 @@ class RunInfoCompiler:
             act_id=act.id,
             prompt=act.prompt,
         )
-        file_name = f"act_{act.id}_output.html"
-        output_file_path = os.path.join(self._logs_directory, file_name)
+        # Add prompt to the name
+        prompt_filename_snippet = self._safe_filename(act.prompt, 30)
+        file_name_prefix = f"act_{act.id}_{prompt_filename_snippet}"
+        output_file_path = os.path.join(self._session_logs_directory, file_name_prefix + ".html")
 
         try:
             with open(output_file_path, "w", encoding="utf-8") as f:
                 f.write(html_content)
 
             # Compile request and response JSON
-            request_response_file_name = f"act_{act.id}_calls.json"
-            json_file_path = os.path.join(self._logs_directory, request_response_file_name)
+            request_response_file_name = f"{file_name_prefix}_calls.json"
+            json_file_path = os.path.join(self._session_logs_directory, request_response_file_name)
 
             step_info = []
             for step in act.steps:
