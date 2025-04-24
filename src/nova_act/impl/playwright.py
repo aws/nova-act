@@ -38,7 +38,7 @@ from nova_act.util.logging import setup_logging
 
 _LOGGER = setup_logging(__name__)
 
-_DEFAULT_USER_AGENT_SUFFIX = " NovaAct/0.9"
+_DEFAULT_USER_AGENT_SUFFIX = " Agent-NovaAct/0.9"
 
 
 class PlaywrightInstanceManager:
