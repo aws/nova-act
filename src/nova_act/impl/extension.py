@@ -286,7 +286,8 @@ class ExtensionDispatcher:
                 self.cancel_prompt(act)
 
             if self._run_info_compiler:
-                self._run_info_compiler.compile(act)
+                file_path = self._run_info_compiler.compile(act)
+                _TRACE_LOGGER.info(f"\n{get_session_id_prefix()}** View your act run here: {file_path}\n")
 
             result = act.result
             output: ActResult | ActError
