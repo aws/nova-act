@@ -44,19 +44,6 @@ _DEFAULT_USER_AGENT_SUFFIX = " Agent-NovaAct/0.9"
 class PlaywrightInstanceManager:
     """RAII Manager for the Playwright Browser"""
 
-    @staticmethod
-    def _add_listeners(page: Page):
-        try:
-            page.evaluate(ADD_COMPLETION_LISTENER_EXPRESSION)
-            # suppress trace during initialization as sometimes multiple pages
-            # open and close in quick succession
-        except PlaywrightError as e:
-            _LOGGER.debug(f"{type(e).__name__}", exc_info=True)
-
-    @staticmethod
-    def _initialize_page(page: Page):
-        page.on("domcontentloaded", PlaywrightInstanceManager._add_listeners)
-
     def __init__(
         self,
         maybe_playwright: Playwright | None,
@@ -128,9 +115,12 @@ class PlaywrightInstanceManager:
 
         context.expose_function(HANDLE_ENCRYPTED_MESSAGE_FUNCTION_NAME, self._window_message_handler.handle_message)
 
+        # This will handle adding the message handler to all pages that gets created/navigated in the browser context.
+        # This seems to be more robust than adding the listeners to each page via domcontentloaded
+        context.add_init_script(f"({ADD_COMPLETION_LISTENER_EXPRESSION})();")
+
         # Send in the secret key through a trusted page.
         trusted_page.goto("https://nova.amazon.com/agent-loading")
-        self._initialize_page(trusted_page)
         trusted_page.wait_for_selector("#autonomy-listeners-registered", state="attached")
         trusted_page.evaluate(POST_MESSAGE_EXPRESSION, self._encrypter.make_set_key_message())
 
@@ -142,14 +132,11 @@ class PlaywrightInstanceManager:
         trusted_page.close()
 
         # Navigate to the starting page, from the default (about:blank).
-        self._initialize_page(first_page)
         first_page.goto(self._starting_page, wait_until="domcontentloaded")
         first_page.wait_for_selector("#autonomy-listeners-registered", state="attached")
 
         if first_video_path and os.path.exists(first_video_path):
             os.remove(first_video_path)
-
-        context.on("page", PlaywrightInstanceManager._initialize_page)
 
         return first_page
 
