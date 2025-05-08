@@ -229,6 +229,7 @@ class ExtensionDispatcher:
         """
         self._playwright_manager.window_message_handler.bind(act)
         _LOGGER.debug(f"SDK version: {SDK_VERSION}")
+        _LOGGER.debug(f"Extension version: {self._extension_version}")
 
         kb_cm: KeyboardEventWatcher | ContextManager[None] = (
             KeyboardEventWatcher(chr(24), "ctrl+x", "stop agent act() call without quitting the browser")
