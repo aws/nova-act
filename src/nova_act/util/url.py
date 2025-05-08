@@ -17,6 +17,7 @@ from urllib.parse import urlparse, urlunparse
 
 import certifi
 
+from nova_act.types.errors import InvalidCertificate
 from nova_act.util.logging import setup_logging
 
 _LOGGER = setup_logging(__name__)
@@ -50,12 +51,12 @@ def verify_certificate(url: str) -> None:
                 secure_socket.getpeercert()
                 return
     except socket.gaierror:
-        raise ValueError(
+        raise InvalidCertificate(
             f"SSL Certificate verification failed for {url} as there was an error fetching details for the url"
         )
     except (ssl.SSLCertVerificationError, ssl.SSLError):
-        raise ValueError(f"SSL Certificate verification failed for {url}")
+        raise InvalidCertificate(f"SSL Certificate verification failed for {url}")
     except ConnectionRefusedError:
-        raise ValueError(f"Connection refused by {url}")
+        raise InvalidCertificate(f"Connection refused by {url}")
     except Exception:
-        raise ValueError(f"An error occurred while verifying SSL certificate for {url}")
+        raise InvalidCertificate(f"An error occurred while verifying SSL certificate for {url}")

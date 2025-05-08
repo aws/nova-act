@@ -19,6 +19,7 @@ from nova_act.types.errors import (
     AuthError,
     InvalidChromeChannel,
     InvalidInputLength,
+    InvalidMaxSteps,
     InvalidPath,
     InvalidScreenResolution,
     InvalidTimeout,
@@ -37,6 +38,8 @@ MIN_SCREEN_SIZE = 600
 MAX_SCREEN_SIZE = 10000
 
 MAX_PARAM_LENGTH = 2048
+
+MAX_STEP_LIMIT = 100
 
 _LOGGER = setup_logging(__name__)
 
@@ -140,6 +143,14 @@ def validate_timeout(timeout: int | None) -> None:
         raise InvalidTimeout("Timeout must be an integer.")
     if timeout < MIN_TIMEOUT_S or timeout > MAX_TIMEOUT_S:
         raise InvalidTimeout(f"Timeout must be between {MIN_TIMEOUT_S} and {MAX_TIMEOUT_S}")
+
+
+def validate_step_limit(max_steps: int | None) -> None:
+    """Validate the max_steps input"""
+    if max_steps is None:
+        return
+    if max_steps >= MAX_STEP_LIMIT:
+        raise InvalidMaxSteps(MAX_STEP_LIMIT)
 
 
 def check_screen_resolution_in_recommended_range(screen_width: int, screen_height: int) -> None:

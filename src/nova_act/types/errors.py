@@ -97,8 +97,17 @@ class InvalidURL(ValidationFailed):
     pass
 
 
+class InvalidCertificate(ValidationFailed):
+    pass
+
+
 class InvalidTimeout(ValidationFailed):
     pass
+
+
+class InvalidMaxSteps(ValidationFailed):
+    def __init__(self, num_steps_allowed: int):
+        super().__init__(f"Please choose a number less than {num_steps_allowed}")
 
 
 class InvalidChromeChannel(ValidationFailed):

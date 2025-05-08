@@ -28,6 +28,7 @@ from nova_act.impl.inputs import (
     validate_base_parameters,
     validate_length,
     validate_prompt,
+    validate_step_limit,
     validate_timeout,
     validate_url,
 )
@@ -41,6 +42,8 @@ from nova_act.util.logging import get_session_id_prefix, make_trace_logger, set_
 
 DEFAULT_SCREEN_WIDTH = 1600
 DEFAULT_SCREEN_HEIGHT = 900
+
+DEFAULT_ACT_MAX_STEPS = 30
 
 _LOGGER = setup_logging(__name__)
 _TRACE_LOGGER = make_trace_logger()
@@ -79,8 +82,6 @@ class NovaAct:
     get_page(i)
         Gets a specific playwright page by its index in the browser context
     """
-
-    _DEFAULT_ACT_MAX_STEPS = 30
 
     def __init__(
         self,
@@ -375,7 +376,7 @@ class NovaAct:
         prompt: str,
         *,
         timeout: int | None = None,
-        max_steps: int = _DEFAULT_ACT_MAX_STEPS,
+        max_steps: int = DEFAULT_ACT_MAX_STEPS,
         schema: Dict[str, Any] | None = None,
         endpoint_name: str | None = None,
         model_temperature: int | None = None,
@@ -412,6 +413,7 @@ class NovaAct:
 
         validate_timeout(timeout)
         validate_prompt(prompt)
+        validate_step_limit(max_steps)
 
         if endpoint_name is None:
             endpoint_name = self.endpoint_name
