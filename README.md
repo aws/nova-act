@@ -417,6 +417,7 @@ For example:
 * `act()` is unreliable with high-level prompts.
 * `act()` cannot interact with elements hidden behind a mouseover.
 * `act()` cannot interact with the browser window. This means that browser modals such as those requesting access to use your location don't interfere with act() but must be manually acknowledged if desired.
+* `act()` is not yet optimized for PDF file actuation.
 
 ## Reference
 
@@ -425,7 +426,7 @@ For example:
 
 The constructor accepts the following:
 
-* `starting_page (str)`: The URL of the starting page (required argument)
+* `starting_page (str)`: The URL of the starting page; supports both web URLs (`https://`) and local file URLs (`file://`) (required argument)
 * `headless (bool)`: Whether to launch the browser in headless mode (defaults to `False`)
 * `quiet (bool)`: Whether to suppress logs to terminal (defaults to `False`)
 * `user_data_dir (str)`: Path to a [user data directory](https://chromium.googlesource.com/chromium/src/+/master/docs/user_data_dir.md#introduction), which stores browser session data like cookies and local storage (defaults to `None`).
