@@ -27,7 +27,7 @@ import fire  # type: ignore
 import pandas as pd
 from pydantic import BaseModel
 
-from nova_act import NovaAct
+from nova_act import ActAgentError, NovaAct
 
 
 class Apartment(BaseModel):
@@ -52,15 +52,21 @@ def add_biking_distance(apartment: Apartment, caltrain_city: str, headless: bool
         starting_page="https://maps.google.com/",
         headless=headless,
     ) as nova:
-        nova.act(
-            f"Search for {caltrain_city} Caltrain station and press enter. "
-            "Click Directions. "
-            f"Enter '{apartment.address}' into the starting point field and press enter. "
-            "Click the bicycle icon for cycling directions."
-        )
-        result = nova.act("Return the shortest time and distance for biking", schema=CaltrainBiking.model_json_schema())
+        try:
+            nova.act(
+                f"Search for {caltrain_city} Caltrain station and press enter. "
+                "Click Directions. "
+                f"Enter '{apartment.address}' into the starting point field and press enter. "
+                "Click the bicycle icon for cycling directions."
+            )
+            result = nova.act(
+                "Return the shortest time and distance for biking", schema=CaltrainBiking.model_json_schema()
+            )
+        except ActAgentError as exc:
+            print(f"Could not retrieve biking distance: {exc}")
+            return None
         if not result.matches_schema:
-            print(f"Invalid JSON {result=}")
+            print(f"Invalid JSON while retrieving biking distance {result=}")
             return None
         time_distance = CaltrainBiking.model_validate(result.parsed_response)
         return time_distance
