@@ -103,6 +103,7 @@ class NovaAct:
         logs_directory: str | None = None,
         record_video: bool = False,
         go_to_url_timeout: int | None = None,
+        ignore_https_errors: bool = False,
     ):
         """Initialize a client object.
 
@@ -152,6 +153,8 @@ class NovaAct:
             Whether to record video
         go_to_url_timeout : int, optional
             Max wait time on initial page load in seconds
+        ignore_https_errors: bool
+            Whether to ignore https errors for url to allow website with self-signed certificates
         """
 
         self._backend = Backend.PROD
@@ -199,6 +202,7 @@ class NovaAct:
             screen_height=screen_height,
             logs_directory=logs_directory,
             chrome_channel=_chrome_channel,
+            ignore_https_errors=ignore_https_errors,
         )
         if go_to_url_timeout is not None:
             validate_timeout(go_to_url_timeout)
@@ -242,6 +246,7 @@ class NovaAct:
             screen_height=self.screen_height,
             user_agent=user_agent,
             record_video=bool(record_video and self._logs_directory),
+            ignore_https_errors=ignore_https_errors,
         )
 
         self._dispatcher: ExtensionDispatcher | None = None

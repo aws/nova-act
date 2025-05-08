@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import html
 import os
 from urllib.parse import urlparse
 
@@ -25,6 +26,7 @@ from nova_act.types.errors import (
     InvalidURL,
 )
 from nova_act.util.logging import setup_logging
+from nova_act.util.url import verify_certificate
 
 MIN_TIMEOUT_S = 2  # 2 sec
 MAX_TIMEOUT_S = 1800  # 30 mins
@@ -171,6 +173,24 @@ def validate_chrome_channel(chrome_channel: str) -> None:
         )
 
 
+def validate_url_ssl_certificate(ignore_https_errors: bool, url: str):
+    """
+    Validate the SSL certificate for the given URL.
+
+    Parameters
+    ----------
+    ignore_https_errors: bool
+        Whether to ignore https errors for url to allow website with self-signed certificates
+    url: str
+        The url to be validated
+    """
+    if ignore_https_errors is True:
+        return
+
+    if verify_certificate(url) is False:
+        raise ValueError(f"Invalid SSL certificate for {html.escape(url)}")
+
+
 def validate_base_parameters(
     extension_path: str,
     starting_page: str,
@@ -181,9 +201,11 @@ def validate_base_parameters(
     screen_width: int,
     screen_height: int,
     chrome_channel: str,
+    ignore_https_errors: bool,
 ):
     validate_path(extension_path, "extension_path")
     validate_url(starting_page, "starting_page")
+    validate_url_ssl_certificate(ignore_https_errors, starting_page)
     validate_url(backend_uri, "backend_uri")
     if user_data_dir:
         validate_path(user_data_dir, "user_data_dir", empty_directory_allowed=True)

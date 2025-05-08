@@ -71,6 +71,7 @@ class PlaywrightInstanceManager:
         screen_height: int,
         user_agent: str | None,
         record_video: bool,
+        ignore_https_errors: bool,
     ):
         self._playwright = maybe_playwright
         self._owns_playwright = maybe_playwright is None  # Tracks if we created an instance
@@ -86,6 +87,7 @@ class PlaywrightInstanceManager:
         self.screen_height = screen_height
         self.user_agent = user_agent
         self._record_video = record_video
+        self._ignore_https_errors = ignore_https_errors
 
         if self._cdp_endpoint_url:
             if self._record_video:
@@ -240,6 +242,7 @@ class PlaywrightInstanceManager:
                     ],  # Disable infobar with automated test software message
                     # If you set viewport any user changes to the browser size will skew screenshots
                     "no_viewport": True,
+                    "ignore_https_errors": self._ignore_https_errors,
                     "channel": self._chrome_channel,
                 }
                 if self.user_agent:
