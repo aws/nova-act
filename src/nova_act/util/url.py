@@ -11,33 +11,51 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import requests
+import socket
+import ssl
+from urllib.parse import urlparse, urlunparse
+
+import certifi
+
+from nova_act.util.logging import setup_logging
+
+_LOGGER = setup_logging(__name__)
 
 
-def verify_certificate(url: str) -> bool:
+def verify_certificate(url: str) -> None:
     """
-    Attempts to verify a certificate for a given URL.
-
-    This function simulates the process of verifying a certificate for a URL,
-    similar to what a web browser might do. It checks if the certificate is
-    valid and can be verified.
+    Verifies the SSL certificate of a given URL using native ssl library with certifi.
 
     Args:
     url (str): The URL to verify the certificate for.
-
-    Returns:
-    bool: True if the certificate is valid and can be verified, False otherwise.
-
-    Raises:
-    ValueError: If the input URL is empty or not a string.
     """
     if not isinstance(url, str) or not url:
         raise ValueError("URL must be a non-empty string")
+
+    # Parse the URL
+    parsed = urlparse(url)
+
+    if not parsed.scheme:
+        url = f"https://{url}"
+        parsed = urlparse(url)
+    elif parsed.scheme == "http":
+        url = urlunparse(("https",) + parsed[1:])
+        parsed = urlparse(url)
+
+    hostname = parsed.hostname
     try:
-        response = requests.get(url, verify=True)
-        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
-        print(f"Certificate for {url} is valid.")
-        return True
-    except requests.exceptions.RequestException as e:
-        print(f"Certificate verification failed for {url}: {e}")
-        return False
+        context = ssl.create_default_context(cafile=certifi.where())
+        with socket.create_connection((hostname, 443), timeout=20) as sock:
+            with context.wrap_socket(sock, server_hostname=hostname) as secure_socket:
+                secure_socket.getpeercert()
+                return
+    except socket.gaierror:
+        raise ValueError(
+            f"SSL Certificate verification failed for {url} as there was an error fetching details for the url"
+        )
+    except (ssl.SSLCertVerificationError, ssl.SSLError):
+        raise ValueError(f"SSL Certificate verification failed for {url}")
+    except ConnectionRefusedError:
+        raise ValueError(f"Connection refused by {url}")
+    except Exception:
+        raise ValueError(f"An error occurred while verifying SSL certificate for {url}")

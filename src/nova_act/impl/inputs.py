@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import html
 import os
 from urllib.parse import urlparse
 
@@ -187,8 +186,7 @@ def validate_url_ssl_certificate(ignore_https_errors: bool, url: str):
     if ignore_https_errors is True:
         return
 
-    if verify_certificate(url) is False:
-        raise ValueError(f"Invalid SSL certificate for {html.escape(url)}")
+    verify_certificate(url)
 
 
 def validate_base_parameters(
