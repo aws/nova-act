@@ -67,12 +67,22 @@ def make_trace_logger() -> logging.Logger:
 class LoadScroller:
     """Print horizontal dots until stop condition"""
 
-    def __init__(self, condition_check=lambda: True):
+    def __init__(self, condition_check=lambda: True, frequency: int = 1):
+        if frequency < 1:
+            raise ValueError("Frequency must be greater than 1")
+
         self.condition_check = condition_check
         self.toggled = False
+        self._frequency = frequency
+        self._count = 0
 
     def scroll(self):
-        if self.condition_check():
+        if not self.condition_check():
+            return
+
+        self._count += 1
+        if self._count >= self._frequency:
+            self._count = 0
             print(".", end="", flush=True, file=sys.stderr)
 
 

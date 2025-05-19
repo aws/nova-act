@@ -38,8 +38,8 @@ from nova_act.types.state.act import Act, ActCanceled, ActFailed, ActSucceeded
 from nova_act.types.state.page import PageState
 from nova_act.util.logging import LoadScroller, get_session_id_prefix, is_quiet, make_trace_logger, setup_logging
 
-# Check every 0.5 seconds, for a total of 30 seconds.
-DEFAULT_POLL_SLEEP_S = 0.5
+# Check every 0.1 seconds, for a total of 30 seconds.
+DEFAULT_POLL_SLEEP_S = 0.1
 DEFAULT_TIMEOUT_S = 30.0
 
 # Give Extension 30s to accept the request
@@ -248,12 +248,9 @@ class ExtensionDispatcher:
                 tries=DEFAULT_RETRY_TRIES if self._retry else 1,
             )
 
-            scroller = LoadScroller(condition_check=lambda: len(act.steps) < 1)
+            scroller = LoadScroller(frequency=5)
 
             end_time = time.time() + act.timeout
-
-            scroller = LoadScroller()
-
             num_steps_observed = 0
             while time.time() < end_time:
 
