@@ -17,7 +17,12 @@ Amazon Nova Act is an experimental SDK. When using Nova Act, please keep in mind
 
 ## Pre-requisites
 
-1. Operating System: MacOS or Ubuntu.
+1. Operating System:
+   - macOS (Sierra or later)
+   - Ubuntu (22.04 LTS or later)
+   - Windows:
+     - Windows 10 or later
+     - Windows Subsystem for Linux 2 (WSL2)
 2. Python 3.10 or above.
 
 ## Building
@@ -418,6 +423,9 @@ For example:
 * `act()` cannot interact with elements hidden behind a mouseover.
 * `act()` cannot interact with the browser window. This means that browser modals such as those requesting access to use your location don't interfere with act() but must be manually acknowledged if desired.
 * `act()` is not yet optimized for PDF file actuation.
+* Screen size constraints
+  * Nova Act is optimized for resolutions between `864×1296` and `1536×2304`
+  * Performance may degrade outside this range
 
 ## Reference
 
