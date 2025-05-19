@@ -36,6 +36,7 @@ from nova_act.impl.playwright import PlaywrightInstanceManager
 from nova_act.types.act_errors import ActError
 from nova_act.types.act_result import ActResult
 from nova_act.types.errors import AuthError, ClientNotStarted, StartFailed, StopFailed, ValidationFailed
+from nova_act.types.hooks import StopHook
 from nova_act.types.state.act import Act
 from nova_act.util.jsonschema import add_schema_to_prompt, populate_json_schema_response, validate_jsonschema_schema
 from nova_act.util.logging import get_session_id_prefix, make_trace_logger, set_logging_session, setup_logging
@@ -105,6 +106,7 @@ class NovaAct:
         record_video: bool = False,
         go_to_url_timeout: int | None = None,
         ignore_https_errors: bool = False,
+        stop_hooks: list[StopHook] = [],
     ):
         """Initialize a client object.
 
@@ -156,6 +158,8 @@ class NovaAct:
             Max wait time on initial page load in seconds
         ignore_https_errors: bool
             Whether to ignore https errors for url to allow website with self-signed certificates
+        stop_hooks: list[StopHook]
+            A list of stop hooks that are called when this object is stopped.
         """
 
         self._backend = Backend.PROD
@@ -251,6 +255,8 @@ class NovaAct:
         )
 
         self._dispatcher: ExtensionDispatcher | None = None
+        self._session_id: str | None = None
+        self._stop_hooks = stop_hooks
 
     def __del__(self) -> None:
         if hasattr(self, "_session_user_data_dir_is_temp") and self._session_user_data_dir_is_temp:
@@ -269,7 +275,7 @@ class NovaAct:
     @property
     def started(self) -> bool:
         """Check if the browser is started."""
-        return self._playwright.started and self._dispatcher is not None
+        return self._playwright.started and self._dispatcher is not None and self._session_id is not None
 
     @property
     def page(self) -> Page:
@@ -309,6 +315,22 @@ class NovaAct:
         assert self._dispatcher is not None
         return self._dispatcher
 
+    def get_session_id(self) -> str:
+        """Get the session ID for the current client.
+
+        Raises ClientNotStarted if the client has not been started.
+        """
+        if not self.started:
+            raise ClientNotStarted("Client must be started before accessing the session ID.")
+        return str(self._session_id)
+
+    def get_logs_directory(self) -> str:
+        """Get the logs directory for the current client."""
+        if not self._logs_directory:
+            raise ValueError("Logs directory is not set.")
+
+        return self._logs_directory
+
     def start(self) -> None:
         """Start the client."""
         if self.started:
@@ -317,10 +339,10 @@ class NovaAct:
 
 
         try:
-            session_id = str(uuid.uuid4())
-            set_logging_session(session_id)
+            self._session_id = str(uuid.uuid4())
+            set_logging_session(self._session_id)
             if self._logs_directory:
-                session_logs_directory = os.path.join(self._logs_directory, session_id)
+                session_logs_directory = os.path.join(self._logs_directory, self._session_id)
             else:
                 session_logs_directory = ""
 
@@ -339,21 +361,54 @@ class NovaAct:
                     backend_info=self._backend_info,
                     nova_act_api_key=self._nova_act_api_key,
                     tty=self._tty,
-                    session_id=session_id,
+                    session_id=self._session_id,
                     playwright_manager=self._playwright,
                     extension_version=self._extension_version,
                     session_logs_directory=session_logs_directory,
                 )
-                set_logging_session(session_id)
+                set_logging_session(self._session_id)
             self._dispatcher.wait_for_page_to_settle(go_to_url_timeout=self.go_to_url_timeout)
             session_logs_str = f" logs dir {session_logs_directory}" if session_logs_directory else ""
-            _TRACE_LOGGER.info(f"\nstart session {session_id} on {self._starting_page}{session_logs_str}\n")
+            _TRACE_LOGGER.info(f"\nstart session {self._session_id} on {self._starting_page}{session_logs_str}\n")
         except Exception as e:
             self._stop()
             raise StartFailed from e
 
+    def register_stop_hook(self, hook: StopHook) -> None:
+        """Register a stop hook that will be called during stop().
+
+        Parameters
+        ----------
+        hook : StopHook
+            The stop hook to register. Must implement the StopHook protocol.
+        """
+        if hook in self._stop_hooks:
+            raise ValueError(f"Stop hook {hook} is already registered.")
+        self._stop_hooks.append(hook)
+
+    def unregister_stop_hook(self, hook: StopHook) -> None:
+        """Unregister a previously registered stop hook.
+
+        Parameters
+        ----------
+        hook : StopHook
+            The stop hook to unregister.
+        """
+        if hook not in self._stop_hooks:
+            raise ValueError(f"Stop hook {hook} is not registered.")
+        self._stop_hooks.remove(hook)
+
+    def _execute_stop_hooks(self) -> None:
+        """Call all registered stop hooks."""
+        for hook in self._stop_hooks:
+            try:
+                hook.on_stop(self)
+            except Exception as e:
+                _LOGGER.error(f"Error in stop hook {hook}: {e}", exc_info=True)
+
     def _stop(self) -> None:
         try:
+            self._execute_stop_hooks()
             if self._dispatcher is not None:
                 self._dispatcher.cancel_prompt()
             if self._playwright.started:
@@ -424,7 +479,7 @@ class NovaAct:
 
         act = Act(
             prompt,
-            session_id=self.dispatcher.session_id,
+            session_id=str(self._session_id),
             endpoint_name=endpoint_name,
             timeout=timeout or float("inf"),
             max_steps=max_steps,
