@@ -42,9 +42,9 @@ from nova_act.util.logging import LoadScroller, get_session_id_prefix, is_quiet,
 DEFAULT_POLL_SLEEP_S = 0.5
 DEFAULT_TIMEOUT_S = 30.0
 
-# Give Extension 2s to accept the request; it should be instant
+# Give Extension 30s to accept the request
 EXTENSION_POLL_SLEEP_S = 0.1
-EXTENSION_TIMEOUT_S = 2.0
+EXTENSION_TIMEOUT_S = 30.0
 MAX_WAIT_FOR_PAGE_TO_SETTLE_TIMEOUT = 15
 
 DEFAULT_ENDPOINT_NAME = "alpha-sunshine"
