@@ -17,13 +17,10 @@ Amazon Nova Act is an experimental SDK. When using Nova Act, please keep in mind
 
 ## Pre-requisites
 
-1. Operating System:
-   - macOS (Sierra or later)
-   - Ubuntu (22.04 LTS or later)
-   - Windows:
-     - Windows 10 or later
-     - Windows Subsystem for Linux 2 (WSL2)
-2. Python 3.10 or above.
+1. Operating System: MacOS Sierra+, Ubuntu 22.04+, WSL2 or Windows 10+
+2. Python: 3.10 or above
+
+> **Note:** Nova Act supports English.
 
 ## Building
 
