@@ -69,7 +69,7 @@ class ExtensionDispatcher:
         backend_info: BackendInfo,
         nova_act_api_key: str | None,
         playwright_manager: PlaywrightInstanceManager,
-        session_logs_directory: str | None,
+        run_info_compiler: RunInfoCompiler | None,
         extension_version: str,
         tty: bool,
         session_id: str,
@@ -85,7 +85,7 @@ class ExtensionDispatcher:
         self._verbose_errors = verbose_errors
         self._retry = retry
 
-        self._run_info_compiler = RunInfoCompiler(session_logs_directory) if session_logs_directory else None
+        self._run_info_compiler = run_info_compiler
 
     def _poll_playwright(self, timeout_s: float):
         try:

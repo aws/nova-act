@@ -33,6 +33,7 @@ from nova_act.impl.inputs import (
     validate_url,
 )
 from nova_act.impl.playwright import PlaywrightInstanceManager
+from nova_act.impl.run_info_compiler import RunInfoCompiler
 from nova_act.types.act_errors import ActError
 from nova_act.types.act_result import ActResult
 from nova_act.types.errors import AuthError, ClientNotStarted, StartFailed, StopFailed, ValidationFailed
@@ -163,6 +164,7 @@ class NovaAct:
         """
 
 
+        self._run_info_compiler: RunInfoCompiler | None = None
         self._backend = self._determine_backend()
         self._backend_info = get_urls_for_backend(self._backend)
 
@@ -369,6 +371,7 @@ class NovaAct:
                     )
 
             self._playwright.start(session_logs_directory)
+            self._run_info_compiler = RunInfoCompiler(session_logs_directory)
             if self._dispatcher is None:
                 self._dispatcher = ExtensionDispatcher(
                     backend_info=self._backend_info,
@@ -377,7 +380,7 @@ class NovaAct:
                     session_id=self._session_id,
                     playwright_manager=self._playwright,
                     extension_version=self._extension_version,
-                    session_logs_directory=session_logs_directory,
+                    run_info_compiler=self._run_info_compiler,
                 )
                 set_logging_session(self._session_id)
 
