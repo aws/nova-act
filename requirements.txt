@@ -2,6 +2,7 @@ cryptography
 fire
 install_playwright
 jsonschema
+numpy<=2.2.6
 pandas
 pillow
 playwright==1.48.0
