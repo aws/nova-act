@@ -17,6 +17,7 @@ from typing import Any, cast
 
 from nova_act.impl.backend import BackendInfo
 from nova_act.types.act_errors import (
+    ActActuationError,
     ActAgentError,
     ActBadRequestError,
     ActBadResponseError,
@@ -41,6 +42,7 @@ NOVA_ACT_CLIENT = "NovaActClient"
 class NovaActClientErrors(Enum):
     BAD_RESPONSE = "BAD_RESPONSE"
     MAX_STEPS_EXCEEDED = "MAX_STEPS_EXCEEDED"
+    ACTUATION_ERROR = "ACTUATION_ERROR"
 
 
 def parse_errors(act: Act, backend_info: BackendInfo):
@@ -109,6 +111,7 @@ def handle_nova_act_service_error(error: dict, act: Act, backend_info: BackendIn
             return ActBadRequestError(
                 metadata=act.metadata, failed_request_id=request_id, raw_message=json.dumps(error)
             )
+
         if "AGENT_GUARDRAILS_TRIGGERED" == error_dict.get("reason"):
             return ActGuardrailsError(message=error_dict, metadata=act.metadata)
         if "INVALID_INPUT" == error_dict.get("reason"):
@@ -165,6 +168,8 @@ def handle_nova_act_client_error(error: dict, act: Act):
         return ActBadResponseError(metadata=act.metadata, failed_request_id=request_id, raw_message=json.dumps(error))
     if error_type == NovaActClientErrors.MAX_STEPS_EXCEEDED:
         return ActExceededMaxStepsError(metadata=act.metadata)
+    if error_type == NovaActClientErrors.ACTUATION_ERROR:
+        return ActActuationError(metadata=act.metadata, message=error.get("message", ""))
 
     return ActProtocolError(
         message="Unhandled NovaActClient error",

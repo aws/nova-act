@@ -38,7 +38,7 @@ def act_error_class(default_message: str):
 
 
 """
-Base class for all Errors Occurring during act()
+Base classes for Errors Occurring during act()
 """
 
 
@@ -98,6 +98,13 @@ class ActServerError(ActError, ABC):
         object.__setattr__(self, "failed_request_id", failed_request_id)
 
 
+@dataclasses.dataclass(frozen=True, repr=False)
+class ActClientError(ActError, ABC):
+    def __init__(self, *, metadata: ActMetadata, message: str | None = None):
+        super().__init__(metadata=metadata, message=message)
+
+
+@dataclasses.dataclass(frozen=True, repr=False)
 class ActPromptError(ActError, ABC):
     """Represents an error specific to the given prompt."""
 
@@ -114,11 +121,6 @@ class ActPromptError(ActError, ABC):
 Concrete Errors
 
 """
-
-
-@act_error_class("Error in client implementation")
-class ActClientError(ActError):
-    pass
 
 
 @act_error_class("The requested action was not possible")
@@ -213,6 +215,11 @@ class ActProtocolError(ActServerError, ActClientError):
 
 @act_error_class("Invalid Input")
 class ActInvalidInputError(ActClientError):
+    pass
+
+
+@act_error_class("Actuation Error")
+class ActActuationError(ActClientError):
     pass
 
 
