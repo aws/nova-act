@@ -15,20 +15,33 @@ Amazon Nova Act is an experimental SDK. When using Nova Act, please keep in mind
 4. We recommend that you do not provide sensitive information to Nova Act, such as account passwords. Note that if you use sensitive information through Playwright calls, the information could be collected in screenshots if it appears unobstructed on the browser when Nova Act is engaged in completing an action. (See [Entering sensitive information](#entering-sensitive-information) below.)
 5. If you are using our browsing environment defaults, to identify our agent, look for `NovaAct` in the user agent string. If you operate Nova Act in your own browsing environment or customize the user agent, we recommend that you include that same string.
 
+## Table of contents
+* [Pre-requisites](#pre-requisites)
+* [Nova Act Authentication and Installation](#set-up)
+* [Quick Start: Order a coffee maker on Amazon](#quick-start-ordering-a-coffee-maker-on-amazon)
+* [How to prompt Nova Act](#how-to-prompt-act)
+* [Extract information from a web page](#extracting-information-from-a-web-page)
+* [Run multiple sessions in parallel](#running-multiple-sessions-in-parallel)
+* [Authentication, cookies, and persisting browser state](#authentication-cookies-and-persistent-browser-state)
+* [Handling sensitive data](#entering-sensitive-information)
+* [Captchas](#captchas)
+* [Search on a website](#search-on-a-website)
+* [File upload and download](#file-upload-and-download)
+* [Working with dates](#picking-dates)
+* [Setting the browser user agent](#setting-the-browser-user-agent)
+* [Logging and viewing traces](#logging)
+* [Recording a video of a session](#recording-a-session)
+* [Known limitations](#known-limitations)
+* [Reference: Nova Act constructor parameters](#initializing-novaact)
+* [Reference: Customizing the browser actuation](#actuating-the-browser)
+* [Reference: Viewing a session that is running in headless mode](#viewing-a-session-that-is-running-in-headless-mode)
+
 ## Pre-requisites
 
 1. Operating System: MacOS Sierra+, Ubuntu 22.04+, WSL2 or Windows 10+
 2. Python: 3.10 or above
 
 > **Note:** Nova Act supports English.
-
-## Building
-
-
-```sh
-python -m pip install --editable '.[dev]'
-python -m build --wheel --no-isolation --outdir dist/ .
-```
 
 ## Set Up
 
@@ -47,6 +60,12 @@ export NOVA_ACT_API_KEY="your_api_key"
 
 ```bash
 pip install nova-act
+```
+
+
+Alternatively, you can build `nova-act`. Clone this repo, and then:
+```sh
+pip install .
 ```
 
 #### [Optional] Install Google Chrome
@@ -316,6 +335,8 @@ if result.matches_schema and result.parsed_response:
 ...
 ```
 
+Please refer to the section below on [headless browsing](#viewing-a-session-that-is-running-in-headless-mode) to see how to handle captchas when running Nova Act in headless mode and in the cloud.
+
 ### Search on a website
 
 ```python
@@ -482,6 +503,26 @@ nova.page.keyboard.type("hello")
 
 The Playwright Page's `goto()` method has a default timeout of 30 seconds, which may cause failures for slow-loading websites. If the page does not finish loading within this time, `goto()` will raise a `TimeoutError`, potentially interrupting your workflow. Additionally, goto() does not always work well with act, as Playwright may consider the page ready before it has fully loaded.
 To address these issues, we have implemented a new function, `go_to_url()`, which provides more reliable navigation. You can use it by calling: `nova.go_to_url(url)` after `nova.start()`. You can also use the `go_to_url_timeout` parameter on `NovaAct` initialization to modify the default max wait time in seconds for the start page load and subsequent `got_to_url()` calls
+
+### Viewing a session that is running in headless mode
+
+When running the browser in headless mode (`headless: True`), you may need to see how the workflow is progressing as the agent is going through it. To do this:
+1. set the following environment variables before starting your Nova Act workflow
+```bash
+export NOVA_ACT_BROWSER_ARGS="--remote-debugging-port=9222"
+```
+2. start your Nova Act workflow as you normally do, with `headless: True`
+3. Open a local browser to `http://localhost:9222/json`
+4. Look for the item of type `page` and copy and paste its `devtoolsFrontendUrl` into the browser
+
+You'll now be observing the activity happening within the headless browser. You can also interact with the browser window as you normally would, which can be helpful for handling captchas. For example, in your Python script:
+1. ask Nova Act to check if there is a captcha
+2. if there is, `sleep()` for a period of time. Loop back to step 1. During `sleep()`...
+3. send an email / SMS alert (eg, with [Amazon Simple Notification Service](https://aws.amazon.com/sns/)) containing the `devtoolsFrontendUrl` signaling human intervention is required
+4. a human opens the `devtoolsFrontendUrl` and solves the captcha
+5. the next time step 1 is run, Nova Act will see the captcha has been solved, and the script will continue
+
+Note that if you are running Nova Act on a remote host, you may need to set up port forwarding to enable access from another system.
 
 ## Report a Bug
 Help us improve! If you notice any issues, please let us know by submitting a bug report via nova-act@amazon.com. 
