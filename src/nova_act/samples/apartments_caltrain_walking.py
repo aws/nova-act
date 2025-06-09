@@ -39,7 +39,7 @@ class CaltrainCommute(BaseModel):
 
 def add_commute_distance(apartment: Apartment, caltrain_city: str, headless: bool) -> CaltrainCommute | None:
     with NovaAct(
-        starting_page="https://maps.apple.com/",
+        starting_page="https://www.bing.com/maps",
         headless=headless,
     ) as nova:
         try:
