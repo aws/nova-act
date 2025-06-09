@@ -14,6 +14,7 @@
 import json
 import os
 import pathlib
+import subprocess
 from platform import freedesktop_os_release, system
 
 from nova_act.types.errors import UnsupportedOperatingSystem
@@ -81,3 +82,14 @@ def get_default_extension_path() -> str:
     if path is None:
         raise FileNotFoundError("Extension not found")
     return path
+
+
+def rsync(src_dir: str, dest_dir: str, extra_args: list[str]) -> None:
+    """rsync from src_dir to dest_dir for cheaper copies of diffs"""
+    if not os.path.exists(src_dir):
+        raise ValueError(f"Source directory {src_dir} does not exist")
+    os.makedirs(dest_dir, exist_ok=True)
+
+    rsync_cmd = ["rsync", "-a", "--delete", *extra_args, src_dir, dest_dir]
+
+    subprocess.run(rsync_cmd, check=True)

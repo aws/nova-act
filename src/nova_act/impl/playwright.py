@@ -12,14 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
+import subprocess
+import sys
+import time
+from pathlib import Path
 from typing import cast
 
+import requests
 from install_playwright import install
 from playwright.sync_api import BrowserContext
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Page, Playwright, Video, sync_playwright
 
-from nova_act.impl.common import should_install_chromium_dependencies
+from nova_act.impl.common import rsync, should_install_chromium_dependencies
 from nova_act.impl.message_encrypter import MessageEncrypter
 from nova_act.impl.window_messages import (
     ADD_COMPLETION_LISTENER_EXPRESSION,
@@ -40,6 +45,8 @@ _LOGGER = setup_logging(__name__)
 
 _DEFAULT_USER_AGENT_SUFFIX = " Agent-NovaAct/0.9"
 _DEFAULT_GO_TO_URL_TIMEOUT = 60
+_MACOS_LOCAL_CHROME_PATH = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+_CDP_PORT = 9222
 
 
 class PlaywrightInstanceManager:
@@ -79,7 +86,8 @@ class PlaywrightInstanceManager:
         self._ignore_https_errors = ignore_https_errors
         self._go_to_url_timeout = 1000.0 * (go_to_url_timeout or _DEFAULT_GO_TO_URL_TIMEOUT)
 
-        if self._cdp_endpoint_url:
+        external_browser = self._cdp_endpoint_url is not None
+        if external_browser:
             if self._record_video:
                 raise ValidationFailed("Cannot record video when connecting over CDP")
             if self._profile_directory:
@@ -189,6 +197,7 @@ class PlaywrightInstanceManager:
                         ) from e
                     raise
 
+
             # Attach to a context or create one.
             if self._cdp_endpoint_url is not None:
                 browser = self._playwright.chromium.connect_over_cdp(self._cdp_endpoint_url)
@@ -289,6 +298,7 @@ class PlaywrightInstanceManager:
 
         if self._owns_context and self._context is not None:
             self._context.close()
+
 
         # Stop playwright instance if one was created by us
         if self._owns_playwright and self._playwright is not None:

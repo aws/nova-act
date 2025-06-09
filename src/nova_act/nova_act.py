@@ -22,7 +22,7 @@ from typing import Any, Dict, Type, cast
 from playwright.sync_api import Page, Playwright
 
 from nova_act.impl.backend import Backend, get_urls_for_backend
-from nova_act.impl.common import get_default_extension_path, get_extension_version
+from nova_act.impl.common import get_default_extension_path, get_extension_version, rsync
 from nova_act.impl.extension import DEFAULT_ENDPOINT_NAME, ExtensionDispatcher
 from nova_act.impl.inputs import (
     validate_base_parameters,
@@ -177,7 +177,7 @@ class NovaAct:
                 # We want to make a copy so the original is unmodified.
                 self._session_user_data_dir = tempfile.mkdtemp(suffix="_nova_act_user_data_dir")
                 _LOGGER.debug(f"Copying {user_data_dir} to {self._session_user_data_dir=}")
-                shutil.copytree(user_data_dir, self._session_user_data_dir, dirs_exist_ok=True)
+                rsync(user_data_dir, self._session_user_data_dir, [])
                 self._session_user_data_dir_is_temp = True
             else:
                 # We want to just use the original.

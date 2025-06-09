@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
+import sys
 from urllib.parse import urlparse
 
 from nova_act.impl.backend import Backend, get_urls_for_backend
