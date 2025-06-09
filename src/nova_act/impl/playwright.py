@@ -39,6 +39,7 @@ from nova_act.util.logging import setup_logging
 _LOGGER = setup_logging(__name__)
 
 _DEFAULT_USER_AGENT_SUFFIX = " Agent-NovaAct/0.9"
+_DEFAULT_GO_TO_URL_TIMEOUT = 60
 
 
 class PlaywrightInstanceManager:
@@ -59,6 +60,7 @@ class PlaywrightInstanceManager:
         user_agent: str | None,
         record_video: bool,
         ignore_https_errors: bool,
+        go_to_url_timeout: int | None = None,
     ):
         self._playwright = maybe_playwright
         self._owns_playwright = maybe_playwright is None  # Tracks if we created an instance
@@ -75,6 +77,7 @@ class PlaywrightInstanceManager:
         self.user_agent = user_agent
         self._record_video = record_video
         self._ignore_https_errors = ignore_https_errors
+        self._go_to_url_timeout = 1000.0 * (go_to_url_timeout or _DEFAULT_GO_TO_URL_TIMEOUT)
 
         if self._cdp_endpoint_url:
             if self._record_video:
@@ -120,7 +123,7 @@ class PlaywrightInstanceManager:
         context.add_init_script(f"({ADD_COMPLETION_LISTENER_EXPRESSION})();")
 
         # Send in the secret key through a trusted page.
-        trusted_page.goto("https://nova.amazon.com/agent-loading")
+        trusted_page.goto("https://nova.amazon.com/agent-loading", timeout=self._go_to_url_timeout)
         trusted_page.wait_for_selector("#autonomy-listeners-registered", state="attached")
         trusted_page.evaluate(POST_MESSAGE_EXPRESSION, self._encrypter.make_set_key_message())
 
@@ -133,7 +136,7 @@ class PlaywrightInstanceManager:
         trusted_page.close()
 
         # Navigate to the starting page, from the default (about:blank).
-        first_page.goto(self._starting_page, wait_until="domcontentloaded")
+        first_page.goto(self._starting_page, wait_until="domcontentloaded", timeout=self._go_to_url_timeout)
         first_page.wait_for_selector("#autonomy-listeners-registered", state="attached")
 
         if first_video_path and os.path.exists(first_video_path):

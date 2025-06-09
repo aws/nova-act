@@ -252,6 +252,7 @@ class NovaAct:
             user_agent=user_agent,
             record_video=bool(record_video and self._logs_directory),
             ignore_https_errors=ignore_https_errors,
+            go_to_url_timeout=self.go_to_url_timeout,
         )
 
         self._dispatcher: ExtensionDispatcher | None = None
