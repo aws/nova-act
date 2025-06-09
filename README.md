@@ -429,6 +429,7 @@ For example:
 The constructor accepts the following:
 
 * `starting_page (str)`: The URL of the starting page; supports both web URLs (`https://`) and local file URLs (`file://`) (required argument)
+  * Note: file URLs require passing `ignore_https_errors=True` to the constructor
 * `headless (bool)`: Whether to launch the browser in headless mode (defaults to `False`)
 * `quiet (bool)`: Whether to suppress logs to terminal (defaults to `False`)
 * `user_data_dir (str)`: Path to a [user data directory](https://chromium.googlesource.com/chromium/src/+/master/docs/user_data_dir.md#introduction), which stores browser session data like cookies and local storage (defaults to `None`).
