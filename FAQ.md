@@ -10,7 +10,7 @@ Nova Act can:
 * Perform automated UI tasks
 
 ### General Question 2: How do I get access to Nova Act?
-Go to [nova.amazon.com/act](https://nova.amazon.com/act) and sign in with your amazon.com account. You can generate your API key and get started building workflows. Currently, Nova Act is only available for US-based users.
+Go to [nova.amazon.com/act](https://nova.amazon.com/act) and sign in with your amazon.com account. You can generate your API key and get started building workflows.
 
 ### General Question 3: Can I connect Nova Act with my AWS account?
 No, Nova Act is not available as an AWS product, but AWS users are more than welcome to try it out. During this experimental phase, you need to sign up using your amazon.com account. Refer to Question 1 to learn how to access Nova Act. 
@@ -19,10 +19,16 @@ No, Nova Act is not available as an AWS product, but AWS users are more than wel
 Nova Act is a research preview which is free to use. Customers get a daily quota of requests.
 
 ### General Question 5: In which regions is Nova Act available?
-Nova Act is currently available in the US. If you are interested in using Nova Act in a different region, please let us know. We are tracking feature requests in our GitHub repo, so please +1 and add a comment where you'd like to see us expand to next.
+Nova Act is currently available in the following regions:
 
-### General Question 6: When will Nova Act be available outside the US?
-As of now, Nova Act is only available for US-based users. We have not published timelines for availability outside the US.
+  - United States
+  - Canada
+  - Mexico
+  
+If you are interested in using Nova Act in a different region, please let us know. We are tracking feature requests in our GitHub repo, so please +1 and add a comment where you'd like to see us expand to next.
+
+### General Question 6: When will Nova Act be available in my region?
+We have not published timelines for additional region availability.
 
 ### General Question 7: I created a workflow with Nova Act. How can I share this with the community?
 We highly encourage users to share their workflows with others in the community. Please make a Pull Request (PR) with your script in the Nova Act GitHub [samples folder](https://github.com/aws/nova-act/tree/main/src/nova_act/samples). Our team will analyze your workflow and, if approved, it will be merged into the repository.
