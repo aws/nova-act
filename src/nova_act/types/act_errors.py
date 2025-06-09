@@ -14,6 +14,7 @@
 import dataclasses
 from abc import ABC
 
+from nova_act.__version__ import EXTENSION_VERSION
 from nova_act.types.act_metadata import ActMetadata
 from nova_act.types.errors import NovaActError
 
@@ -25,7 +26,16 @@ def act_error_class(default_message: str):
         class wrapped(cls):
             _DEFAULT_MESSAGE = default_message
 
-            def __init__(self, *, metadata: ActMetadata, message: str | None = None, **kwargs):
+            def __init__(
+                self,
+                *,
+                metadata: ActMetadata,
+                message: str | None = None,
+                extension_version: str | None = None,
+                **kwargs,
+            ):
+                if extension_version is not None:
+                    message = check_extension_version(extension_version, message=message)
                 super().__init__(metadata=metadata, message=message)
                 wrapped.__name__ = cls.__name__
                 for key, value in kwargs.items():
@@ -35,6 +45,20 @@ def act_error_class(default_message: str):
         return wrapped
 
     return decorator
+
+
+def check_extension_version(extension_version: str | None, *, message: str | None):
+    if extension_version is not None and extension_version != EXTENSION_VERSION:
+        warning = (
+            "Detected incompatible extension version, indicating a corrupted installation. "
+            "Re-install nova-act to proceed."
+            f"Expected: {EXTENSION_VERSION} Received: {extension_version}"
+        )
+        if message is not None:
+            message = message + "; " + warning
+        else:
+            message = warning
+    return message
 
 
 """
@@ -48,7 +72,7 @@ class ActError(NovaActError):
     message: str = dataclasses.field(init=False)
     _DEFAULT_MESSAGE = "An error occurred during act()"
 
-    def __init__(self, *, metadata: ActMetadata, message: str | None = None):
+    def __init__(self, *, metadata: ActMetadata, message: str | None = None, extension_version: str | None = None):
         final_message = message or self.__class__._DEFAULT_MESSAGE
         super().__init__(final_message)
         object.__setattr__(self, "metadata", metadata)
@@ -93,6 +117,7 @@ class ActServerError(ActError, ABC):
         message: str | None = None,
         failed_request_id: str | None = None,
         raw_message: str | None = None,
+        extension_version: str | None = None,
     ):
         super().__init__(metadata=metadata, message=message)
         object.__setattr__(self, "failed_request_id", failed_request_id)
@@ -100,8 +125,10 @@ class ActServerError(ActError, ABC):
 
 @dataclasses.dataclass(frozen=True, repr=False)
 class ActClientError(ActError, ABC):
-    def __init__(self, *, metadata: ActMetadata, message: str | None = None):
-        super().__init__(metadata=metadata, message=message)
+    extension_version: str | None = None
+
+    def __init__(self, *, metadata: ActMetadata, message: str | None = None, extension_version: str | None = None):
+        super().__init__(metadata=metadata, message=message, extension_version=extension_version)
 
 
 @dataclasses.dataclass(frozen=True, repr=False)
@@ -155,7 +182,19 @@ class ActCanceledError(ActError):
 
 @act_error_class("Failed to dispatch act")
 class ActDispatchError(ActClientError):
-    pass
+
+    def __init__(
+        self,
+        *,
+        metadata: ActMetadata,
+        message: str | None = None,
+        extension_version: str | None = None,
+    ):
+        super().__init__(
+            metadata=metadata,
+            message=message,
+            extension_version=extension_version,
+        )
 
 
 @act_error_class("Internal Server Error")
@@ -210,7 +249,23 @@ class ActRateLimitExceededError(ActServerError):
 
 @act_error_class("Failed to parse response")
 class ActProtocolError(ActServerError, ActClientError):
-    pass
+
+    def __init__(
+        self,
+        *,
+        metadata: ActMetadata,
+        message: str | None = None,
+        failed_request_id: str | None = None,
+        raw_message: str | None = None,
+        extension_version: str | None = None,
+    ):
+        super().__init__(
+            metadata=metadata,
+            message=message,
+            failed_request_id=failed_request_id,
+            raw_message=raw_message,
+            extension_version=extension_version,
+        )
 
 
 @act_error_class("Invalid Input")

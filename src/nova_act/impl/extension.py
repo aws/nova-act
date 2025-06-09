@@ -126,8 +126,7 @@ class ExtensionDispatcher:
                 self._poll_playwright(EXTENSION_POLL_SLEEP_S)
 
         raise ActDispatchError(
-            message="Failed to cancel Act",
-            metadata=act.metadata,
+            message="Failed to cancel Act", metadata=act.metadata, extension_version=self._extension_version
         )
 
     def wait_for_page_to_settle(self, go_to_url_timeout: int | None = None) -> None:
@@ -215,6 +214,7 @@ class ExtensionDispatcher:
         raise ActDispatchError(
             message="Failed to receive Acknowledgment after dispatching a prompt to browser",
             metadata=act.metadata,
+            extension_version=self._extension_version,
         )
 
     def dispatch_and_wait_for_prompt_completion(self, act: Act) -> ActResult | ActError:
@@ -293,7 +293,7 @@ class ExtensionDispatcher:
                 output = ActCanceledError(metadata=act.metadata)
 
             elif isinstance(result, ActFailed):
-                output = parse_errors(act, self._backend_info)
+                output = parse_errors(act, self._backend_info, self._extension_version)
 
             elif isinstance(result, ActSucceeded):
                 output = ActResult(

@@ -45,7 +45,7 @@ class NovaActClientErrors(Enum):
     ACTUATION_ERROR = "ACTUATION_ERROR"
 
 
-def parse_errors(act: Act, backend_info: BackendInfo):
+def parse_errors(act: Act, backend_info: BackendInfo, extension_version: str):
     if not isinstance(act.result, ActFailed) or not act.is_complete:
         raise ValueError(f"Expected ActFailed result when attempting to parse, got act: {act}")
 
@@ -68,6 +68,7 @@ def parse_errors(act: Act, backend_info: BackendInfo):
             metadata=act.metadata,
             message="failed to load error message as json",
             raw_message=json.dumps(error),
+            extension_version=extension_version,
         )
 
     if "type" not in error_message:
@@ -76,22 +77,24 @@ def parse_errors(act: Act, backend_info: BackendInfo):
             message="missing type in error message",
             failed_request_id=request_id,
             raw_message=json.dumps(error),
+            extension_version=extension_version,
         )
 
     if error_message.get("type") == NOVA_ACT_SERVICE:
-        return handle_nova_act_service_error(error_message, act, backend_info)
+        return handle_nova_act_service_error(error_message, act, backend_info, extension_version)
     if error_message.get("type") == NOVA_ACT_CLIENT:
-        return handle_nova_act_client_error(error_message, act)
+        return handle_nova_act_client_error(error_message, act, extension_version)
 
     return ActProtocolError(
         metadata=act.metadata,
         message="unhandled failure type",
         failed_request_id=request_id,
         raw_message=error,
+        extension_version=extension_version,
     )
 
 
-def handle_nova_act_service_error(error: dict, act: Act, backend_info: BackendInfo):
+def handle_nova_act_service_error(error: dict, act: Act, backend_info: BackendInfo, extension_version: str):
     request_id = error.get("requestId", "")
     code = error.get("code")
 
@@ -101,6 +104,7 @@ def handle_nova_act_service_error(error: dict, act: Act, backend_info: BackendIn
             message="invalid error code in Server Response",
             failed_request_id=request_id,
             raw_message=json.dumps(error),
+            extension_version=extension_version,
         )
 
     message = error.get("message")
@@ -147,10 +151,11 @@ def handle_nova_act_service_error(error: dict, act: Act, backend_info: BackendIn
         metadata=act.metadata,
         failed_request_id=request_id,
         raw_message=json.dumps(error),
+        extension_version=extension_version,
     )
 
 
-def handle_nova_act_client_error(error: dict, act: Act):
+def handle_nova_act_client_error(error: dict, act: Act, extension_version: str):
     request_id = error.get("requestId")
     code = error.get("code", "")
 
@@ -162,6 +167,7 @@ def handle_nova_act_client_error(error: dict, act: Act):
             metadata=act.metadata,
             failed_request_id=request_id,
             raw_message=str(e),
+            extension_version=extension_version,
         )
 
     if error_type == NovaActClientErrors.BAD_RESPONSE:
@@ -176,6 +182,7 @@ def handle_nova_act_client_error(error: dict, act: Act):
         metadata=act.metadata,
         failed_request_id=request_id,
         raw_message=json.dumps(error),
+        extension_version=extension_version,
     )
 
 

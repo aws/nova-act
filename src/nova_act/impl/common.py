@@ -72,7 +72,7 @@ def get_extension_version(extension_path: str):
     manifest_path = os.path.join(extension_path, "manifest.json")
     with open(manifest_path) as f:
         manifest = json.load(f)
-    return manifest["description"].replace(" ", "_")
+    return manifest["description"]
 
 
 def get_default_extension_path() -> str:
