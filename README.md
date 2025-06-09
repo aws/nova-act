@@ -305,12 +305,6 @@ nova.page.keyboard.type(getpass())
 nova.act("sign in")
 ```
 
-> **NOTE:** We are aware of an issue where sometimes a page element can not be put into focus by the agent. We are actively working on a fix for this. In the interim, to work around this you can instruct Nova Act in this way:
-> ```python
-> nova.act("enter '' in the password field")
-> nova.page.keyboard.type(getpass())
-> ```
-
 ### Captchas
 
 NovaAct will not solve captchas. It is up to the user to do that. If your script encounters captchas in certain places, you can do the following:
