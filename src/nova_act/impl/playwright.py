@@ -222,6 +222,7 @@ class PlaywrightInstanceManager:
                     *(["--headless=new"] if self._headless else []),
                     *([] if not self._profile_directory else [f"--profile-directory={self._profile_directory}"]),
                     "--silent-debugger-extension-api",
+                    "--remote-allow-origins=https://chrome-devtools-frontend.appspot.com",
                     *user_browser_args,
                 ]
 
