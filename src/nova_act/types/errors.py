@@ -61,6 +61,8 @@ class AuthError(NovaActError):
         super().__init__(warning)
 
 
+
+
 class ValidationFailed(NovaActError, ABC):
     """Indicates assumptions violated about how the SDK can be used"""
 

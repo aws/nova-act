@@ -15,7 +15,7 @@ import time
 import uuid
 from contextlib import nullcontext
 from dataclasses import replace
-from typing import ContextManager, cast
+from typing import Any, ContextManager, Dict, cast
 
 from playwright.sync_api import Error as PlaywrightError
 from retry.api import retry_call
@@ -67,7 +67,7 @@ class ExtensionDispatcher:
     def __init__(
         self,
         backend_info: BackendInfo,
-        nova_act_api_key: str,
+        nova_act_api_key: str | None,
         playwright_manager: PlaywrightInstanceManager,
         session_logs_directory: str | None,
         extension_version: str,
@@ -178,7 +178,7 @@ class ExtensionDispatcher:
         * https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage
 
         """
-        pending_action_message = {
+        pending_action_message: Dict[str, Any] = {
             "type": DISPATCH_PROMPT_TYPE,
             "pendingPrompt": act.prompt,
             "apiKey": self._nova_act_api_key,
@@ -306,3 +306,4 @@ class ExtensionDispatcher:
 
 
             return output
+

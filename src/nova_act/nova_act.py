@@ -162,7 +162,8 @@ class NovaAct:
             A list of stop hooks that are called when this object is stopped.
         """
 
-        self._backend = Backend.PROD
+
+        self._backend = self._determine_backend()
         self._backend_info = get_urls_for_backend(self._backend)
 
         extension_path = extension_path or get_default_extension_path()
@@ -213,26 +214,26 @@ class NovaAct:
             validate_timeout(go_to_url_timeout)
         self.go_to_url_timeout = go_to_url_timeout
 
-        nova_act_api_key = nova_act_api_key or os.environ.get("NOVA_ACT_API_KEY")
+        self._nova_act_api_key = nova_act_api_key or os.environ.get("NOVA_ACT_API_KEY")
 
-        if not nova_act_api_key:
-            raise AuthError(backend_info=self._backend_info)
-        self._nova_act_api_key = nova_act_api_key
+        self._validate_auth()
 
         self.endpoint_name = endpoint_name
 
-        validate_length(
-            extension_path=extension_path,
-            starting_page=self._starting_page,
-            profile_directory=profile_directory,
-            user_data_dir=self._session_user_data_dir,
-            nova_act_api_key=self._nova_act_api_key,
-            endpoint_name=self.endpoint_name,
-            cdp_endpoint_url=cdp_endpoint_url,
-            user_agent=user_agent,
-            logs_directory=logs_directory,
-            backend=self._backend,
-        )
+        if self._nova_act_api_key:
+            validate_length(
+                extension_path=extension_path,
+                starting_page=self._starting_page,
+                profile_directory=profile_directory,
+                user_data_dir=self._session_user_data_dir,
+                nova_act_api_key=self._nova_act_api_key,
+                endpoint_name=self.endpoint_name,
+                cdp_endpoint_url=cdp_endpoint_url,
+                user_agent=user_agent,
+                logs_directory=logs_directory,
+                backend=self._backend,
+            )
+
         self._tty = tty
 
         self.screen_width = screen_width
@@ -258,6 +259,17 @@ class NovaAct:
         self._dispatcher: ExtensionDispatcher | None = None
         self._session_id: str | None = None
         self._stop_hooks = stop_hooks
+
+    def _determine_backend(self) -> Backend:
+        """Determines which Nova Act backend to use."""
+
+        return Backend.PROD
+
+    def _validate_auth(self) -> None:
+        """Validate that the NovaAct instance is using supported authentication methods."""
+
+        if not self._nova_act_api_key:
+            raise AuthError(backend_info=self._backend_info)
 
     def __del__(self) -> None:
         if hasattr(self, "_session_user_data_dir_is_temp") and self._session_user_data_dir_is_temp:
@@ -368,6 +380,8 @@ class NovaAct:
                     session_logs_directory=session_logs_directory,
                 )
                 set_logging_session(self._session_id)
+
+
             self._dispatcher.wait_for_page_to_settle(go_to_url_timeout=self.go_to_url_timeout)
             session_logs_str = f" logs dir {session_logs_directory}" if session_logs_directory else ""
             _TRACE_LOGGER.info(f"\nstart session {self._session_id} on {self._starting_page}{session_logs_str}\n")
@@ -490,6 +504,7 @@ class NovaAct:
         )
         _TRACE_LOGGER.info(f'{get_session_id_prefix()}act("{prompt}")')
 
+
         try:
             response = self.dispatcher.dispatch_and_wait_for_prompt_completion(act)
             if isinstance(response, ActError):
@@ -515,3 +530,4 @@ class NovaAct:
         self.page.goto(url, wait_until="domcontentloaded")
         self.page.wait_for_selector("#autonomy-listeners-registered", state="attached")
         self.dispatcher.wait_for_page_to_settle(go_to_url_timeout=self.go_to_url_timeout)
+

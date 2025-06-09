@@ -127,7 +127,6 @@ class PlaywrightInstanceManager:
         trusted_page.wait_for_selector("#autonomy-listeners-registered", state="attached")
         trusted_page.evaluate(POST_MESSAGE_EXPRESSION, self._encrypter.make_set_key_message())
 
-
         # The default opened page may contain infobars with messages while new pages should not.
         first_page = context.new_page()
         first_video_path = None
@@ -331,7 +330,7 @@ class PlaywrightInstanceManager:
 
     @property
     def context(self) -> BrowserContext:
-        "Get the browser context"
+        """Get the browser context"""
         if self._context is None:
             raise ClientNotStarted("Playwright not attached, run start() to start")
 
