@@ -274,6 +274,10 @@ class NovaAct:
         if not self._nova_act_api_key:
             raise AuthError(backend_info=self._backend_info)
 
+    def _settle_on_start(self) -> None:
+        assert self._dispatcher is not None
+        self._dispatcher.wait_for_page_to_settle(go_to_url_timeout=self.go_to_url_timeout)
+
     def __del__(self) -> None:
         if hasattr(self, "_session_user_data_dir_is_temp") and self._session_user_data_dir_is_temp:
             _LOGGER.debug(f"Deleting {self._session_user_data_dir}")
@@ -388,7 +392,7 @@ class NovaAct:
                 set_logging_session(self._session_id)
 
 
-            self._dispatcher.wait_for_page_to_settle(go_to_url_timeout=self.go_to_url_timeout)
+            self._settle_on_start()
             session_logs_str = f" logs dir {session_logs_directory}" if session_logs_directory else ""
             _TRACE_LOGGER.info(f"\nstart session {self._session_id} on {self._starting_page}{session_logs_str}\n")
         except Exception as e:

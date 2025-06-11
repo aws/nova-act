@@ -69,6 +69,7 @@ class PlaywrightInstanceManager:
         record_video: bool,
         ignore_https_errors: bool,
         go_to_url_timeout: int | None = None,
+        require_extension: bool = True,
     ):
         self._playwright = maybe_playwright
         self._owns_playwright = maybe_playwright is None  # Tracks if we created an instance
@@ -86,6 +87,7 @@ class PlaywrightInstanceManager:
         self._record_video = record_video
         self._ignore_https_errors = ignore_https_errors
         self._go_to_url_timeout = 1000.0 * (go_to_url_timeout or _DEFAULT_GO_TO_URL_TIMEOUT)
+        self._require_extension = require_extension
 
         external_browser = self._cdp_endpoint_url is not None
         if external_browser:
@@ -124,6 +126,11 @@ class PlaywrightInstanceManager:
         # - Send the encryption key through that page to the extension service worker.
         # - Service worker will then register the tab id with the SDK.
         # - Open the starting page and close the trusted page.
+
+        if not self._require_extension:
+            # If the extension is not required, go to the starting page and exit.
+            trusted_page.goto(self._starting_page, timeout=self._go_to_url_timeout)
+            return trusted_page
 
         context.expose_function(HANDLE_ENCRYPTED_MESSAGE_FUNCTION_NAME, self._window_message_handler.handle_message)
 
@@ -224,8 +231,14 @@ class PlaywrightInstanceManager:
                 user_browser_args = os.environ.get("NOVA_ACT_BROWSER_ARGS", "").split()
 
                 launch_args = [
-                    f"--disable-extensions-except={self._extension_path}",
-                    f"--load-extension={self._extension_path}",
+                    *(
+                        [
+                            f"--disable-extensions-except={self._extension_path}",
+                            f"--load-extension={self._extension_path}",
+                        ]
+                        if self._require_extension
+                        else []
+                    ),
                     f"--window-size={self.screen_width},{self.screen_height}",
                     "--disable-blink-features=AutomationControlled",  # Suppress navigator.webdriver flag
                     *(["--headless=new"] if self._headless else []),
