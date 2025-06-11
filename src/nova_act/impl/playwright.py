@@ -39,6 +39,7 @@ from nova_act.types.errors import (
     StartFailed,
     ValidationFailed,
 )
+from nova_act.util.common_js_expressions import Expressions
 from nova_act.util.logging import setup_logging
 
 _LOGGER = setup_logging(__name__)
@@ -253,7 +254,7 @@ class PlaywrightInstanceManager:
                         headless=True, args=["--headless=new", *user_browser_args]
                     )
                     page = browser.new_page()
-                    original_user_agent = page.evaluate("() => navigator.userAgent")
+                    original_user_agent = page.evaluate(Expressions.GET_USER_AGENT.value)
                     browser.close()
                     # Replace the headless chrome bit since it's a detection artifact.
                     original_user_agent = original_user_agent.replace("HeadlessChrome/", "Chrome/")

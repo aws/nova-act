@@ -34,6 +34,7 @@ from nova_act.impl.inputs import (
 )
 from nova_act.impl.playwright import PlaywrightInstanceManager
 from nova_act.impl.run_info_compiler import RunInfoCompiler
+
 from nova_act.types.act_errors import ActError
 from nova_act.types.act_result import ActResult
 from nova_act.types.errors import AuthError, ClientNotStarted, StartFailed, StopFailed, ValidationFailed
@@ -372,6 +373,8 @@ class NovaAct:
 
             self._playwright.start(session_logs_directory)
             self._run_info_compiler = RunInfoCompiler(session_logs_directory)
+
+
             if self._dispatcher is None:
                 self._dispatcher = ExtensionDispatcher(
                     backend_info=self._backend_info,
