@@ -68,6 +68,7 @@ class PlaywrightInstanceManager:
         user_agent: str | None,
         record_video: bool,
         ignore_https_errors: bool,
+        use_default_chrome_browser: bool = False,
         go_to_url_timeout: int | None = None,
         require_extension: bool = True,
     ):
@@ -80,17 +81,17 @@ class PlaywrightInstanceManager:
         self._user_data_dir = user_data_dir
         self._profile_directory = profile_directory
         self._cdp_endpoint_url = cdp_endpoint_url
-        self._owns_context = cdp_endpoint_url is None
+        self._owns_context = cdp_endpoint_url is None and not use_default_chrome_browser
         self.screen_width = screen_width
         self.screen_height = screen_height
         self.user_agent = user_agent
         self._record_video = record_video
         self._ignore_https_errors = ignore_https_errors
         self._go_to_url_timeout = 1000.0 * (go_to_url_timeout or _DEFAULT_GO_TO_URL_TIMEOUT)
+        self._use_default_chrome_browser = use_default_chrome_browser
         self._require_extension = require_extension
 
-        external_browser = self._cdp_endpoint_url is not None
-        if external_browser:
+        if self._cdp_endpoint_url is not None or self._use_default_chrome_browser:
             if self._record_video:
                 raise ValidationFailed("Cannot record video when connecting over CDP")
             if self._profile_directory:
@@ -205,6 +206,83 @@ class PlaywrightInstanceManager:
                         ) from e
                     raise
 
+            if self._use_default_chrome_browser:
+                # Launch the default browser with a debug port and a freshly copied user data dir.
+
+                # Only works on macos.
+                assert sys.platform == "darwin"
+
+                _LOGGER.info("Quitting Chrome if it's running...")
+                subprocess.run(["osascript", "-e", 'quit app "Google Chrome"'], check=True)
+
+                # Wait for it to exit.
+                exited = False
+                for _ in range(6):  # Wait up to 3 seconds.
+                    try:
+                        output = subprocess.check_output(["pgrep", "-x", "Google Chrome"])
+                        if output.strip():
+                            time.sleep(0.5)
+                            continue
+                    except subprocess.CalledProcessError:
+                        pass
+                    exited = True
+                    break
+
+                assert exited, "Could not quit Chrome"
+
+                # rsync the default user data dir to the temp location. Can't start the default Chrome with a debug
+                # port without this.
+                home = str(Path.home())
+                src_dir = os.path.join(home, "Library", "Application Support", "Google", "Chrome")
+                _LOGGER.info(f"Copying Chrome user data from {src_dir} to {self._user_data_dir}...")
+
+                rsync(
+                    src_dir + "/",
+                    self._user_data_dir,
+                    ["--exclude=Singleton*"],
+                )
+
+                # Start Chrome with a debug port and the new user data dir.
+                _LOGGER.info(
+                    f"Launching Chrome with user-data-dir={self._user_data_dir} remote-debugging-port={_CDP_PORT}"
+                )
+                self._launched_default_chrome_popen = subprocess.Popen(
+                    [
+                        _MACOS_LOCAL_CHROME_PATH,
+                        f"--remote-debugging-port={_CDP_PORT}",
+                        f"--user-data-dir={self._user_data_dir}",
+                        f"--window-size={self.screen_width},{self.screen_height}",
+                        *(
+                            [
+                                f"--disable-extensions-except={self._extension_path}",
+                                f"--load-extension={self._extension_path}",
+                            ]
+                            if self._require_extension
+                            else []
+                        ),
+                    ],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                try:
+                    # Wait until Chrome's debugger endpoint is available. When it is, set cdp_endpoint_url to it.
+                    for _ in range(10):  # Wait up to 5 seconds.
+                        try:
+                            resp = requests.get(f"http://localhost:{_CDP_PORT}/json/version")
+                            resp.raise_for_status()
+                            ws_url = resp.json().get("webSocketDebuggerUrl")
+                            if ws_url:
+                                self._cdp_endpoint_url = ws_url
+                        except requests.RequestException:
+                            # Just retry.
+                            pass
+                        time.sleep(0.5)
+                    assert self._cdp_endpoint_url is not None, "Could not get Chrome's debugger endpoint"
+                except Exception:
+                    self._launched_default_chrome_popen.terminate()
+                    raise
+
+                _LOGGER.info(f"Chrome launched with ws url {self._cdp_endpoint_url}")
 
             # Attach to a context or create one.
             if self._cdp_endpoint_url is not None:

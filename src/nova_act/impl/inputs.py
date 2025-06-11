@@ -212,6 +212,7 @@ def validate_base_parameters(
     screen_height: int,
     chrome_channel: str,
     ignore_https_errors: bool,
+    use_default_chrome_browser: bool,
 ):
     validate_path(extension_path, "extension_path")
     validate_url(starting_page, "starting_page")
@@ -229,6 +230,12 @@ def validate_base_parameters(
         validate_path(logs_directory, "logs_directory", empty_directory_allowed=True)
 
     validate_chrome_channel(chrome_channel)
+
+    if use_default_chrome_browser:
+        if sys.platform != "darwin":
+            raise NotImplementedError("use_default_chrome_browser is only supported on macOS")
+        if not user_data_dir:
+            raise InvalidPath("use_default_chrome_browser requires user_data_dir to be provided")
 
 
 def validate_length(

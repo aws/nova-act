@@ -109,6 +109,7 @@ class NovaAct:
         go_to_url_timeout: int | None = None,
         ignore_https_errors: bool = False,
         stop_hooks: list[StopHook] = [],
+        use_default_chrome_browser: bool = False,
     ):
         """Initialize a client object.
 
@@ -162,6 +163,8 @@ class NovaAct:
             Whether to ignore https errors for url to allow website with self-signed certificates
         stop_hooks: list[StopHook]
             A list of stop hooks that are called when this object is stopped.
+        use_default_chrome_browser: bool
+            Use the locally installed Chrome browser. Only works on MacOS.
         """
 
 
@@ -174,6 +177,7 @@ class NovaAct:
 
         self._starting_page = starting_page or "https://www.google.com"
 
+        clone_user_data_dir = clone_user_data_dir and not use_default_chrome_browser
         if user_data_dir:  # pragma: no cover
             # We were supplied an existing user_data_dir.
             if clone_user_data_dir:
@@ -212,6 +216,7 @@ class NovaAct:
             logs_directory=logs_directory,
             chrome_channel=_chrome_channel,
             ignore_https_errors=ignore_https_errors,
+            use_default_chrome_browser=use_default_chrome_browser,
         )
         if go_to_url_timeout is not None:
             validate_timeout(go_to_url_timeout)
@@ -257,6 +262,7 @@ class NovaAct:
             record_video=bool(record_video and self._logs_directory),
             ignore_https_errors=ignore_https_errors,
             go_to_url_timeout=self.go_to_url_timeout,
+            use_default_chrome_browser=use_default_chrome_browser,
         )
 
         self._dispatcher: ExtensionDispatcher | None = None

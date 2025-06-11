@@ -57,7 +57,6 @@ export NOVA_ACT_API_KEY="your_api_key"
 
 ### Installation
 
-
 ```bash
 pip install nova-act
 ```
@@ -305,6 +304,21 @@ print(f"User data dir saved to {user_data_dir=}")
 
 The script is included in the installation: `python -m nova_act.samples.setup_chrome_user_data_dir`.
 
+#### Run against the local default Chrome browser
+
+If your local default Chrome browser has extensions or security features you need for sites you need your workflow to access, you can configure the SDK to use the Chrome browser installed on your machine rather than the one managed by the SDK using the `NovaAct` parameters below.  `use_default_chrome_browser` requires `user_data_dir` to also be specified because we take a copy of the user data dir before starting default Chrome.
+
+> **Note**: This will quit your default running Chrome and restart it with new arguments. At the end of the session, it will quit Chrome.
+
+```python
+>>> from nova_act import NovaAct
+>>> nova = NovaAct(use_default_chrome_browser=True, user_data_dir="/tmp/chrome-temp", starting_page="https://www.amazon.com")
+>>> nova.start()
+>>> nova.act('search for a bird')
+...
+>>> nova.stop()
+>>> quit()
+```
 
 ### Entering sensitive information
 

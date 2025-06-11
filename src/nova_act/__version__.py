@@ -11,5 +11,5 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-VERSION = "1.0.3282.0"  # pragma: no cover
-EXTENSION_VERSION = "Built on 2025-06-10T16:06:32.782Z off of Package Version: 1.0.7048.0 (99b0d28362b6777c94e9dbf9a5904c1ef9fa082e)"  # pragma: no cover
+VERSION = "1.0.3323.0"  # pragma: no cover
+EXTENSION_VERSION = "Built on 2025-06-11T19:20:52.822Z off of Package Version: 1.0.7111.0 (c12fb37f85840cfc334838ef20583dae862a270c)"  # pragma: no cover
