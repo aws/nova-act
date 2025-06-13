@@ -200,7 +200,10 @@ class PlaywrightInstanceManager:
 
             # Attach to a context or create one.
             if self._cdp_endpoint_url is not None:
-                browser = self._playwright.chromium.connect_over_cdp(self._cdp_endpoint_url)
+                try:
+                    browser = self._playwright.chromium.connect_over_cdp(self._cdp_endpoint_url)
+                except PlaywrightError as e:
+                    raise StartFailed(f"Failed to connect to CDP endpoint {self._cdp_endpoint_url}: {str(e)}") from e
 
                 if not browser.contexts:
                     raise InvalidPlaywrightState("No contexts found in the browser")
