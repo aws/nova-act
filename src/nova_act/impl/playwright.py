@@ -185,8 +185,8 @@ class PlaywrightInstanceManager:
 
         self._session_logs_directory = session_logs_directory
         try:
-            # Start a new playwright instance if one was not provided by the user
-            if self._playwright is None:
+            # Start a new playwright instance if one was not provided by the user and we're not using CDP
+            if self._playwright is None and self._cdp_endpoint_url is None:
                 try:
                     self._playwright = sync_playwright().start()
                 except RuntimeError as e:
