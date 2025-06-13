@@ -16,6 +16,8 @@ import os
 import sys
 from contextvars import ContextVar
 
+from nova_act.__version__ import VERSION as SDK_VERSION
+
 _session_id = ContextVar("session_id", default=None)
 
 
@@ -100,3 +102,5 @@ def create_warning_box(messages: list[str]) -> str:
 
     # Combine all parts
     return f"\n{border}\n{chr(10).join(middle_lines)}\n{border}"
+
+

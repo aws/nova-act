@@ -22,8 +22,10 @@ from typing import Any, Dict, Type, cast
 from playwright.sync_api import Page, Playwright
 
 from nova_act.impl.backend import Backend, get_urls_for_backend
-from nova_act.impl.common import get_default_extension_path, get_extension_version, rsync
-from nova_act.impl.extension import DEFAULT_ENDPOINT_NAME, ExtensionDispatcher
+from nova_act.impl.common import get_default_extension_path, rsync
+from nova_act.impl.dispatcher import ActDispatcher
+from nova_act.impl.dispatcher_factory import create_act_dispatcher
+from nova_act.impl.extension import DEFAULT_ENDPOINT_NAME
 from nova_act.impl.inputs import (
     validate_base_parameters,
     validate_length,
@@ -34,7 +36,6 @@ from nova_act.impl.inputs import (
 )
 from nova_act.impl.playwright import PlaywrightInstanceManager
 from nova_act.impl.run_info_compiler import RunInfoCompiler
-
 from nova_act.types.act_errors import ActError
 from nova_act.types.act_result import ActResult
 from nova_act.types.errors import AuthError, ClientNotStarted, StartFailed, StopFailed, ValidationFailed
@@ -45,8 +46,6 @@ from nova_act.util.logging import get_session_id_prefix, make_trace_logger, set_
 
 DEFAULT_SCREEN_WIDTH = 1600
 DEFAULT_SCREEN_HEIGHT = 900
-
-DEFAULT_ACT_MAX_STEPS = 30
 
 _LOGGER = setup_logging(__name__)
 _TRACE_LOGGER = make_trace_logger()
@@ -71,8 +70,8 @@ class NovaAct:
         The playwright Page object for actuation
     pages: list[playwright.Page]
         All playwright Pages available in Browser
-    dispatcher: ExtensionDispatcher
-        Component for sending act prompts to the Chrome Extension
+    dispatcher: Dispatcher
+        Component for sending act prompts to the Browser
 
     Methods
     -------
@@ -173,7 +172,6 @@ class NovaAct:
         self._backend_info = get_urls_for_backend(self._backend)
 
         extension_path = extension_path or get_default_extension_path()
-        self._extension_version = get_extension_version(extension_path)
 
         self._starting_page = starting_page or "https://www.google.com"
 
@@ -265,9 +263,16 @@ class NovaAct:
             use_default_chrome_browser=use_default_chrome_browser,
         )
 
-        self._dispatcher: ExtensionDispatcher | None = None
         self._session_id: str | None = None
         self._stop_hooks = stop_hooks
+
+        self._dispatcher: ActDispatcher = create_act_dispatcher(
+            playwright_manager=self._playwright,
+            nova_act_api_key=self._nova_act_api_key,
+            backend_info=self._backend_info,
+            tty=self._tty,
+            extension_path=extension_path,
+        )
 
     def _determine_backend(self) -> Backend:
         """Determines which Nova Act backend to use."""
@@ -281,8 +286,8 @@ class NovaAct:
             raise AuthError(backend_info=self._backend_info)
 
     def _settle_on_start(self) -> None:
-        assert self._dispatcher is not None
-        self._dispatcher.wait_for_page_to_settle(go_to_url_timeout=self.go_to_url_timeout)
+        assert self._dispatcher is not None and self._session_id is not None
+        self._dispatcher.wait_for_page_to_settle(session_id=self._session_id, timeout=self.go_to_url_timeout)
 
     def __del__(self) -> None:
         if hasattr(self, "_session_user_data_dir_is_temp") and self._session_user_data_dir_is_temp:
@@ -301,7 +306,7 @@ class NovaAct:
     @property
     def started(self) -> bool:
         """Check if the browser is started."""
-        return self._playwright.started and self._dispatcher is not None and self._session_id is not None
+        return self._playwright.started and self._session_id is not None
 
     @property
     def page(self) -> Page:
@@ -333,9 +338,19 @@ class NovaAct:
             raise ClientNotStarted("Run start() to start the client before accessing Playwright Pages.")
         return self._playwright.context.pages
 
+    def go_to_url(self, url: str) -> None:
+        """Navigates to the specified URL and waits for the page to settle."""
+
+        validate_url(url, "go_to_url")
+
+        if self.page is None or self._session_id is None:
+            raise ClientNotStarted("Run start() to start the client before running go_to_url")
+
+        self.dispatcher.go_to_url(url, self._session_id, timeout=self.go_to_url_timeout)
+
     @property
-    def dispatcher(self) -> ExtensionDispatcher:
-        """Get an ExtensionDispatcher for actuation on the current page."""
+    def dispatcher(self) -> ActDispatcher:
+        """Get an ActDispatcher for actuation on the current page."""
         if not self.started:
             raise ClientNotStarted("Client must be started before accessing the dispatcher.")
         assert self._dispatcher is not None
@@ -382,25 +397,11 @@ class NovaAct:
                     )
 
             self._playwright.start(session_logs_directory)
-            self._run_info_compiler = RunInfoCompiler(session_logs_directory)
-
-
-            if self._dispatcher is None:
-                self._dispatcher = ExtensionDispatcher(
-                    backend_info=self._backend_info,
-                    nova_act_api_key=self._nova_act_api_key,
-                    tty=self._tty,
-                    session_id=self._session_id,
-                    playwright_manager=self._playwright,
-                    extension_version=self._extension_version,
-                    run_info_compiler=self._run_info_compiler,
-                )
-                set_logging_session(self._session_id)
-
-
             self._settle_on_start()
+            self._run_info_compiler = RunInfoCompiler(session_logs_directory)
             session_logs_str = f" logs dir {session_logs_directory}" if session_logs_directory else ""
             _TRACE_LOGGER.info(f"\nstart session {self._session_id} on {self._starting_page}{session_logs_str}\n")
+
         except Exception as e:
             self._stop()
             raise StartFailed from e
@@ -440,11 +441,9 @@ class NovaAct:
     def _stop(self) -> None:
         try:
             self._execute_stop_hooks()
-            if self._dispatcher is not None:
-                self._dispatcher.cancel_prompt()
             if self._playwright.started:
+                self._dispatcher.cancel_prompt()
                 self._playwright.stop()
-            self._dispatcher = None
             _TRACE_LOGGER.info("\nend session\n")
             set_logging_session(None)
         except Exception as e:
@@ -462,7 +461,7 @@ class NovaAct:
         prompt: str,
         *,
         timeout: int | None = None,
-        max_steps: int = DEFAULT_ACT_MAX_STEPS,
+        max_steps: int | None = None,
         schema: Dict[str, Any] | None = None,
         endpoint_name: str | None = None,
         model_temperature: int | None = None,
@@ -520,30 +519,19 @@ class NovaAct:
         )
         _TRACE_LOGGER.info(f'{get_session_id_prefix()}act("{prompt}")')
 
-
         try:
             response = self.dispatcher.dispatch_and_wait_for_prompt_completion(act)
             if isinstance(response, ActError):
                 raise response
+            if schema:
+                response = populate_json_schema_response(response, schema)
         except (ActError, AuthError):
             raise
         except Exception as e:
             raise ActError(metadata=act.metadata) from e
-
-        if schema:
-            response = populate_json_schema_response(response, schema)
+        finally:
+            if self._run_info_compiler:
+                file_path = self._run_info_compiler.compile(act)
+                _TRACE_LOGGER.info(f"\n{get_session_id_prefix()}** View your act run here: {file_path}\n")
 
         return response
-
-    def go_to_url(self, url: str) -> None:
-        """Navigates to the specified URL and waits for the page to settle."""
-
-        validate_url(url, "go_to_url")
-
-        if not self.page or not self.dispatcher:
-            raise ClientNotStarted("Run start() to start the client before running go_to_url")
-
-        self.page.goto(url, wait_until="domcontentloaded")
-        self.page.wait_for_selector("#autonomy-listeners-registered", state="attached")
-        self.dispatcher.wait_for_page_to_settle(go_to_url_timeout=self.go_to_url_timeout)
-

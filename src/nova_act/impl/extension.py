@@ -22,10 +22,11 @@ from retry.api import retry_call
 
 from nova_act.__version__ import VERSION as SDK_VERSION
 from nova_act.impl.backend import BackendInfo
+from nova_act.impl.common import get_extension_version
+from nova_act.impl.dispatcher import ActDispatcher
 from nova_act.impl.keyboard_event_watcher import KeyboardEventWatcher
 from nova_act.impl.playwright import PlaywrightInstanceManager
 from nova_act.impl.protocol import parse_errors
-from nova_act.impl.run_info_compiler import RunInfoCompiler
 from nova_act.impl.window_messages import (
     CANCEL_PROMPT_TYPE,
     DISPATCH_PROMPT_TYPE,
@@ -36,7 +37,13 @@ from nova_act.types.act_errors import ActCanceledError, ActClientError, ActDispa
 from nova_act.types.act_result import ActResult
 from nova_act.types.state.act import Act, ActCanceled, ActFailed, ActSucceeded
 from nova_act.types.state.page import PageState
-from nova_act.util.logging import LoadScroller, get_session_id_prefix, is_quiet, make_trace_logger, setup_logging
+from nova_act.util.logging import (
+    LoadScroller,
+    get_session_id_prefix,
+    is_quiet,
+    make_trace_logger,
+    setup_logging,
+)
 
 # Check every 0.1 seconds, for a total of 30 seconds.
 DEFAULT_POLL_SLEEP_S = 0.1
@@ -58,7 +65,7 @@ _TRACE_LOGGER = make_trace_logger()
 
 
 
-class ExtensionDispatcher:
+class ExtensionDispatcher(ActDispatcher):
     """Dispatch act prompts to the Chrome Extension."""
 
     # Map workflow run IDs to act() statement IDs, for parsing return values.
@@ -69,23 +76,19 @@ class ExtensionDispatcher:
         backend_info: BackendInfo,
         nova_act_api_key: str | None,
         playwright_manager: PlaywrightInstanceManager,
-        run_info_compiler: RunInfoCompiler | None,
-        extension_version: str,
+        extension_path: str,
         tty: bool,
-        session_id: str,
         verbose_errors: bool = False,
         retry: bool = True,
     ):
         self._backend_info = backend_info
         self._nova_act_api_key = nova_act_api_key
         self._playwright_manager = playwright_manager
-        self._extension_version = extension_version
         self._tty = tty
-        self._session_id = session_id
         self._verbose_errors = verbose_errors
         self._retry = retry
 
-        self._run_info_compiler = run_info_compiler
+        self._extension_version = get_extension_version(extension_path)
 
     def _poll_playwright(self, timeout_s: float):
         try:
@@ -95,10 +98,6 @@ class ExtensionDispatcher:
             if self._verbose_errors:
                 _LOGGER.error(f"{type(e).__name__}", exc_info=True)
         time.sleep(timeout_s)
-
-    @property
-    def session_id(self) -> str:
-        return self._session_id
 
     def cancel_prompt(self, act: Act | None = None):
         """Dispatch a cancel message to the extension.
@@ -129,14 +128,14 @@ class ExtensionDispatcher:
             message="Failed to cancel Act", metadata=act.metadata, extension_version=self._extension_version
         )
 
-    def wait_for_page_to_settle(self, go_to_url_timeout: int | None = None) -> None:
+    def wait_for_page_to_settle(self, session_id: str, timeout: int | None = None) -> None:
         """
         Dispatch a page state query to extension and wait for confirmation of settled.
         """
-        page_state = PageState(self._session_id)
+        page_state = PageState(session_id)
 
-        if go_to_url_timeout is None:
-            go_to_url_timeout = MAX_WAIT_FOR_PAGE_TO_SETTLE_TIMEOUT
+        if timeout is None:
+            timeout = MAX_WAIT_FOR_PAGE_TO_SETTLE_TIMEOUT
 
         self._playwright_manager.window_message_handler.bind_page(page_state)
         request_wait_for_page_state_message = {
@@ -144,9 +143,9 @@ class ExtensionDispatcher:
             "apiKey": self._nova_act_api_key,
             "uuid": str(uuid.uuid4()),
             "hostname": self._backend_info.api_uri,
-            "sessionId": self._session_id,
+            "sessionId": session_id,
             "useBedrock": True,
-            "maxTimeout": go_to_url_timeout,
+            "maxTimeout": timeout,
         }
 
 
@@ -158,14 +157,21 @@ class ExtensionDispatcher:
             if self._verbose_errors:
                 _LOGGER.error("Encountered PlaywrightError", exc_info=True)
 
-        end_time = time.time() + EXTENSION_TIMEOUT_S + go_to_url_timeout
+        end_time = time.time() + EXTENSION_TIMEOUT_S + timeout
         while time.time() < end_time:
             if page_state.is_settled:
                 return
             else:
                 self._poll_playwright(EXTENSION_POLL_SLEEP_S)
 
-        _LOGGER.warning(f"Page not settled after {go_to_url_timeout}s")
+        _LOGGER.warning(f"Page not settled after {timeout}s")
+
+    def go_to_url(self, url: str, session_id: str, timeout: int | None = None) -> None:
+        """Navigates to the specified URL and waits for the page to settle."""
+
+        self._playwright_manager.main_page.goto(url, wait_until="domcontentloaded")
+        self._playwright_manager.main_page.wait_for_selector("#autonomy-listeners-registered", state="attached")
+        self.wait_for_page_to_settle(session_id, timeout=timeout)
 
     def _dispatch_prompt_and_wait_for_ack(self, act: Act):
         """Dispatch an act prompt to the extension.
@@ -184,7 +190,7 @@ class ExtensionDispatcher:
             "uuid": act.id,
             "endpointName": act.endpoint_name,
             "hostname": self._backend_info.api_uri,
-            "sessionId": self._session_id,
+            "sessionId": act.session_id,
             "useBedrock": True,
         }
         if act.max_steps:
@@ -281,10 +287,6 @@ class ExtensionDispatcher:
             else:
                 act.did_timeout = True
                 self.cancel_prompt(act)
-
-            if self._run_info_compiler:
-                file_path = self._run_info_compiler.compile(act)
-                _TRACE_LOGGER.info(f"\n{get_session_id_prefix()}** View your act run here: {file_path}\n")
 
             result = act.result
             output: ActResult | ActError

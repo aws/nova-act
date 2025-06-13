@@ -214,7 +214,8 @@ def validate_base_parameters(
     ignore_https_errors: bool,
     use_default_chrome_browser: bool,
 ):
-    validate_path(extension_path, "extension_path")
+    if extension_path:
+        validate_path(extension_path, "extension_path")
     validate_url(starting_page, "starting_page")
     validate_url_ssl_certificate(ignore_https_errors, starting_page)
     validate_url(backend_uri, "backend_uri")

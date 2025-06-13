@@ -24,6 +24,8 @@ from attrs.setters import frozen
 from nova_act.types.act_metadata import ActMetadata
 from nova_act.types.state.step import Step
 
+DEFAULT_ACT_MAX_STEPS = 30
+
 
 @dataclass
 class ActSucceeded:
@@ -49,7 +51,11 @@ class Act:
     timeout: float = field(on_setattr=frozen)
 
     # Optional constructor params (immutable)
-    max_steps: int | None = field(default=None, on_setattr=frozen)
+    max_steps: int = field(
+        default=DEFAULT_ACT_MAX_STEPS,
+        converter=lambda x: x if x is not None else DEFAULT_ACT_MAX_STEPS,
+        on_setattr=frozen,
+    )
     model_temperature: int | None = field(default=None, on_setattr=frozen)
     model_top_k: int | None = field(default=None, on_setattr=frozen)
     model_seed: int | None = field(default=None, on_setattr=frozen)
