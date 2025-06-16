@@ -194,8 +194,8 @@ class PlaywrightInstanceManager:
 
         self._session_logs_directory = session_logs_directory
         try:
-            # Start a new playwright instance if one was not provided by the user
-            if self._playwright is None:
+            # Start a new playwright instance if one was not provided by the user and we're not using CDP
+            if self._playwright is None and self._cdp_endpoint_url is None:
                 try:
                     self._playwright = sync_playwright().start()
                 except RuntimeError as e:
@@ -286,7 +286,10 @@ class PlaywrightInstanceManager:
 
             # Attach to a context or create one.
             if self._cdp_endpoint_url is not None:
-                browser = self._playwright.chromium.connect_over_cdp(self._cdp_endpoint_url)
+                try:
+                    browser = self._playwright.chromium.connect_over_cdp(self._cdp_endpoint_url)
+                except PlaywrightError as e:
+                    raise StartFailed(f"Failed to connect to CDP endpoint {self._cdp_endpoint_url}: {str(e)}") from e
 
                 if not browser.contexts:
                     raise InvalidPlaywrightState("No contexts found in the browser")
