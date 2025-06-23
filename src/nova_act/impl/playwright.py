@@ -39,6 +39,7 @@ from nova_act.types.errors import (
     StartFailed,
     ValidationFailed,
 )
+from nova_act.types.features import ExperimentalFeatures
 from nova_act.util.common_js_expressions import Expressions
 from nova_act.util.logging import setup_logging
 
@@ -72,6 +73,7 @@ class PlaywrightInstanceManager:
         go_to_url_timeout: int | None = None,
         require_extension: bool = True,
         cdp_headers: dict[str, str] | None = None,
+        experimental_features: ExperimentalFeatures | None = None,
     ):
         self._playwright = maybe_playwright
         self._owns_playwright = maybe_playwright is None  # Tracks if we created an instance
@@ -90,7 +92,22 @@ class PlaywrightInstanceManager:
         self._ignore_https_errors = ignore_https_errors
         self._go_to_url_timeout = 1000.0 * (go_to_url_timeout or _DEFAULT_GO_TO_URL_TIMEOUT)
         self._use_default_chrome_browser = use_default_chrome_browser
-        self._require_extension = require_extension
+        self._experimental_features = experimental_features
+
+        self._require_extension = (
+            not (
+                self._experimental_features
+                and any(
+                    (
+                        self._experimental_features.get("custom_actuator"),
+                        self._experimental_features.get("playwright_actuation"),
+                    )
+                )
+            )
+            if self._experimental_features
+            else require_extension
+        )
+
         self._cdp_headers = cdp_headers
 
         if self._cdp_endpoint_url is not None or self._use_default_chrome_browser:
@@ -119,6 +136,8 @@ class PlaywrightInstanceManager:
     @property
     def started(self):
         """Check if the client is started."""
+        if self._experimental_features and self._experimental_features.get("custom_actuator"):
+            return True
         return self._context is not None
 
     def _init_browser_context(self, context: BrowserContext, trusted_page: Page) -> Page:
@@ -187,6 +206,10 @@ class PlaywrightInstanceManager:
 
     def start(self, session_logs_directory: str | None) -> None:
         """Start and attach the Browser"""
+        if self._experimental_features and self._experimental_features.get("custom_actuator"):
+            _LOGGER.warning("Custom Actuator does not handle SDK based PlayWright.")
+            return
+
         if self._context is not None:
             _LOGGER.warning("Playwright already attached, to start over, stop the client")
             return

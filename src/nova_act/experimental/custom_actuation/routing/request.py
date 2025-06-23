@@ -1,0 +1,59 @@
+# Copyright 2025 Amazon Inc
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+import json
+
+
+from nova_act.experimental.custom_actuation.interface.browser import BrowserObservation
+
+
+def construct_plan_request(
+    act_id: str,
+    observation: BrowserObservation,
+    prompt: str | None = None,
+    error_executing_previous_step: str | None = None,
+    is_initial_step: bool = False,
+) -> str:
+    initial_prompt = prompt
+    if not is_initial_step:
+        initial_prompt = None
+
+    request_data = {
+        "agentRunId": act_id,
+        "idToBboxMap": observation.get("idToBboxMap", {}),
+        "observation": observation,
+        "screenshotBase64": observation["screenshotBase64"],
+        "tempReturnPlanResponse": True,
+    }
+
+
+    if error_executing_previous_step is not None:
+        request_data["errorExecutingPreviousStep"] = error_executing_previous_step
+
+    if initial_prompt is not None:
+        agent_run_create = {
+            "agentConfigName": "plan-v2",
+            "id": act_id,
+            "plannerFunctionArgs": {"task": initial_prompt},
+            "plannerFunctionName": "act",
+            "planningModelServerHost": "alpha-sunshine",
+            "task": initial_prompt,
+        }
+
+        request_data["agentRunCreate"] = agent_run_create
+
+    string_json_out = json.dumps(request_data)
+
+    return string_json_out
+
+

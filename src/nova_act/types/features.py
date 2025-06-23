@@ -13,9 +13,14 @@
 # limitations under the License.
 from typing_extensions import TypedDict
 
+from nova_act.experimental.custom_actuation.interface.browser import BrowserActuatorBase
 
-class ExperimentalFeatures(TypedDict):
+
+class ExperimentalFeatures(TypedDict, total=False):
     """Experimental features for opt-in."""
 
     playwright_actuation: bool
     """Actuate model output using native Playwright."""
+
+    custom_actuator: BrowserActuatorBase
+    """Provide a custom Actuator implementation."""

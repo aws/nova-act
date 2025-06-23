@@ -94,7 +94,7 @@ def parse_errors(act: Act, backend_info: BackendInfo, extension_version: str):
     )
 
 
-def handle_nova_act_service_error(error: dict, act: Act, backend_info: BackendInfo, extension_version: str):
+def handle_nova_act_service_error(error: dict, act: Act, backend_info: BackendInfo, extension_version: str | None):
     request_id = error.get("requestId", "")
     code = error.get("code")
 
@@ -155,8 +155,8 @@ def handle_nova_act_service_error(error: dict, act: Act, backend_info: BackendIn
     )
 
 
-def handle_nova_act_client_error(error: dict, act: Act, extension_version: str):
-    request_id = error.get("requestId")
+def handle_nova_act_client_error(error: dict, act: Act, extension_version: str | None):
+    request_id = error.get("requestId", "")
     code = error.get("code", "")
 
     try:

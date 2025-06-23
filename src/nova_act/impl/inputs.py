@@ -13,6 +13,7 @@
 # limitations under the License.
 import os
 import sys
+import uuid
 from urllib.parse import urlparse
 
 from nova_act.impl.backend import Backend, get_urls_for_backend
@@ -25,6 +26,7 @@ from nova_act.types.errors import (
     InvalidScreenResolution,
     InvalidTimeout,
     InvalidURL,
+    ValidationFailed,
 )
 from nova_act.util.logging import setup_logging
 from nova_act.util.url import verify_certificate
@@ -239,6 +241,7 @@ def validate_base_parameters(
             raise InvalidPath("use_default_chrome_browser requires user_data_dir to be provided")
 
 
+
 def validate_length(
     extension_path: str,
     starting_page: str,
@@ -268,3 +271,5 @@ def validate_length(
 
     if nova_act_api_key is not None and len(nova_act_api_key) != _get_key_length_by_backend(backend):
         raise AuthError(backend_info=get_urls_for_backend(backend), message="Invalid API key length")
+
+

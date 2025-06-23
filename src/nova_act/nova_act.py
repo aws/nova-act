@@ -21,6 +21,10 @@ from typing import Any, Dict, Type, cast
 
 from playwright.sync_api import Page, Playwright
 
+from nova_act.experimental.custom_actuation.playwright.default_nova_local_browser_actuator import (
+    DefaultNovaLocalBrowserActuator,
+)
+
 from nova_act.impl.backend import Backend, get_urls_for_backend
 from nova_act.impl.common import get_default_extension_path, rsync
 from nova_act.impl.dispatcher import ActDispatcher
@@ -111,6 +115,7 @@ class NovaAct:
         stop_hooks: list[StopHook] = [],
         use_default_chrome_browser: bool = False,
         cdp_headers: dict[str, str] | None = None,
+        experimental_features: ExperimentalFeatures | None = None,
     ):
         """Initialize a client object.
 
@@ -168,6 +173,8 @@ class NovaAct:
             Use the locally installed Chrome browser. Only works on MacOS.
         cdp_headers: dict[str, str], optional
             Additional HTTP headers to be sent when connecting to a CDP endpoint
+        experimental_features: ExperimentalFeatures
+            Optional experimental features for opt-in.
         """
 
 
@@ -178,6 +185,15 @@ class NovaAct:
         extension_path = extension_path or get_default_extension_path()
 
         self._starting_page = starting_page or "https://www.google.com"
+
+        self._experimental_features: ExperimentalFeatures | None = experimental_features
+
+        if (
+            self._experimental_features
+            and self._experimental_features.get("playwright_actuation")
+            and self._experimental_features.get("custom_actuator")
+        ):
+            raise ValidationFailed("Specify one of `playwright_actuation` or `custom_actuator`; not both.")
 
         clone_user_data_dir = clone_user_data_dir and not use_default_chrome_browser
         if user_data_dir:  # pragma: no cover
@@ -266,10 +282,20 @@ class NovaAct:
             go_to_url_timeout=self.go_to_url_timeout,
             use_default_chrome_browser=use_default_chrome_browser,
             cdp_headers=cdp_headers,
+            experimental_features=self._experimental_features,
         )
 
         self._session_id: str | None = None
+
+
         self._stop_hooks = stop_hooks
+
+        self._actuator = None
+        if self._experimental_features:
+            if custom_actuator := self._experimental_features.get("custom_actuator"):
+                self._actuator = custom_actuator
+            elif self._experimental_features.get("playwright_actuation"):
+                self._actuator = DefaultNovaLocalBrowserActuator(playwright_manager=self._playwright)
 
         self._dispatcher: ActDispatcher = create_act_dispatcher(
             playwright_manager=self._playwright,
@@ -277,6 +303,7 @@ class NovaAct:
             backend_info=self._backend_info,
             tty=self._tty,
             extension_path=extension_path,
+            actuator=self._actuator,
         )
 
     def _determine_backend(self) -> Backend:
@@ -289,10 +316,6 @@ class NovaAct:
 
         if not self._nova_act_api_key:
             raise AuthError(backend_info=self._backend_info)
-
-    def _settle_on_start(self) -> None:
-        assert self._dispatcher is not None and self._session_id is not None
-        self._dispatcher.wait_for_page_to_settle(session_id=self._session_id, timeout=self.go_to_url_timeout)
 
     def __del__(self) -> None:
         if hasattr(self, "_session_user_data_dir_is_temp") and self._session_user_data_dir_is_temp:
@@ -320,15 +343,24 @@ class NovaAct:
         This is the Playwright Page on which the SDK is currently actuating
 
         To get a specific page, use `NovaAct.pages` to list all pages,
-        then fetch the intended page with its 0-starting index in `NovaAct.get_page(i)`
+        then fetch the intended page with its 0-starting index in `NovaAct.get_page(i)`.
+
+        Note that the Playwright Page is only relevant to the default Actuator, and therefore
+        is not available if the user has provided a custom Actuator.
         """
+        if self._actuator is not None and not isinstance(self._actuator, DefaultNovaLocalBrowserActuator):
+            raise ValueError(f"{type(self).__name__}.page not available for custom actuators.")
         return self.get_page()
 
     def get_page(self, index: int = -1) -> Page:
         """Get a particular playwright page by index or the currently actuating page if index == -1.
 
-        Note: the order of these pages might not reflect their tab order in the window if they have been moved
+        Note: the order of these pages might not reflect their tab order in the window if they have been moved.
+
+        Only available for default actuation.
         """
+        if self._actuator is not None and not isinstance(self._actuator, DefaultNovaLocalBrowserActuator):
+            raise ValueError(f"{type(self).__name__}.get_page not available for custom actuators.")
         if not self.started:
             raise ClientNotStarted("Run start() to start the client before accessing the Playwright Page.")
         return self._playwright.get_page(index)
@@ -337,8 +369,12 @@ class NovaAct:
     def pages(self) -> list[Page]:
         """Get the current playwright pages.
 
-        Note: the order of these pages might not reflect their tab order in the window if they have been moved
+        Note: the order of these pages might not reflect their tab order in the window if they have been moved.
+
+        Only available for default actuation.
         """
+        if self._actuator is not None and not isinstance(self._actuator, DefaultNovaLocalBrowserActuator):
+            raise ValueError(f"{type(self).__name__}.pages not available for custom actuators.")
         if not self.started:
             raise ClientNotStarted("Run start() to start the client before accessing Playwright Pages.")
         return self._playwright.context.pages
@@ -360,6 +396,9 @@ class NovaAct:
             raise ClientNotStarted("Client must be started before accessing the dispatcher.")
         assert self._dispatcher is not None
         return self._dispatcher
+
+    def _create_session_id(self) -> str:
+        return str(uuid.uuid4())
 
     def get_session_id(self) -> str:
         """Get the session ID for the current client.
@@ -385,7 +424,7 @@ class NovaAct:
 
 
         try:
-            self._session_id = str(uuid.uuid4())
+            self._session_id = self._create_session_id()
             set_logging_session(self._session_id)
             if self._logs_directory:
                 session_logs_directory = os.path.join(self._logs_directory, self._session_id)
@@ -402,9 +441,10 @@ class NovaAct:
                     )
 
             self._playwright.start(session_logs_directory)
-            self._settle_on_start()
+            self._dispatcher.wait_for_page_to_settle(session_id=self._session_id, timeout=self.go_to_url_timeout)
             self._run_info_compiler = RunInfoCompiler(session_logs_directory)
             session_logs_str = f" logs dir {session_logs_directory}" if session_logs_directory else ""
+
             _TRACE_LOGGER.info(f"\nstart session {self._session_id} on {self._starting_page}{session_logs_str}\n")
 
         except Exception as e:
@@ -511,6 +551,7 @@ class NovaAct:
         if schema:
             validate_jsonschema_schema(schema)
             prompt = add_schema_to_prompt(prompt, schema)
+
 
         act = Act(
             prompt,

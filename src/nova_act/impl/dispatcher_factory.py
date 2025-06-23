@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from nova_act.experimental.custom_actuation.custom_dispatcher import CustomActDispatcher
+from nova_act.experimental.custom_actuation.interface.actuator import ActuatorBase
 from nova_act.impl.backend import BackendInfo
 from nova_act.impl.dispatcher import ActDispatcher
 from nova_act.impl.extension import ExtensionDispatcher
@@ -24,13 +26,21 @@ def create_act_dispatcher(
     backend_info: BackendInfo,
     tty: bool,
     extension_path: str,
+    actuator: ActuatorBase | None = None,
 ) -> ActDispatcher:
     """Create a dispatcher for actuation"""
-
-    return ExtensionDispatcher(
-        backend_info=backend_info,
-        nova_act_api_key=nova_act_api_key,
-        tty=tty,
-        playwright_manager=playwright_manager,
-        extension_path=extension_path,
-    )
+    if actuator is not None:
+        return CustomActDispatcher(
+            nova_act_api_key=nova_act_api_key,
+            backend_info=backend_info,
+            actuator=actuator,
+            tty=tty,
+        )
+    else:
+        return ExtensionDispatcher(
+            backend_info=backend_info,
+            nova_act_api_key=nova_act_api_key,
+            tty=tty,
+            playwright_manager=playwright_manager,
+            extension_path=extension_path,
+        )
