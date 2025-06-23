@@ -93,7 +93,6 @@ class WindowMessageHandler:
                         raise ValueError("Completion message missing response")
 
                     completion_type = response.get("type")
-
                     if completion_type == "success":
                         self._act.complete(response.get("result"))
                     elif completion_type == "canceled":

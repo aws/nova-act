@@ -114,6 +114,71 @@ def format_run_info(steps: int, url: str, time: str, image: str, response: str):
     """
 
 
+def _write_html_file(session_logs_directory: str, file_name_prefix: str, html_content: str) -> str:
+    """
+    Write HTML content to a file.
+
+    Args:
+        session_logs_directory: Directory to write the file to
+        file_name_prefix: Prefix for the file name
+        html_content: HTML content to write
+
+    Returns:
+        Path to the written file
+    """
+    output_file_path = os.path.join(session_logs_directory, file_name_prefix + ".html")
+    try:
+        with open(output_file_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+        return output_file_path
+    except OSError as e:
+        _LOGGER.warning(f"Failed to write html to file: {e}")
+        return ""
+
+
+def _extract_step_info(act: Act) -> list:
+    """
+    Extract request/response data from act steps.
+
+    Args:
+        act: Act object containing steps
+
+    Returns:
+        List of request/response data extracted from steps
+    """
+    step_info = []
+    for step in act.steps:
+        step_data = {
+            "request": step.rawMessage.get("input", {}),
+            "response": step.rawMessage.get("output"),
+        }
+        step_info.append(step_data)
+    return step_info
+
+
+def _write_calls_json_file(session_logs_directory: str, file_name_prefix: str, act: Act) -> None:
+    """
+    Write request/response calls to a JSON file.
+
+    Args:
+        session_logs_directory: Directory to write the file to
+        file_name_prefix: Prefix for the file name
+        act: Act object containing steps
+    """
+    try:
+        request_response_file_name = f"{file_name_prefix}_calls.json"
+        json_file_path = os.path.join(session_logs_directory, request_response_file_name)
+
+        step_info = _extract_step_info(act)
+
+        with open(json_file_path, "w", encoding="utf-8") as f:
+            json.dump(step_info, f, indent=2)
+    except OSError as e:
+        _LOGGER.warning(f"Failed to write request/response data to file {json_file_path}: {e}")
+
+
+
+
 class RunInfoCompiler:
     _FILENAME_SUB_RE = re.compile(r'[<>:"/\\|?*\x00-\x1F\s]')
 
@@ -134,15 +199,24 @@ class RunInfoCompiler:
 
         return safe[:max_length]
 
-    def compile(self, act: Act) -> str:
+    def _generate_html_content(self, act: Act) -> str:
+        """
+        Generate HTML content from act steps.
+
+        Args:
+            act: Act object containing steps
+
+        Returns:
+            Generated HTML content
+        """
         run_info = ""
         for i, step in enumerate(act.steps):
             run_info += format_run_info(
-                i + 1,
-                step.model_input.active_url,
-                str(step.observed_time),
-                step.model_input.image,
-                step.model_output.awl_raw_program,
+                steps=i + 1,
+                url=step.model_input.active_url,
+                time=str(step.observed_time),
+                image=step.model_input.image,
+                response=step.model_output.awl_raw_program,
             )
 
         # Compile Workflow View
@@ -151,28 +225,36 @@ class RunInfoCompiler:
             act_id=act.id,
             prompt=act.prompt,
         )
+        return html_content
+
+    def compile(self, act: Act) -> str:
+        """
+        Compile run information from an Act object and write to files.
+
+        Args:
+            act: Act object containing steps
+
+        Returns:
+            Path to the written HTML file
+        """
         # Add prompt to the name
         prompt_filename_snippet = self._safe_filename(act.prompt, 30)
         file_name_prefix = f"act_{act.id}_{prompt_filename_snippet}"
-        output_file_path = os.path.join(self._session_logs_directory, file_name_prefix + ".html")
 
-        try:
-            with open(output_file_path, "w", encoding="utf-8") as f:
-                f.write(html_content)
+        # Generate HTML content
+        html_content = self._generate_html_content(act=act)
 
-            # Compile request and response JSON
-            request_response_file_name = f"{file_name_prefix}_calls.json"
-            json_file_path = os.path.join(self._session_logs_directory, request_response_file_name)
+        # Write HTML file
+        output_file_path = _write_html_file(
+            session_logs_directory=self._session_logs_directory,
+            file_name_prefix=file_name_prefix,
+            html_content=html_content,
+        )
 
-            step_info = []
-            for step in act.steps:
-                step_info.append(
-                    {"request": step.rawMessage.get("input", {}), "response": step.rawMessage.get("output")}
-                )
+        # Write request/response calls JSON file
+        _write_calls_json_file(
+            session_logs_directory=self._session_logs_directory, file_name_prefix=file_name_prefix, act=act
+        )
 
-            with open(json_file_path, "w", encoding="utf-8") as f:
-                json.dump(step_info, f)
-        except OSError as e:
-            _LOGGER.warning(f"Failed to write to file: {e}")
 
         return output_file_path

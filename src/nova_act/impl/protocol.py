@@ -45,6 +45,8 @@ class NovaActClientErrors(Enum):
     ACTUATION_ERROR = "ACTUATION_ERROR"
 
 
+
+
 def parse_errors(act: Act, backend_info: BackendInfo, extension_version: str):
     if not isinstance(act.result, ActFailed) or not act.is_complete:
         raise ValueError(f"Expected ActFailed result when attempting to parse, got act: {act}")
@@ -97,6 +99,8 @@ def parse_errors(act: Act, backend_info: BackendInfo, extension_version: str):
 def handle_nova_act_service_error(error: dict, act: Act, backend_info: BackendInfo, extension_version: str | None):
     request_id = error.get("requestId", "")
     code = error.get("code")
+    message = error.get("message")
+
 
     if not isinstance(code, int) or code == -1:
         return ActProtocolError(
@@ -106,8 +110,6 @@ def handle_nova_act_service_error(error: dict, act: Act, backend_info: BackendIn
             raw_message=json.dumps(error),
             extension_version=extension_version,
         )
-
-    message = error.get("message")
 
     if 400 == code:
         error_dict = check_error_is_json(message)
@@ -191,3 +193,5 @@ def check_error_is_json(message: Any) -> dict | None:
         return json.loads(message)
     except (json.JSONDecodeError, TypeError):
         return None
+
+

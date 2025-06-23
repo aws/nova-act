@@ -317,6 +317,7 @@ class NovaAct:
         if not self._nova_act_api_key:
             raise AuthError(backend_info=self._backend_info)
 
+
     def __del__(self) -> None:
         if hasattr(self, "_session_user_data_dir_is_temp") and self._session_user_data_dir_is_temp:
             _LOGGER.debug(f"Deleting {self._session_user_data_dir}")
