@@ -276,6 +276,7 @@ class PlaywrightInstanceManager:
                         _MACOS_LOCAL_CHROME_PATH,
                         f"--remote-debugging-port={_CDP_PORT}",
                         f"--user-data-dir={self._user_data_dir}",
+                        f"--profile-directory={self._profile_directory if self._profile_directory else 'Default'}",
                         f"--window-size={self.screen_width},{self.screen_height}",
                         *(
                             [
