@@ -71,6 +71,7 @@ class PlaywrightInstanceManager:
         use_default_chrome_browser: bool = False,
         go_to_url_timeout: int | None = None,
         require_extension: bool = True,
+        cdp_headers: dict[str, str] | None = None,
     ):
         self._playwright = maybe_playwright
         self._owns_playwright = maybe_playwright is None  # Tracks if we created an instance
@@ -90,6 +91,7 @@ class PlaywrightInstanceManager:
         self._go_to_url_timeout = 1000.0 * (go_to_url_timeout or _DEFAULT_GO_TO_URL_TIMEOUT)
         self._use_default_chrome_browser = use_default_chrome_browser
         self._require_extension = require_extension
+        self._cdp_headers = cdp_headers
 
         if self._cdp_endpoint_url is not None or self._use_default_chrome_browser:
             if self._record_video:
@@ -286,7 +288,7 @@ class PlaywrightInstanceManager:
 
             # Attach to a context or create one.
             if self._cdp_endpoint_url is not None:
-                browser = self._playwright.chromium.connect_over_cdp(self._cdp_endpoint_url)
+                browser = self._playwright.chromium.connect_over_cdp(self._cdp_endpoint_url, headers=self._cdp_headers)
 
                 if not browser.contexts:
                     raise InvalidPlaywrightState("No contexts found in the browser")

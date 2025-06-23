@@ -109,6 +109,7 @@ class NovaAct:
         ignore_https_errors: bool = False,
         stop_hooks: list[StopHook] = [],
         use_default_chrome_browser: bool = False,
+        cdp_headers: dict[str, str] | None = None,
     ):
         """Initialize a client object.
 
@@ -164,6 +165,8 @@ class NovaAct:
             A list of stop hooks that are called when this object is stopped.
         use_default_chrome_browser: bool
             Use the locally installed Chrome browser. Only works on MacOS.
+        cdp_headers: dict[str, str], optional
+            Additional HTTP headers to be sent when connecting to a CDP endpoint
         """
 
 
@@ -261,6 +264,7 @@ class NovaAct:
             ignore_https_errors=ignore_https_errors,
             go_to_url_timeout=self.go_to_url_timeout,
             use_default_chrome_browser=use_default_chrome_browser,
+            cdp_headers=cdp_headers,
         )
 
         self._session_id: str | None = None
