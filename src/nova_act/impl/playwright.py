@@ -286,6 +286,7 @@ class PlaywrightInstanceManager:
                             if self._require_extension
                             else []
                         ),
+                        *(["--headless=new"] if self._headless else []),
                     ],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
