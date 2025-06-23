@@ -40,6 +40,7 @@ from nova_act.impl.inputs import (
 )
 from nova_act.impl.playwright import PlaywrightInstanceManager
 from nova_act.impl.run_info_compiler import RunInfoCompiler
+from nova_act.impl.telemetry import send_act_telemetry
 from nova_act.types.act_errors import ActError
 from nova_act.types.act_result import ActResult
 from nova_act.types.errors import AuthError, ClientNotStarted, StartFailed, StopFailed, ValidationFailed
@@ -566,19 +567,28 @@ class NovaAct:
         )
         _TRACE_LOGGER.info(f'{get_session_id_prefix()}act("{prompt}")')
 
+        error = None
+        result = None
+
         try:
             response = self.dispatcher.dispatch_and_wait_for_prompt_completion(act)
             if isinstance(response, ActError):
                 raise response
+
+            result = response
             if schema:
-                response = populate_json_schema_response(response, schema)
-        except (ActError, AuthError):
-            raise
+                result = populate_json_schema_response(result, schema)
+        except (ActError, AuthError) as e:
+            error = e
+            raise e
         except Exception as e:
-            raise ActError(metadata=act.metadata) from e
+            error = ActError(metadata=act.metadata)
+            raise error from e
         finally:
+            send_act_telemetry(self._backend_info.api_uri, self._nova_act_api_key, act, result, error)
+
             if self._run_info_compiler:
                 file_path = self._run_info_compiler.compile(act)
                 _TRACE_LOGGER.info(f"\n{get_session_id_prefix()}** View your act run here: {file_path}\n")
 
-        return response
+        return result
