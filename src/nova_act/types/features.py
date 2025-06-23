@@ -11,5 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-VERSION = "1.0.3499.0"  # pragma: no cover
-EXTENSION_VERSION = "Built on 2025-06-17T18:17:45.976Z off of Package Version: 1.0.7280.0 (d77213041dcb88ef35cfcacfa8dc6df997d56b17)"  # pragma: no cover
+from typing_extensions import TypedDict
+
+
+class ExperimentalFeatures(TypedDict):
+    """Experimental features for opt-in."""
+
+    playwright_actuation: bool
+    """Actuate model output using native Playwright."""

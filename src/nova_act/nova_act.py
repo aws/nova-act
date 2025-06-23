@@ -39,6 +39,7 @@ from nova_act.impl.run_info_compiler import RunInfoCompiler
 from nova_act.types.act_errors import ActError
 from nova_act.types.act_result import ActResult
 from nova_act.types.errors import AuthError, ClientNotStarted, StartFailed, StopFailed, ValidationFailed
+from nova_act.types.features import ExperimentalFeatures
 from nova_act.types.hooks import StopHook
 from nova_act.types.state.act import Act
 from nova_act.util.jsonschema import add_schema_to_prompt, populate_json_schema_response, validate_jsonschema_schema
