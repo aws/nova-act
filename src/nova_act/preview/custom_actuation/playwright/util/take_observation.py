@@ -17,8 +17,8 @@ from datetime import datetime
 
 from playwright.sync_api import Page
 
-from nova_act.experimental.custom_actuation.interface.types.dimensions_dict import DimensionsDict
-from nova_act.experimental.custom_actuation.playwright.util.image_helpers import (
+from nova_act.preview.custom_actuation.interface.types.dimensions_dict import DimensionsDict
+from nova_act.preview.custom_actuation.playwright.util.image_helpers import (
     resize_image,
     take_screenshot_as_data_url,
 )

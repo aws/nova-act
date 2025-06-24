@@ -21,10 +21,6 @@ from typing import Any, Dict, Type, cast
 
 from playwright.sync_api import Page, Playwright
 
-from nova_act.experimental.custom_actuation.playwright.default_nova_local_browser_actuator import (
-    DefaultNovaLocalBrowserActuator,
-)
-
 from nova_act.impl.backend import Backend, get_urls_for_backend
 from nova_act.impl.common import get_default_extension_path, rsync
 from nova_act.impl.dispatcher import ActDispatcher
@@ -41,10 +37,14 @@ from nova_act.impl.inputs import (
 from nova_act.impl.playwright import PlaywrightInstanceManager
 from nova_act.impl.run_info_compiler import RunInfoCompiler
 from nova_act.impl.telemetry import send_act_telemetry
+from nova_act.preview.custom_actuation.playwright.default_nova_local_browser_actuator import (
+    DefaultNovaLocalBrowserActuator,
+)
+
 from nova_act.types.act_errors import ActError
 from nova_act.types.act_result import ActResult
 from nova_act.types.errors import AuthError, ClientNotStarted, StartFailed, StopFailed, ValidationFailed
-from nova_act.types.features import ExperimentalFeatures
+from nova_act.types.features import PreviewFeatures
 from nova_act.types.hooks import StopHook
 from nova_act.types.state.act import Act
 from nova_act.util.jsonschema import add_schema_to_prompt, populate_json_schema_response, validate_jsonschema_schema
@@ -116,7 +116,7 @@ class NovaAct:
         stop_hooks: list[StopHook] = [],
         use_default_chrome_browser: bool = False,
         cdp_headers: dict[str, str] | None = None,
-        experimental_features: ExperimentalFeatures | None = None,
+        preview: PreviewFeatures | None = None,
     ):
         """Initialize a client object.
 
@@ -174,8 +174,8 @@ class NovaAct:
             Use the locally installed Chrome browser. Only works on MacOS.
         cdp_headers: dict[str, str], optional
             Additional HTTP headers to be sent when connecting to a CDP endpoint
-        experimental_features: ExperimentalFeatures
-            Optional experimental features for opt-in.
+        preview: PreviewFeatures
+            Optional preview features for opt-in.
         """
 
 
@@ -187,12 +187,12 @@ class NovaAct:
 
         self._starting_page = starting_page or "https://www.google.com"
 
-        self._experimental_features: ExperimentalFeatures | None = experimental_features
+        self._preview_features: PreviewFeatures | None = preview
 
         if (
-            self._experimental_features
-            and self._experimental_features.get("playwright_actuation")
-            and self._experimental_features.get("custom_actuator")
+            self._preview_features
+            and self._preview_features.get("playwright_actuation")
+            and self._preview_features.get("custom_actuator")
         ):
             raise ValidationFailed("Specify one of `playwright_actuation` or `custom_actuator`; not both.")
 
@@ -283,7 +283,7 @@ class NovaAct:
             go_to_url_timeout=self.go_to_url_timeout,
             use_default_chrome_browser=use_default_chrome_browser,
             cdp_headers=cdp_headers,
-            experimental_features=self._experimental_features,
+            preview=self._preview_features,
         )
 
         self._session_id: str | None = None
@@ -292,10 +292,10 @@ class NovaAct:
         self._stop_hooks = stop_hooks
 
         self._actuator = None
-        if self._experimental_features:
-            if custom_actuator := self._experimental_features.get("custom_actuator"):
+        if self._preview_features:
+            if custom_actuator := self._preview_features.get("custom_actuator"):
                 self._actuator = custom_actuator
-            elif self._experimental_features.get("playwright_actuation"):
+            elif self._preview_features.get("playwright_actuation"):
                 self._actuator = DefaultNovaLocalBrowserActuator(playwright_manager=self._playwright)
 
         self._dispatcher: ActDispatcher = create_act_dispatcher(

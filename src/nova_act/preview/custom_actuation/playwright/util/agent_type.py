@@ -13,10 +13,10 @@
 # limitations under the License.
 from playwright.sync_api import Page
 
-from nova_act.experimental.custom_actuation.playwright.dom_actuation.type_events import get_after_type_events
-from nova_act.experimental.custom_actuation.playwright.util.bbox_parser import bounding_box_to_point, parse_bbox_string
-from nova_act.experimental.custom_actuation.playwright.util.dispatch_dom_events import dispatch_event_sequence
-from nova_act.experimental.custom_actuation.playwright.util.element_helpers import (
+from nova_act.preview.custom_actuation.playwright.dom_actuation.type_events import get_after_type_events
+from nova_act.preview.custom_actuation.playwright.util.bbox_parser import bounding_box_to_point, parse_bbox_string
+from nova_act.preview.custom_actuation.playwright.util.dispatch_dom_events import dispatch_event_sequence
+from nova_act.preview.custom_actuation.playwright.util.element_helpers import (
     blur,
     check_if_native_dropdown,
     get_element_at_point,

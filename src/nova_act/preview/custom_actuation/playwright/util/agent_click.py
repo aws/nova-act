@@ -16,12 +16,12 @@ from typing import Any, Dict, Literal, Optional
 
 from playwright.sync_api import Page
 
-from nova_act.experimental.custom_actuation.interface.types.agent_redirect_error import AgentRedirectError
-from nova_act.experimental.custom_actuation.interface.types.click_options import ClickOptions
-from nova_act.experimental.custom_actuation.playwright.dom_actuation.click_events import get_after_click_events
-from nova_act.experimental.custom_actuation.playwright.util.bbox_parser import bounding_box_to_point, parse_bbox_string
-from nova_act.experimental.custom_actuation.playwright.util.dispatch_dom_events import dispatch_event_sequence
-from nova_act.experimental.custom_actuation.playwright.util.element_helpers import (
+from nova_act.preview.custom_actuation.interface.types.agent_redirect_error import AgentRedirectError
+from nova_act.preview.custom_actuation.interface.types.click_options import ClickOptions
+from nova_act.preview.custom_actuation.playwright.dom_actuation.click_events import get_after_click_events
+from nova_act.preview.custom_actuation.playwright.util.bbox_parser import bounding_box_to_point, parse_bbox_string
+from nova_act.preview.custom_actuation.playwright.util.dispatch_dom_events import dispatch_event_sequence
+from nova_act.preview.custom_actuation.playwright.util.element_helpers import (
     check_if_native_dropdown,
     get_element_at_point,
     locate_element,

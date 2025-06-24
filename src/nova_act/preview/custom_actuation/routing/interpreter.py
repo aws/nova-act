@@ -15,10 +15,10 @@ import json
 import re
 from typing import List, Tuple
 
-from nova_act.experimental.custom_actuation.interface.browser import BrowserActuatorBase
-from nova_act.experimental.custom_actuation.interface.types.agent_redirect_error import AgentRedirectError
-from nova_act.experimental.custom_actuation.interface.types.program_error_response import ProgramErrorResponse
 from nova_act.impl.protocol import NovaActClientErrors
+from nova_act.preview.custom_actuation.interface.browser import BrowserActuatorBase
+from nova_act.preview.custom_actuation.interface.types.agent_redirect_error import AgentRedirectError
+from nova_act.preview.custom_actuation.interface.types.program_error_response import ProgramErrorResponse
 from nova_act.types.errors import NovaActError
 
 FUNCTION_PATTERN = re.compile(r"(\w+)\((.*)\);")

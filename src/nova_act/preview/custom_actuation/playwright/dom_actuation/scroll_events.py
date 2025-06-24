@@ -13,14 +13,14 @@
 # limitations under the License.
 from typing import Dict
 
-from nova_act.experimental.custom_actuation.playwright.dom_actuation.create_dom_events import (
+from nova_act.preview.custom_actuation.playwright.dom_actuation.create_dom_events import (
     create_mouse_event_init,
     create_pointer_event_init,
 )
 
 
-def get_after_type_events(point: Dict[str, float]) -> list:
-    """Get events for after typing."""
+def get_after_scroll_events(point: Dict[str, float]) -> list:
+    """Get events for after scrolling."""
     return [
         {"type": "pointerout", "init": create_pointer_event_init(point, -1, 0)},
         {

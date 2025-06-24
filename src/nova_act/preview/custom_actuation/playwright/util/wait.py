@@ -17,11 +17,11 @@ from datetime import datetime
 from playwright.sync_api import Page
 from typing_extensions import Optional, TypedDict
 
-from nova_act.experimental.custom_actuation.playwright.util.image_helpers import (
+from nova_act.preview.custom_actuation.playwright.util.image_helpers import (
     compare_images,
     take_screenshot_as_data_url,
 )
-from nova_act.experimental.custom_actuation.playwright.util.take_observation import save_data_url_to_file
+from nova_act.preview.custom_actuation.playwright.util.take_observation import save_data_url_to_file
 
 
 def timed_wait(milliseconds: int, page: Page) -> None:

@@ -13,7 +13,7 @@
 # limitations under the License.
 from playwright.sync_api import Locator, Page
 
-from nova_act.experimental.custom_actuation.interface.types.element_dict import ElementDict
+from nova_act.preview.custom_actuation.interface.types.element_dict import ElementDict
 
 
 def blur(element_info: ElementDict, page: Page) -> None:

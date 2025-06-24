@@ -14,7 +14,7 @@
 import json
 
 
-from nova_act.experimental.custom_actuation.interface.browser import BrowserObservation
+from nova_act.preview.custom_actuation.interface.browser import BrowserObservation
 
 
 def construct_plan_request(

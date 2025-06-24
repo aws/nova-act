@@ -15,7 +15,7 @@ from abc import abstractmethod
 
 from typing_extensions import Any, TypedDict, Union
 
-from nova_act.experimental.custom_actuation.interface.actuator import ActuatorBase, action
+from nova_act.preview.custom_actuation.interface.actuator import ActuatorBase, action
 
 # Ref: https://github.com/python/typing/issues/182
 JSONSerializable = Union[str, int, float, bool, None, dict[str, Any], list[Any]]

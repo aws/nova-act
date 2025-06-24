@@ -17,21 +17,21 @@ from typing import Literal
 
 from playwright.sync_api import Page
 
-from nova_act.experimental.custom_actuation.interface.actuator import action
-from nova_act.experimental.custom_actuation.interface.browser import (
+from nova_act.impl.playwright import PlaywrightInstanceManager
+from nova_act.preview.custom_actuation.interface.actuator import action
+from nova_act.preview.custom_actuation.interface.browser import (
     BrowserActuatorBase,
     BrowserObservation,
     JSONSerializable,
 )
-from nova_act.experimental.custom_actuation.interface.types.click_options import ClickOptions
-from nova_act.experimental.custom_actuation.interface.types.dimensions_dict import DimensionsDict
-from nova_act.experimental.custom_actuation.playwright.util.agent_click import agent_click
-from nova_act.experimental.custom_actuation.playwright.util.agent_scroll import agent_scroll
-from nova_act.experimental.custom_actuation.playwright.util.agent_type import agent_type
-from nova_act.experimental.custom_actuation.playwright.util.go_to_url import go_to_url
-from nova_act.experimental.custom_actuation.playwright.util.take_observation import take_observation
-from nova_act.experimental.custom_actuation.playwright.util.wait import wait_for_page_to_settle
-from nova_act.impl.playwright import PlaywrightInstanceManager
+from nova_act.preview.custom_actuation.interface.types.click_options import ClickOptions
+from nova_act.preview.custom_actuation.interface.types.dimensions_dict import DimensionsDict
+from nova_act.preview.custom_actuation.playwright.util.agent_click import agent_click
+from nova_act.preview.custom_actuation.playwright.util.agent_scroll import agent_scroll
+from nova_act.preview.custom_actuation.playwright.util.agent_type import agent_type
+from nova_act.preview.custom_actuation.playwright.util.go_to_url import go_to_url
+from nova_act.preview.custom_actuation.playwright.util.take_observation import take_observation
+from nova_act.preview.custom_actuation.playwright.util.wait import wait_for_page_to_settle
 from nova_act.util.common_js_expressions import Expressions
 
 

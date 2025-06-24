@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from nova_act.experimental.custom_actuation.custom_dispatcher import CustomActDispatcher
-from nova_act.experimental.custom_actuation.interface.actuator import ActuatorBase
 from nova_act.impl.backend import BackendInfo
 from nova_act.impl.dispatcher import ActDispatcher
 from nova_act.impl.extension import ExtensionDispatcher
 from nova_act.impl.playwright import PlaywrightInstanceManager
+from nova_act.preview.custom_actuation.custom_dispatcher import CustomActDispatcher
+from nova_act.preview.custom_actuation.interface.actuator import ActuatorBase
 
 
 def create_act_dispatcher(

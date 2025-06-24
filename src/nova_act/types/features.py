@@ -13,10 +13,10 @@
 # limitations under the License.
 from typing_extensions import TypedDict
 
-from nova_act.experimental.custom_actuation.interface.browser import BrowserActuatorBase
+from nova_act.preview.custom_actuation.interface.browser import BrowserActuatorBase
 
 
-class ExperimentalFeatures(TypedDict, total=False):
+class PreviewFeatures(TypedDict, total=False):
     """Experimental features for opt-in."""
 
     playwright_actuation: bool

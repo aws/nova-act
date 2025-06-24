@@ -13,7 +13,7 @@
 # limitations under the License.
 from typing import Dict
 
-from nova_act.experimental.custom_actuation.playwright.dom_actuation.create_dom_events import (
+from nova_act.preview.custom_actuation.playwright.dom_actuation.create_dom_events import (
     create_focus_event_init,
     create_mouse_event_init,
     create_pointer_event_init,
