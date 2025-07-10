@@ -47,10 +47,10 @@ class ActuatorBase(ABC):
     domain: str | None = None
     """An optional description of the actuation domain."""
 
-    def start(self) -> None:
+    def start(self, **kwargs) -> None:
         """Prepare for actuation."""
 
-    def stop(self, *exc) -> None:
+    def stop(self, **kwargs) -> None:
         """Clean up when done."""
 
     def list_actions(self) -> Sequence[Callable]:

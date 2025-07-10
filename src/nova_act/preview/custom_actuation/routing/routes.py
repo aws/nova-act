@@ -17,7 +17,7 @@ from typing import Any, Dict
 import requests
 
 from nova_act.impl.backend import BackendInfo
-from nova_act.types.act_errors import ActProtocolError
+from nova_act.types.act_errors import ActInternalServerError, ActProtocolError
 from nova_act.types.act_metadata import ActMetadata
 from nova_act.types.errors import AuthError, NovaActError
 from nova_act.types.state.act import Act
@@ -26,20 +26,32 @@ DEFAULT_REQUEST_CONNECT_TIMEOUT = 30  # 30s
 DEFAULT_REQUEST_READ_TIMEOUT = 5 * 60  # 5min
 
 
+
+
 class Routes:
-    def __init__(self, backend_info: BackendInfo, api_key: str | None):
+    def __init__(
+        self,
+        backend_info: BackendInfo,
+        api_key: str | None,
+    ):
         if not api_key:
             raise AuthError(backend_info=backend_info)
-
+        self.backend_info = backend_info
         self.url = backend_info.api_uri + "/step"
         self.auth_header = f"ApiKey {api_key}"
 
 
         self.api_key = api_key
 
-    def step(self, plan_request: str, act: Act, session_id: str, metadata: ActMetadata) -> tuple[
+    def step(
+        self,
+        plan_request: str,
+        act: Act,
+        session_id: str,
+        metadata: ActMetadata,
+    ) -> tuple[
         str | None,
-        Any,
+        dict[str, Any],
     ]:
         """
         Sends an actuation plan request and processes the response.
@@ -60,8 +72,8 @@ class Routes:
             ActProtocolError: If the response is missing expected fields
         """
 
-        request_object = json.loads(plan_request)
-        payload = {
+        request_object: Dict[str, Any] = json.loads(plan_request)
+        payload: Dict[str, Any] = {
             "actId": act.id,
             "sessionId": session_id,
             "actuationPlanRequest": plan_request,
@@ -78,6 +90,7 @@ class Routes:
             json=payload,
             timeout=(DEFAULT_REQUEST_CONNECT_TIMEOUT, DEFAULT_REQUEST_READ_TIMEOUT),
         )
+
         json_response = response.json()
 
         if response.status_code >= 400:
@@ -96,9 +109,7 @@ class Routes:
         }
         if "agentRunCreate" in request_object:
             input["agentRunCreate"] = request_object["agentRunCreate"]
-        step_object = {
-            "input": input,
-        }
+        step_object = {"input": input, "server_time_s": response.elapsed.total_seconds()}
 
         if "actuationPlanResponse" not in json_response:
             raise ActProtocolError(

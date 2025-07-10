@@ -21,8 +21,9 @@ from nova_act.preview.custom_actuation.interface.types.agent_redirect_error impo
 from nova_act.preview.custom_actuation.interface.types.program_error_response import ProgramErrorResponse
 from nova_act.types.errors import NovaActError
 
-FUNCTION_PATTERN = re.compile(r"(\w+)\((.*)\);")
+FUNCTION_PATTERN = re.compile(r"(\w+)\((.*)\);?")
 ARGS_PATTERN = re.compile(r'"([^"]*)"')
+RETURN_PATTERN = re.compile(r"return( )?(?P<value>.+)?;")
 
 
 class AWLInterpreter:
@@ -47,26 +48,25 @@ class AWLInterpreter:
         if not maybe_action:
             raise NovaActError("No action found in the program body")
 
-        # return;
-        # Indicates act is complete
-        if "return;" == maybe_action:
-            return True, "Success", None
-
-        # Handle return actions provided by the model
-        if maybe_action.startswith("return "):
-            value = maybe_action[7:-1]
-            try:
-                value = json.loads(maybe_action[7:-1])
-            except json.JSONDecodeError:
-                pass
+        # Handle return
+        return_match = RETURN_PATTERN.match(maybe_action)
+        if return_match:
+            value = return_match.group("value")
+            if value is not None:
+                try:
+                    value = json.loads(value)
+                except json.JSONDecodeError:
+                    pass
             return True, self.actuator._return(value), None
 
         # Handle throw actions provided by the model
         if maybe_action.startswith("throw "):
+            value = maybe_action[6:-1]
+            self.actuator.throw_agent_error(value)
             error: ProgramErrorResponse = {
                 "type": "NovaActService",
                 "subErrorCode": "AGENT_ERROR",
-                "error": maybe_action[6:-1],
+                "error": value,
             }
             return True, "Error", error
 

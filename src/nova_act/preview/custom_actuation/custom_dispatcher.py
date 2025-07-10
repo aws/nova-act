@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import codecs
 import time
 from contextlib import nullcontext
 from datetime import datetime, timezone
@@ -64,7 +65,10 @@ class CustomActDispatcher(ActDispatcher):
         if not isinstance(actuator, BrowserActuatorBase):
             raise ValidationFailed("actuator must be an instance of BrowserActuatorBase")
         self._actuator = actuator
-        self._routes = Routes(self._backend_info, self._nova_act_api_key)
+        self._routes = Routes(
+            self._backend_info,
+            self._nova_act_api_key,
+        )
         self._interpreter = AWLInterpreter(actuator=self._actuator)
 
     def dispatch_and_wait_for_prompt_completion(self, act: Act) -> ActResult | ActError:
@@ -113,7 +117,9 @@ class CustomActDispatcher(ActDispatcher):
                         }
                     )
 
-                    observation: BrowserObservation = self._actuator.take_observation(save_screenshot=False)
+                    observation: BrowserObservation = self._actuator.take_observation(
+                        save_screenshot=False,
+                    )
 
                     plan_request = construct_plan_request(
                         act_id=act.id,
@@ -121,15 +127,25 @@ class CustomActDispatcher(ActDispatcher):
                         prompt=act.prompt,
                         error_executing_previous_step=error_executing_previous_step,
                         is_initial_step=i == 1,
+                        endpoint_name=act.endpoint_name,
                     )
 
                     _TRACE_LOGGER.info("...")
                     program, step_object = self._routes.step(
-                        plan_request=plan_request, act=act, session_id=act.session_id, metadata=act.metadata
+                        plan_request=plan_request,
+                        act=act,
+                        session_id=act.session_id,
+                        metadata=act.metadata,
                     )
+
+                    # UTF-decode program
+                    if isinstance(program, str):
+                        program = codecs.decode(program, "unicode_escape")
+
                     _log_program(program)
                     if program is None:
-                        act.fail(step_object)
+                        error_message = step_object
+                        act.fail(error_message)
                         break
 
                     act.add_step(Step.from_message(step_object))
@@ -141,12 +157,12 @@ class CustomActDispatcher(ActDispatcher):
                             error_dict = dict(program_error)
                             act.fail(error_dict)
                             break
-                        elif is_act_done and result:
-                            act.complete(result)
+                        elif is_act_done:
+                            act.complete(str(result))
                             break
                     except AgentRedirectError as e:
                         is_act_done = False
-                        error_executing_previous_step = e.error_and_correction
+                        error_executing_previous_step = e
 
                 except Exception:
                     raise

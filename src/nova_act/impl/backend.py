@@ -35,5 +35,14 @@ URLS_BY_BACKEND = {
 }
 
 
+
+
 def get_urls_for_backend(backend: Backend) -> BackendInfo:
     return URLS_BY_BACKEND[backend]
+
+
+def is_backend_info_for_backend(backend: Backend, backend_info: BackendInfo) -> bool:
+    """Checks if the provided BackendInfo matches the provided Backend."""
+    return backend_info == get_urls_for_backend(backend)
+
+

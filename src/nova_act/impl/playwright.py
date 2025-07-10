@@ -22,10 +22,11 @@ import requests
 from install_playwright import install
 from playwright.sync_api import BrowserContext
 from playwright.sync_api import Error as PlaywrightError
-from playwright.sync_api import Page, Playwright, Video, sync_playwright
+from playwright.sync_api import Page, Video, sync_playwright
 
 from nova_act.impl.common import rsync, should_install_chromium_dependencies
 from nova_act.impl.message_encrypter import MessageEncrypter
+from nova_act.impl.playwright_instance_options import PlaywrightInstanceOptions
 from nova_act.impl.window_messages import (
     ADD_COMPLETION_LISTENER_EXPRESSION,
     HANDLE_ENCRYPTED_MESSAGE_FUNCTION_NAME,
@@ -39,7 +40,6 @@ from nova_act.types.errors import (
     StartFailed,
     ValidationFailed,
 )
-from nova_act.types.features import PreviewFeatures
 from nova_act.util.common_js_expressions import Expressions
 from nova_act.util.logging import setup_logging
 
@@ -54,61 +54,27 @@ _CDP_PORT = 9222
 class PlaywrightInstanceManager:
     """RAII Manager for the Playwright Browser"""
 
-    def __init__(
-        self,
-        maybe_playwright: Playwright | None,
-        starting_page: str,
-        chrome_channel: str,
-        headless: bool,
-        extension_path: str,
-        user_data_dir: str,
-        profile_directory: str | None,
-        cdp_endpoint_url: str | None,
-        screen_width: int,
-        screen_height: int,
-        user_agent: str | None,
-        record_video: bool,
-        ignore_https_errors: bool,
-        use_default_chrome_browser: bool = False,
-        go_to_url_timeout: int | None = None,
-        require_extension: bool = True,
-        cdp_headers: dict[str, str] | None = None,
-        preview: PreviewFeatures | None = None,
-    ):
-        self._playwright = maybe_playwright
-        self._owns_playwright = maybe_playwright is None  # Tracks if we created an instance
-        self._starting_page = starting_page
-        self._chrome_channel = chrome_channel
-        self._headless = headless
-        self._extension_path = extension_path
-        self._user_data_dir = user_data_dir
-        self._profile_directory = profile_directory
-        self._cdp_endpoint_url = cdp_endpoint_url
-        self._owns_context = cdp_endpoint_url is None and not use_default_chrome_browser
-        self.screen_width = screen_width
-        self.screen_height = screen_height
-        self.user_agent = user_agent
-        self._record_video = record_video
-        self._ignore_https_errors = ignore_https_errors
-        self._go_to_url_timeout = 1000.0 * (go_to_url_timeout or _DEFAULT_GO_TO_URL_TIMEOUT)
-        self._use_default_chrome_browser = use_default_chrome_browser
-        self._preview = preview
-
-        self._require_extension = (
-            not (
-                self._preview
-                and any(
-                    (
-                        self._preview.get("custom_actuator"),
-                        self._preview.get("playwright_actuation"),
-                    )
-                )
-            )
-            if self._preview
-            else require_extension
-        )
-
-        self._cdp_headers = cdp_headers
+    def __init__(self, options: PlaywrightInstanceOptions):
+        self._playwright = options.maybe_playwright
+        self._owns_playwright = options.owns_playwright
+        self._starting_page = options.starting_page
+        self._chrome_channel = options.chrome_channel
+        self._headless = options.headless
+        self._extension_path = options.extension_path
+        self._user_data_dir = options.user_data_dir
+        self._profile_directory = options.profile_directory
+        self._cdp_endpoint_url = options.cdp_endpoint_url
+        self._owns_context = options.owns_context
+        self.screen_width = options.screen_width
+        self.screen_height = options.screen_height
+        self.user_agent = options.user_agent
+        self._record_video = options.record_video
+        self._ignore_https_errors = options.ignore_https_errors
+        self._go_to_url_timeout = options.go_to_url_timeout
+        self._use_default_chrome_browser = options.use_default_chrome_browser
+        self._require_extension = options.require_extension
+        self._cdp_headers = options.cdp_headers
+        self._proxy = options.proxy
 
         if self._cdp_endpoint_url is not None or self._use_default_chrome_browser:
             if self._record_video:
@@ -117,6 +83,8 @@ class PlaywrightInstanceManager:
                 raise ValidationFailed("Cannot specify a profile directory when connecting over CDP")
             if self.user_agent:
                 raise ValidationFailed("Cannot specify a user agent when connecting over CDP")
+            if self._proxy:
+                raise ValidationFailed("Cannot specify a proxy when connecting over CDP")
 
         self._context: BrowserContext | None = None
         self._session_logs_directory: str | None = None
@@ -136,8 +104,6 @@ class PlaywrightInstanceManager:
     @property
     def started(self):
         """Check if the client is started."""
-        if self._preview and self._preview.get("custom_actuator"):
-            return True
         return self._context is not None
 
     def _init_browser_context(self, context: BrowserContext, trusted_page: Page) -> Page:
@@ -206,10 +172,6 @@ class PlaywrightInstanceManager:
 
     def start(self, session_logs_directory: str | None) -> None:
         """Start and attach the Browser"""
-        if self._preview and self._preview.get("custom_actuator"):
-            _LOGGER.warning("Custom Actuator does not handle SDK based PlayWright.")
-            return
-
         if self._context is not None:
             _LOGGER.warning("Playwright already attached, to start over, stop the client")
             return
@@ -364,6 +326,8 @@ class PlaywrightInstanceManager:
                     "ignore_https_errors": self._ignore_https_errors,
                     "channel": self._chrome_channel,
                 }
+                if self._proxy:
+                    context_options["proxy"] = self._proxy
                 if self.user_agent:
                     context_options["user_agent"] = self.user_agent
                 else:

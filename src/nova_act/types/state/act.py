@@ -16,6 +16,7 @@ import uuid
 
 # using dataclasses for end states
 from dataclasses import dataclass
+from typing import Dict
 
 # using attrs to finely control mutability of types
 from attrs import define, field
@@ -85,8 +86,13 @@ class Act:
             num_steps_executed=len(self._steps),
             start_time=self.start_time,
             end_time=self.end_time,
+            step_server_times_s=self.get_step_server_times_s,
             prompt=self.prompt,
         )
+
+    @property
+    def get_step_server_times_s(self) -> list[float]:
+        return [round(step.server_time_s, 3) for step in self._steps if step.server_time_s is not None]
 
     @property
     def result(self) -> ActSucceeded | ActCanceled | ActFailed | None:

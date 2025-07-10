@@ -186,6 +186,42 @@ def validate_chrome_channel(chrome_channel: str) -> None:
         )
 
 
+def validate_proxy(proxy: dict[str, str] | None) -> None:
+    """Validate proxy configuration.
+
+    Parameters
+    ----------
+    proxy : dict[str, str] | None
+        Proxy configuration dictionary with server, username, and password keys.
+
+    Returns
+    -------
+    None
+    """
+    if proxy is None:
+        return
+
+    if not isinstance(proxy, dict):
+        raise ValidationFailed("Proxy must be a dictionary")
+
+    # Check required keys
+    if "server" not in proxy:
+        raise ValidationFailed("Proxy configuration must contain 'server' key")
+
+    # Validate server format
+    server = proxy["server"]
+    if not isinstance(server, str):
+        raise ValidationFailed("Proxy server must be a string")
+
+    if not (server.startswith("http://") or server.startswith("https://")):
+        raise ValidationFailed("Proxy server must start with http:// or https://")
+
+    # Validate optional credentials
+    for key in ["username", "password"]:
+        if key in proxy and not isinstance(proxy[key], str):
+            raise ValidationFailed(f"Proxy {key} must be a string")
+
+
 def validate_url_ssl_certificate(ignore_https_errors: bool, url: str):
     """
     Validate the SSL certificate for the given URL.
@@ -215,6 +251,7 @@ def validate_base_parameters(
     chrome_channel: str,
     ignore_https_errors: bool,
     use_default_chrome_browser: bool,
+    proxy: dict[str, str] | None = None,
 ):
     if extension_path:
         validate_path(extension_path, "extension_path")
@@ -239,6 +276,8 @@ def validate_base_parameters(
             raise NotImplementedError("use_default_chrome_browser is only supported on macOS")
         if not user_data_dir:
             raise InvalidPath("use_default_chrome_browser requires user_data_dir to be provided")
+
+    validate_proxy(proxy)
 
 
 

@@ -16,6 +16,7 @@ from abc import abstractmethod
 from typing_extensions import Any, TypedDict, Union
 
 from nova_act.preview.custom_actuation.interface.actuator import ActuatorBase, action
+from nova_act.preview.custom_actuation.interface.types.bbox_dict import Bbox
 
 # Ref: https://github.com/python/typing/issues/182
 JSONSerializable = Union[str, int, float, bool, None, dict[str, Any], list[Any]]
@@ -26,7 +27,7 @@ class BrowserObservation(TypedDict):
 
     activeURL: str
     browserDimensions: dict[str, int]
-    idToBboxMap: dict[str, str]
+    idToBboxMap: dict[int, Bbox]
     screenshotBase64: str
     simplifiedDOM: str
     timestamp_ms: int
@@ -101,3 +102,11 @@ class BrowserActuatorBase(ActuatorBase):
     @abstractmethod
     def take_observation(self) -> BrowserObservation:
         """Take an observation of the existing browser state."""
+
+    @property
+    def started(self, **kwargs) -> bool:
+        """
+        Tells whether the actuator instance was started or not.
+        By default, this will return True
+        """
+        return True

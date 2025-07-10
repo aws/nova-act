@@ -14,6 +14,7 @@
 import time
 from dataclasses import dataclass
 from datetime import datetime as dt
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -35,10 +36,11 @@ class Step:
     model_input: ModelInput
     model_output: ModelOutput
     observed_time: dt
-    rawMessage: dict[str, dict]
+    rawMessage: dict[str, Any]
+    server_time_s: float | None
 
     @classmethod
-    def from_message(cls, message: dict[str, dict]) -> "Step":
+    def from_message(cls, message: dict[str, Any]) -> "Step":
         # Extract input data
         input_data = message.get("input", {})
         model_input = ModelInput(
@@ -56,12 +58,15 @@ class Step:
 
         # Extract timing data
         observed_time = dt.fromtimestamp(time.time())
+        server_time_value = message.get("server_time_s")
+        server_time_s = float(server_time_value) if server_time_value is not None else None
 
         return cls(
             model_input=model_input,
             model_output=model_output,
             observed_time=observed_time,
             rawMessage=message,
+            server_time_s=server_time_s,
         )
 
     # Input validation

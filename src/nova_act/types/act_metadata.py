@@ -13,6 +13,7 @@
 # limitations under the License.
 import dataclasses
 from datetime import datetime
+from typing import Dict
 
 
 @dataclasses.dataclass(frozen=True)
@@ -23,6 +24,7 @@ class ActMetadata:
     start_time: float | None
     end_time: float | None
     prompt: str
+    step_server_times_s: list[float] = dataclasses.field(default_factory=list)
 
     def __repr__(self) -> str:
         local_tz = datetime.now().astimezone().tzinfo
@@ -39,6 +41,11 @@ class ActMetadata:
             else "None"
         )
 
+        step_times_line = ""
+        if self.step_server_times_s and any(t != 0 for t in self.step_server_times_s):
+            formatted_times = [f"{t:.3f}" for t in self.step_server_times_s]
+            step_times_line = f"    step_server_times_s = {formatted_times}\n"
+
         return (
             f"ActMetadata(\n"
             f"    session_id = {self.session_id}\n"
@@ -46,6 +53,7 @@ class ActMetadata:
             f"    num_steps_executed = {self.num_steps_executed}\n"
             f"    start_time = {start_time_str}\n"
             f"    end_time = {end_time_str}\n"
+            f"{step_times_line}"
             f"    prompt = '{self.prompt}'\n"
             f")"
         )

@@ -54,7 +54,9 @@ def agent_click(
 
     if check_if_native_dropdown(page, point["x"], point["y"]):
         dropdown_options = get_dropdown_options(page, point["x"], point["y"])
-        error_message = NATIVE_DROPDOWN_REDIRECT_MESSAGE + json.dumps(dropdown_options)
+        error_message = NATIVE_DROPDOWN_REDIRECT_MESSAGE + json.dumps(
+            dropdown_options, separators=(",", ":"), sort_keys=True
+        )
         raise AgentRedirectError(error_message)
 
     if click_type == "left":

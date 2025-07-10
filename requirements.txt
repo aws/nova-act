@@ -5,7 +5,7 @@ jsonschema
 numpy<=2.2.6
 pandas
 pillow
-playwright==1.48.0
+playwright==1.52.0
 pydantic>=2.10.6
 requests
 retry

@@ -43,7 +43,15 @@ class AuthError(NovaActError):
     """Indicates there's error with user auth"""
 
     def __init__(self, backend_info: BackendInfo, *, message: str = "Authentication failed.", request_id: str = ""):
+        warning = self._get_warning_message(backend_info=backend_info, message=message, request_id=request_id)
+        super().__init__(warning)
 
+    def _get_warning_message(self, backend_info: BackendInfo, message: str, request_id: str) -> str:
+        warning = self._get_api_key_warning_message(backend_info=backend_info, message=message, request_id=request_id)
+        return warning
+
+
+    def _get_api_key_warning_message(self, backend_info: BackendInfo, message: str, request_id: str) -> str:
         warning = create_warning_box(
             [
                 message,
@@ -58,7 +66,8 @@ class AuthError(NovaActError):
                 "\nIf you are sure the above requirements are satisfied and you are still facing AuthError, "
                 f"please submit an issue with this request ID: {request_id}"
             )
-        super().__init__(warning)
+
+        return warning
 
 
 

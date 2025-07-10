@@ -42,6 +42,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </head>
 <body>
     <h1>Action Viewer</h1>
+    <h3>Session ID: {session_id}</h3>
     <h3>Act ID: {act_id}</h3>
     <h3>Prompt: {prompt}</h3>
     {run_info}
@@ -82,8 +83,14 @@ def _add_bbox_to_image(image: str, response: str) -> str:
     return "data:image/jpeg;base64," + base64.b64encode(image_bytes_io.getvalue()).decode("utf-8")
 
 
-def format_run_info(steps: int, url: str, time: str, image: str, response: str):
+def format_run_info(steps: int, url: str, time: str, image: str, response: str, server_time_s: float | None = None):
     image = _add_bbox_to_image(image, response)
+
+    server_time_info = ""
+    if server_time_s is not None:
+        server_time_info = (
+            f'<p style="font-size: 14px; color: #666;"><strong>Server Time:</strong> {server_time_s:.3f}s</p>'
+        )
 
     return f"""
         <div style="border: 1px solid #ddd; border-radius: 8px; padding: 15px;
@@ -102,6 +109,7 @@ def format_run_info(steps: int, url: str, time: str, image: str, response: str):
 
             <p style="font-size: 14px; color: #666;"><strong>Timestamp:</strong> {time}
             </p>
+            {server_time_info}
             <img src="{image}"
                 style="max-width: 800px; height: auto; width: 100%;
                 border: 1px solid #ccc; padding: 5px;
@@ -217,11 +225,13 @@ class RunInfoCompiler:
                 time=str(step.observed_time),
                 image=step.model_input.image,
                 response=step.model_output.awl_raw_program,
+                server_time_s=step.server_time_s,
             )
 
         # Compile Workflow View
         html_content = HTML_TEMPLATE.format(
             run_info=run_info,
+            session_id=act.session_id,
             act_id=act.id,
             prompt=act.prompt,
         )

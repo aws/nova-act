@@ -21,34 +21,43 @@ def construct_plan_request(
     act_id: str,
     observation: BrowserObservation,
     prompt: str | None = None,
-    error_executing_previous_step: str | None = None,
+    error_executing_previous_step: Exception | None = None,
     is_initial_step: bool = False,
+    endpoint_name: str | None = None,
 ) -> str:
     initial_prompt = prompt
     if not is_initial_step:
         initial_prompt = None
 
-    request_data = {
+    tempReturnPlanResponse = True
+
+
+    request_data: dict[str, Any] = {
         "agentRunId": act_id,
         "idToBboxMap": observation.get("idToBboxMap", {}),
         "observation": observation,
         "screenshotBase64": observation["screenshotBase64"],
-        "tempReturnPlanResponse": True,
+        "tempReturnPlanResponse": tempReturnPlanResponse,
     }
 
 
     if error_executing_previous_step is not None:
-        request_data["errorExecutingPreviousStep"] = error_executing_previous_step
+        request_data["errorExecutingPreviousStep"] = (
+            f"{type(error_executing_previous_step).__name__}: {str(error_executing_previous_step)}"
+        )
+
+    agentConfig = "plan-v2"
 
     if initial_prompt is not None:
         agent_run_create = {
-            "agentConfigName": "plan-v2",
+            "agentConfigName": agentConfig,
             "id": act_id,
             "plannerFunctionArgs": {"task": initial_prompt},
             "plannerFunctionName": "act",
-            "planningModelServerHost": "alpha-sunshine",
+            "planningModelServerHost": endpoint_name,
             "task": initial_prompt,
         }
+
 
         request_data["agentRunCreate"] = agent_run_create
 

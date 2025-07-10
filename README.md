@@ -29,6 +29,7 @@ Amazon Nova Act is an experimental SDK. When using Nova Act, please keep in mind
 * [File upload and download](#file-upload-and-download)
 * [Working with dates](#picking-dates)
 * [Setting the browser user agent](#setting-the-browser-user-agent)
+* [Using a proxy](#using-a-proxy)
 * [Logging and viewing traces](#logging)
 * [Recording a video of a session](#recording-a-session)
 * [Known limitations](#known-limitations)
@@ -47,6 +48,8 @@ Amazon Nova Act is an experimental SDK. When using Nova Act, please keep in mind
 
 ### Authentication
 
+#### API Key Authentication
+
 
 Navigate to https://nova.amazon.com/act and generate an API key.
 
@@ -54,6 +57,7 @@ To save it as an environment variable, execute in the terminal:
 ```sh
 export NOVA_ACT_API_KEY="your_api_key"
 ```
+
 
 ### Installation
 
@@ -423,6 +427,31 @@ Nova Act comes with Playwright's Chrome and Chromium browsers. These use the def
 nova = NovaAct(..., user_agent="MyUserAgent/2.7")
 ```
 
+### Using a proxy
+
+Nova Act supports proxy configurations for browser sessions. This can be useful when you need to route traffic through a specific proxy server:
+
+```python
+# Basic proxy without authentication
+proxy_config = {
+    "server": "http://proxy.example.com:8080"
+}
+
+# Proxy with authentication
+proxy_config = {
+    "server": "http://proxy.example.com:8080",
+    "username": "myusername",
+    "password": "mypassword"
+}
+
+nova = NovaAct(
+    starting_page="https://example.com",
+    proxy=proxy_config
+)
+```
+
+> **Note:** Proxy configuration is not supported when connecting to a CDP endpoint or when using the default Chrome browser (`use_default_chrome_browser=True`).
+
 ### Logging
 
 By default, `NovaAct` will emit all logs level `logging.INFO` or above. This can be overridden by specifying an integer value under the `NOVA_ACT_LOG_LEVEL` environment variable. Integers should correspond to [Python logging levels](https://docs.python.org/3/library/logging.html#logging-levels).
@@ -436,13 +465,13 @@ After an `act()` finishes, it will output traces of what it did in a self-contai
 ```
  
 You can change the directory for this by passing in a `logs_directory` argument to `NovaAct`.
- 
+
 ### Recording a session
  
 You can record an entire browser session easily by setting the `logs_directory` and specifying `record_video=True` in the constructor for `NovaAct`.
 
-## Known limitations
 
+## Known limitations
 Nova Act is a research preview intended for prototyping and exploration. It’s the first step in our vision for building the key capabilities for useful agents at scale. You can expect to encounter many limitations at this stage — please provide feedback to [nova-act@amazon.com](mailto:nova-act@amazon.com?subject=Nova%20Act%20Bug%20Report) to help us make it better.
 
 For example:
@@ -471,6 +500,11 @@ The constructor accepts the following:
 * `nova_act_api_key (str)`: The API key you generated for authentication; required if the `NOVA_ACT_API_KEY` environment variable is not set. If passed, takes precedence over the environment variable.
 * `logs_directory (str)`: The directory where NovaAct will output its logs, run info, and videos (if `record_video` is set to `True`).
 * `record_video (bool))`: Whether to record video and save it to `logs_directory`. Must have `logs_directory` specified for video to record.
+* `proxy (dict)`: Proxy configuration for the browser. Should be a dictionary containing:
+  * `server` (required): The proxy server URL (must start with `http://` or `https://`)
+  * `username` (optional): Username for proxy authentication
+  * `password` (optional): Password for proxy authentication
+  * Note: Proxy is not supported when connecting to a CDP endpoint or using the default Chrome browser
 
 This creates one browser session. You can create as many browser sessions as you wish and run them in parallel but a single session must be single-threaded.
 

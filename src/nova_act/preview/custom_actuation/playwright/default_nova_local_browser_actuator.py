@@ -15,15 +15,15 @@ import time
 from datetime import datetime, timezone
 from typing import Literal
 
-from playwright.sync_api import Page
-
 from nova_act.impl.playwright import PlaywrightInstanceManager
+from nova_act.impl.playwright_instance_options import PlaywrightInstanceOptions
 from nova_act.preview.custom_actuation.interface.actuator import action
 from nova_act.preview.custom_actuation.interface.browser import (
     BrowserActuatorBase,
     BrowserObservation,
     JSONSerializable,
 )
+from nova_act.preview.custom_actuation.interface.types.bbox_dict import Bbox
 from nova_act.preview.custom_actuation.interface.types.click_options import ClickOptions
 from nova_act.preview.custom_actuation.interface.types.dimensions_dict import DimensionsDict
 from nova_act.preview.custom_actuation.playwright.util.agent_click import agent_click
@@ -38,10 +38,21 @@ from nova_act.util.common_js_expressions import Expressions
 class DefaultNovaLocalBrowserActuator(BrowserActuatorBase):
     """The Default Actuator for NovaAct Browser Use."""
 
-    _page: Page
+    def __init__(self, playwright_options: PlaywrightInstanceOptions):
+        self._playwright_manager = PlaywrightInstanceManager(playwright_options)
 
-    def __init__(self, playwright_manager: PlaywrightInstanceManager):
-        self._playwright_manager = playwright_manager
+    def start(self, **kwargs) -> None:
+        if not self._playwright_manager.started:
+            if "session_logs_directory" in kwargs:
+                self._playwright_manager.start(kwargs.get("session_logs_directory"))
+
+    def stop(self, **kwargs) -> None:
+        if self.started:
+            self._playwright_manager.stop()
+
+    @property
+    def started(self, **kwargs) -> bool:
+        return self._playwright_manager.started
 
     @action
     def agent_click(
@@ -94,7 +105,7 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase):
     @action
     def throw_agent_error(self, value: str) -> JSONSerializable:
         """Used when the task requested by the user is not possible."""
-        raise RuntimeError(f"AgentError: {value}")
+        pass
 
     @action
     def wait(self, seconds: float) -> JSONSerializable:
@@ -121,10 +132,18 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase):
         return None
 
     @action
-    def take_observation(self, save_screenshot: bool = False) -> BrowserObservation:
+    def take_observation(
+        self,
+        save_screenshot: bool = False,
+    ) -> BrowserObservation:
         """Take an observation of the existing browser state."""
         dimensions: DimensionsDict = self._playwright_manager.main_page.evaluate(Expressions.GET_VIEWPORT_SIZE.value)
+
+        id_to_bbox_map: dict[int, Bbox] = {}
+        simplified_dom = ""
+
         screenshot_data_url = take_observation(self._playwright_manager.main_page, dimensions, save_screenshot)
+
         return {
             "activeURL": self._playwright_manager.main_page.url,
             "browserDimensions": {
@@ -135,9 +154,9 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase):
                 "windowHeight": dimensions["height"],
                 "windowWidth": dimensions["width"],
             },
-            "idToBboxMap": {},
+            "idToBboxMap": id_to_bbox_map,
             "screenshotBase64": screenshot_data_url,
-            "simplifiedDOM": "...",
+            "simplifiedDOM": simplified_dom,
             "timestamp_ms": int(datetime.now(timezone.utc).timestamp() * 1000),
             "userAgent": self._playwright_manager.main_page.evaluate(Expressions.GET_USER_AGENT.value),
         }

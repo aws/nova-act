@@ -16,6 +16,7 @@ from nova_act.types.state.act import Act
 from nova_act.types.state.page import PageState
 from nova_act.types.state.step import Step
 from nova_act.util.logging import setup_logging
+from nova_act.util.step_server_time_tracker import StepServerTimeTracker
 
 CANCEL_PROMPT_TYPE = "autonomy-cancel-prompt"
 WAIT_FOR_PAGE_TO_SETTLE_PROMPT_TYPE = "autonomy-pending-wait-for-page-to-settle"
@@ -104,6 +105,9 @@ class WindowMessageHandler:
                     self._act.acknowledged = True
 
                 if message_type == STEP_OBSERVATION_PROMPT_TYPE:
+                    maybe_server_time_tracker = StepServerTimeTracker.get_instance()
+                    if maybe_server_time_tracker is not None:
+                        message["server_time_s"] = maybe_server_time_tracker.get_step_duration_s(act_id=self._act.id)
                     self._act.add_step(Step.from_message(message))
 
         except Exception as ex:

@@ -24,8 +24,7 @@ from playwright.sync_api import Page, Playwright
 from nova_act.impl.backend import Backend, get_urls_for_backend
 from nova_act.impl.common import get_default_extension_path, rsync
 from nova_act.impl.dispatcher import ActDispatcher
-from nova_act.impl.dispatcher_factory import create_act_dispatcher
-from nova_act.impl.extension import DEFAULT_ENDPOINT_NAME
+from nova_act.impl.extension import DEFAULT_ENDPOINT_NAME, ExtensionDispatcher
 from nova_act.impl.inputs import (
     validate_base_parameters,
     validate_length,
@@ -35,8 +34,10 @@ from nova_act.impl.inputs import (
     validate_url,
 )
 from nova_act.impl.playwright import PlaywrightInstanceManager
+from nova_act.impl.playwright_instance_options import PlaywrightInstanceOptions
 from nova_act.impl.run_info_compiler import RunInfoCompiler
 from nova_act.impl.telemetry import send_act_telemetry
+from nova_act.preview.custom_actuation.custom_dispatcher import CustomActDispatcher
 from nova_act.preview.custom_actuation.playwright.default_nova_local_browser_actuator import (
     DefaultNovaLocalBrowserActuator,
 )
@@ -49,6 +50,7 @@ from nova_act.types.hooks import StopHook
 from nova_act.types.state.act import Act
 from nova_act.util.jsonschema import add_schema_to_prompt, populate_json_schema_response, validate_jsonschema_schema
 from nova_act.util.logging import get_session_id_prefix, make_trace_logger, set_logging_session, setup_logging
+from nova_act.util.step_server_time_tracker import StepServerTimeTracker
 
 DEFAULT_SCREEN_WIDTH = 1600
 DEFAULT_SCREEN_HEIGHT = 900
@@ -117,6 +119,7 @@ class NovaAct:
         use_default_chrome_browser: bool = False,
         cdp_headers: dict[str, str] | None = None,
         preview: PreviewFeatures | None = None,
+        proxy: dict[str, str] | None = None,
     ):
         """Initialize a client object.
 
@@ -176,6 +179,8 @@ class NovaAct:
             Additional HTTP headers to be sent when connecting to a CDP endpoint
         preview: PreviewFeatures
             Optional preview features for opt-in.
+        proxy: dict[str, str], optional
+            Proxy configuration for the browser. Should contain 'server', 'username', and 'password' keys.
         """
 
 
@@ -220,6 +225,7 @@ class NovaAct:
             logs_directory = tempfile.mkdtemp(suffix="_nova_act_logs")
 
         self._logs_directory = logs_directory
+        self._session_logs_directory: str = ""
 
         _chrome_channel = cast(str, chrome_channel or os.environ.get("NOVA_ACT_CHROME_CHANNEL", "chrome"))
         _headless = headless or bool(os.environ.get("NOVA_ACT_HEADLESS"))
@@ -236,6 +242,7 @@ class NovaAct:
             chrome_channel=_chrome_channel,
             ignore_https_errors=ignore_https_errors,
             use_default_chrome_browser=use_default_chrome_browser,
+            proxy=proxy,
         )
         if go_to_url_timeout is not None:
             validate_timeout(go_to_url_timeout)
@@ -266,7 +273,12 @@ class NovaAct:
         self.screen_width = screen_width
         self.screen_height = screen_height
 
-        self._playwright = PlaywrightInstanceManager(
+        self._session_id: str | None = None
+
+
+        self._stop_hooks = stop_hooks
+
+        self._playwright_options = PlaywrightInstanceOptions(
             maybe_playwright=playwright_instance,
             starting_page=self._starting_page,
             chrome_channel=_chrome_channel,
@@ -283,28 +295,36 @@ class NovaAct:
             go_to_url_timeout=self.go_to_url_timeout,
             use_default_chrome_browser=use_default_chrome_browser,
             cdp_headers=cdp_headers,
-            preview=self._preview_features,
+            require_extension=not self._is_any_preview_feature_enabled,
+            proxy=proxy,
         )
 
-        self._session_id: str | None = None
+        self._actuator: BrowserActuatorBase | None = None
+        self._dispatcher: ActDispatcher
 
-
-        self._stop_hooks = stop_hooks
-
-        self._actuator = None
-        if self._preview_features:
+        if self._is_any_preview_feature_enabled:
+            # This will cover both DefaultNovaLocalBrowserActuator
+            # and custom actuator.
+            assert self._preview_features is not None  # Type narrowing for MyPy
             if custom_actuator := self._preview_features.get("custom_actuator"):
                 self._actuator = custom_actuator
             elif self._preview_features.get("playwright_actuation"):
-                self._actuator = DefaultNovaLocalBrowserActuator(playwright_manager=self._playwright)
+                self._actuator = DefaultNovaLocalBrowserActuator(playwright_options=self._playwright_options)
+            self._dispatcher = CustomActDispatcher(
+                nova_act_api_key=self._nova_act_api_key,
+                backend_info=self._backend_info,
+                actuator=self._actuator,
+                tty=self._tty,
+            )
+            return
 
-        self._dispatcher: ActDispatcher = create_act_dispatcher(
-            playwright_manager=self._playwright,
-            nova_act_api_key=self._nova_act_api_key,
+        self._playwright = PlaywrightInstanceManager(self._playwright_options)
+        self._dispatcher = ExtensionDispatcher(
             backend_info=self._backend_info,
+            nova_act_api_key=self._nova_act_api_key,
             tty=self._tty,
+            playwright_manager=self._playwright,
             extension_path=extension_path,
-            actuator=self._actuator,
         )
 
     def _determine_backend(self) -> Backend:
@@ -334,8 +354,16 @@ class NovaAct:
         self.stop()
 
     @property
+    def _is_any_preview_feature_enabled(self) -> bool:
+        return self._preview_features is not None and any(self._preview_features.values())
+
+    @property
     def started(self) -> bool:
-        """Check if the browser is started."""
+        if self._is_any_preview_feature_enabled:
+            # This will cover both DefaultNovaLocalBrowserActuator
+            # and custom actuator.
+            return self._actuator is not None and self._actuator.started and self._session_id is not None
+        # Check if the browser is started
         return self._playwright.started and self._session_id is not None
 
     @property
@@ -350,8 +378,9 @@ class NovaAct:
         Note that the Playwright Page is only relevant to the default Actuator, and therefore
         is not available if the user has provided a custom Actuator.
         """
-        if self._actuator is not None and not isinstance(self._actuator, DefaultNovaLocalBrowserActuator):
-            raise ValueError(f"{type(self).__name__}.page not available for custom actuators.")
+        if self._actuator is not None:
+            if not isinstance(self._actuator, DefaultNovaLocalBrowserActuator):
+                raise ValueError(f"{type(self).__name__}.page not available for custom actuators.")
         return self.get_page()
 
     def get_page(self, index: int = -1) -> Page:
@@ -361,8 +390,10 @@ class NovaAct:
 
         Only available for default actuation.
         """
-        if self._actuator is not None and not isinstance(self._actuator, DefaultNovaLocalBrowserActuator):
-            raise ValueError(f"{type(self).__name__}.get_page not available for custom actuators.")
+        if self._actuator is not None:
+            if not isinstance(self._actuator, DefaultNovaLocalBrowserActuator):
+                raise ValueError(f"{type(self).__name__}.get_page not available for custom actuators.")
+            return self._actuator._playwright_manager.get_page(index)
         if not self.started:
             raise ClientNotStarted("Run start() to start the client before accessing the Playwright Page.")
         return self._playwright.get_page(index)
@@ -375,8 +406,10 @@ class NovaAct:
 
         Only available for default actuation.
         """
-        if self._actuator is not None and not isinstance(self._actuator, DefaultNovaLocalBrowserActuator):
-            raise ValueError(f"{type(self).__name__}.pages not available for custom actuators.")
+        if self._actuator is not None:
+            if not isinstance(self._actuator, DefaultNovaLocalBrowserActuator):
+                raise ValueError(f"{type(self).__name__}.pages not available for custom actuators.")
+            return self._actuator._playwright_manager.context.pages
         if not self.started:
             raise ClientNotStarted("Run start() to start the client before accessing Playwright Pages.")
         return self._playwright.context.pages
@@ -418,6 +451,31 @@ class NovaAct:
 
         return self._logs_directory
 
+    def _init_session_logs_directory(self, base_dir: str, session_id: str) -> str:
+        _session_logs_directory: str = os.path.join(base_dir, session_id) if base_dir else ""
+        if _session_logs_directory:
+            try:
+                os.mkdir(_session_logs_directory)
+            except Exception as e:
+                _LOGGER.error(
+                    f"Failed to create directory: {_session_logs_directory} with Error: {e} "
+                    f"of type {type(e).__name__}"
+                )
+        return _session_logs_directory
+
+    def get_session_logs_directory(self) -> str:
+        """
+        Get the session logs directory path where run_info_compiler.py creates files.
+
+        Returns:
+            str: Path to the session logs directory
+
+        Raises:
+            ValueError: If logs directory is not set
+            ClientNotStarted: If client is not started
+        """
+        return self._session_logs_directory
+
     def start(self) -> None:
         """Start the client."""
         if self.started:
@@ -428,24 +486,23 @@ class NovaAct:
         try:
             self._session_id = self._create_session_id()
             set_logging_session(self._session_id)
-            if self._logs_directory:
-                session_logs_directory = os.path.join(self._logs_directory, self._session_id)
-            else:
-                session_logs_directory = ""
+            self._session_logs_directory = self._init_session_logs_directory(self._logs_directory, self._session_id)
 
-            if session_logs_directory:
-                try:
-                    os.mkdir(session_logs_directory)
-                except Exception as e:
-                    _LOGGER.error(
-                        f"Failed to create directory: {session_logs_directory} with Error: {e} "
-                        f"of type {type(e).__name__}"
+            if self._is_any_preview_feature_enabled:
+                # This will cover both DefaultNovaLocalBrowserActuator
+                # and custom actuator.
+                if self._actuator is not None:
+                    self._actuator.start(
+                        starting_page=self._starting_page, session_logs_directory=self._session_logs_directory
                     )
+            else:
+                self._playwright.start(session_logs_directory=self._session_logs_directory)
+                if os.environ.get("PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS"):
+                    StepServerTimeTracker(self._playwright._context, endpoint_pattern=self._backend_info.api_uri)
 
-            self._playwright.start(session_logs_directory)
             self._dispatcher.wait_for_page_to_settle(session_id=self._session_id, timeout=self.go_to_url_timeout)
-            self._run_info_compiler = RunInfoCompiler(session_logs_directory)
-            session_logs_str = f" logs dir {session_logs_directory}" if session_logs_directory else ""
+            self._run_info_compiler = RunInfoCompiler(self._session_logs_directory)
+            session_logs_str = f" logs dir {self._session_logs_directory}" if self._session_logs_directory else ""
 
             _TRACE_LOGGER.info(f"\nstart session {self._session_id} on {self._starting_page}{session_logs_str}\n")
 
@@ -488,9 +545,16 @@ class NovaAct:
     def _stop(self) -> None:
         try:
             self._execute_stop_hooks()
-            if self._playwright.started:
+
+            if self._is_any_preview_feature_enabled:
+                # This will cover both DefaultNovaLocalBrowserActuator
+                # and custom actuator.
+                if self._actuator is not None:
+                    self._actuator.stop()
+            elif self._playwright.started:
                 self._dispatcher.cancel_prompt()
                 self._playwright.stop()
+
             _TRACE_LOGGER.info("\nend session\n")
             set_logging_session(None)
         except Exception as e:
