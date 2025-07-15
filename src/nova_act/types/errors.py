@@ -13,7 +13,7 @@
 # limitations under the License.
 from abc import ABC
 
-from nova_act.impl.backend import BackendInfo
+from nova_act.impl.backend import BackendInfo, is_helios_backend_info
 from nova_act.util.logging import create_warning_box
 
 
@@ -48,8 +48,21 @@ class AuthError(NovaActError):
 
     def _get_warning_message(self, backend_info: BackendInfo, message: str, request_id: str) -> str:
         warning = self._get_api_key_warning_message(backend_info=backend_info, message=message, request_id=request_id)
+        if is_helios_backend_info(backend_info):
+            warning = self._get_iam_auth_warning_message(message)
         return warning
 
+    def _get_iam_auth_warning_message(self, message: str) -> str:
+        warning = create_warning_box(
+            [
+                message,
+                "",
+                "Please ensure you have received confirmation that your IAM role is allowlisted "
+                "and that its policy has the required permissions. ",
+                "To join the waitlist, please go here: https://amazonexteu.qualtrics.com/jfe/form/SV_9siTXCFdKHpdwCa",
+            ]
+        )
+        return warning
 
     def _get_api_key_warning_message(self, backend_info: BackendInfo, message: str, request_id: str) -> str:
         warning = create_warning_box(
@@ -70,6 +83,11 @@ class AuthError(NovaActError):
         return warning
 
 
+class IAMAuthError(NovaActError):
+    """Indicates there's an error with IAM credentials"""
+
+    def __init__(self, message: str | None = "IAM authentication failed."):
+        super().__init__(message)
 
 
 class ValidationFailed(NovaActError, ABC):

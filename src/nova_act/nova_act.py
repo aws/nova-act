@@ -19,6 +19,7 @@ import tempfile
 import uuid
 from typing import Any, Dict, Type, cast
 
+from boto3.session import Session
 from playwright.sync_api import Page, Playwright
 
 from nova_act.impl.backend import Backend, get_urls_for_backend
@@ -44,7 +45,7 @@ from nova_act.preview.custom_actuation.playwright.default_nova_local_browser_act
 
 from nova_act.types.act_errors import ActError
 from nova_act.types.act_result import ActResult
-from nova_act.types.errors import AuthError, ClientNotStarted, StartFailed, StopFailed, ValidationFailed
+from nova_act.types.errors import AuthError, ClientNotStarted, IAMAuthError, StartFailed, StopFailed, ValidationFailed
 from nova_act.types.features import PreviewFeatures
 from nova_act.types.hooks import StopHook
 from nova_act.types.state.act import Act
@@ -119,6 +120,7 @@ class NovaAct:
         use_default_chrome_browser: bool = False,
         cdp_headers: dict[str, str] | None = None,
         preview: PreviewFeatures | None = None,
+        boto_session: Session | None = None,
         proxy: dict[str, str] | None = None,
     ):
         """Initialize a client object.
@@ -179,10 +181,15 @@ class NovaAct:
             Additional HTTP headers to be sent when connecting to a CDP endpoint
         preview: PreviewFeatures
             Optional preview features for opt-in.
+        boto_session : Session, optional
+            A boto3 session containing IAM credentials for authentication.
+            When provided, enables AWS IAM-based authentication instead of API key authentication.
+            Cannot be used together with nova_act_api_key.
         proxy: dict[str, str], optional
             Proxy configuration for the browser. Should contain 'server', 'username', and 'password' keys.
         """
 
+        self._boto_session = boto_session
 
         self._run_info_compiler: RunInfoCompiler | None = None
         self._backend = self._determine_backend()
@@ -325,19 +332,59 @@ class NovaAct:
             tty=self._tty,
             playwright_manager=self._playwright,
             extension_path=extension_path,
+            boto_session=self._boto_session,
         )
 
     def _determine_backend(self) -> Backend:
         """Determines which Nova Act backend to use."""
 
+        if self._boto_session:
+            return Backend.HELIOS
+
         return Backend.PROD
 
     def _validate_auth(self) -> None:
         """Validate that the NovaAct instance is using supported authentication methods."""
+        # Case 1: Both boto_session and API key provided (invalid)
+        if self._boto_session and self._nova_act_api_key:
+            raise IAMAuthError("Cannot set both API key and boto session!")
 
-        if not self._nova_act_api_key:
-            raise AuthError(backend_info=self._backend_info)
+        # Case 2: No authentication provided (invalid)
+        if not self._boto_session and not self._nova_act_api_key:
+            raise AuthError(backend_info=self._backend_info)  # at least API key must be set
 
+        # Case 3: Only boto_session provided (valid if credentials are valid)
+        if self._boto_session and not self._nova_act_api_key:
+            self._validate_boto_session(self._boto_session)
+            return
+
+        # Case 4: Only API key provided (valid)
+        if not self._boto_session and self._nova_act_api_key:
+            return
+
+    def _validate_boto_session(self, boto_session: Session) -> None:
+        """
+        Validate that the boto3 session has valid credentials associated with a real IAM identity.
+
+        Args:
+            boto_session: The boto3 session to validate
+
+        Raises:
+            IAMAuthError: If the boto3 session doesn't have valid credentials or the credentials
+                        are not associated with a real IAM identity
+        """
+        # Check if credentials exist
+        if not boto_session.get_credentials():
+            raise IAMAuthError("IAM credentials not found. Please ensure your boto3 session has valid credentials.")
+
+        # Verify credentials are associated with a real IAM identity
+        try:
+            sts_client = boto_session.client("sts")
+            sts_client.get_caller_identity()
+        except Exception as e:
+            raise IAMAuthError(
+                f"IAM validation failed: {str(e)}. Check your credentials with 'aws sts get-caller-identity'."
+            )
 
     def __del__(self) -> None:
         if hasattr(self, "_session_user_data_dir_is_temp") and self._session_user_data_dir_is_temp:

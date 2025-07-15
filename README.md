@@ -4,6 +4,8 @@ A Python SDK for Amazon Nova Act.
 
 Nova Act is an early research preview of an SDK + model for building agents designed to reliably take actions in web browsers. Building with the SDK enables developers to break down complex workflows into smaller, reliable, commands, add more detail where needed, call APIs, and intersperse direct browser manipulation. Developers can interleave Python code, whether it be tests, breakpoints, asserts, or threadpooling for parallelization. Read more about the announcement: https://labs.amazon.science/blog/nova-act.
 
+>We are now working with select customers to productionize their agents, with capabilities including [AWS IAM authentication](https://aws.amazon.com/iam/), [Amazon S3](https://aws.amazon.com/s3/) secure storage, and integration with the [Amazon Bedrock AgentCore Browser](https://aws.amazon.com/bedrock/agentcore). Learn more in our [blog post](https://labs.amazon.science/blog/prototype-to-production) and join our [waitlist](https://amazonexteu.qualtrics.com/jfe/form/SV_9siTXCFdKHpdwCa).
+
 
 ## Disclosures
 
@@ -470,6 +472,40 @@ You can change the directory for this by passing in a `logs_directory` argument 
  
 You can record an entire browser session easily by setting the `logs_directory` and specifying `record_video=True` in the constructor for `NovaAct`.
 
+### Storing Session Data in Your Amazon S3 Bucket
+
+Nova Act allows you to store session data (HTML traces, screenshots, etc.) in your own [Amazon S3](https://aws.amazon.com/s3/) bucket using the `S3Writer` convenience utility:
+
+```python
+import boto3
+from nova_act import NovaAct
+from nova_act.util.s3_writer import S3Writer
+
+# Create a boto3 session with appropriate credentials
+boto_session = boto3.Session()
+
+# Create an S3Writer
+s3_writer = S3Writer(
+    boto_session=boto_session,
+    s3_bucket_name="my-bucket",
+    s3_prefix="my-prefix/",  # Optional
+    metadata={"Project": "MyProject"}  # Optional
+)
+
+# Use the S3Writer with NovaAct
+with NovaAct(
+    starting_page="https://www.amazon.com",
+    boto_session=boto_session,  # You may use API key here instead
+    stop_hooks=[s3_writer]
+) as nova:
+    nova.act("search for a coffee maker")
+```
+
+The S3Writer requires the following AWS permissions:
+- s3:ListObjects on the bucket and prefix
+- s3:PutObject on the bucket and prefix
+
+When the NovaAct session ends, all session files will be automatically uploaded to the specified S3 bucket with the provided prefix.
 
 ## Known limitations
 Nova Act is a research preview intended for prototyping and exploration. It’s the first step in our vision for building the key capabilities for useful agents at scale. You can expect to encounter many limitations at this stage — please provide feedback to [nova-act@amazon.com](mailto:nova-act@amazon.com?subject=Nova%20Act%20Bug%20Report) to help us make it better.

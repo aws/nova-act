@@ -27,6 +27,7 @@ from nova_act.types.act_errors import (
     ActInternalServerError,
     ActInvalidInputError,
     ActModelError,
+    ActNotAuthorizedError,
     ActProtocolError,
     ActRateLimitExceededError,
     ActServiceUnavailableError,
@@ -45,6 +46,14 @@ class NovaActClientErrors(Enum):
     ACTUATION_ERROR = "ACTUATION_ERROR"
 
 
+class NovaActServiceError(Enum):
+    INVALID_INPUT = "INVALID_INPUT"
+    MODEL_ERROR = "MODEL_ERROR"
+    INTERNAL_ERROR = "INTERNAL_ERROR"
+    GUARDRAILS_ERROR = "GUARDRAILS_ERROR"
+    UNAUTHORIZED_ERROR = "UNAUTHORIZED_ERROR"
+    TOO_MANY_REQUESTS = "TOO_MANY_REQUESTS"
+    DAILY_QUOTA_LIMIT_ERROR = "DAILY_QUOTA_LIMIT_ERROR"
 
 
 def parse_errors(act: Act, backend_info: BackendInfo, extension_version: str):
@@ -101,6 +110,9 @@ def handle_nova_act_service_error(error: dict, act: Act, backend_info: BackendIn
     code = error.get("code")
     message = error.get("message")
 
+    if isinstance(code, str):
+        error = _handle_service_error_with_string_code(error, act)
+        return error
 
     if not isinstance(code, int) or code == -1:
         return ActProtocolError(
@@ -195,3 +207,52 @@ def check_error_is_json(message: Any) -> dict | None:
         return None
 
 
+def _handle_service_error_with_string_code(error: dict, act: Act):
+    """Translates errors returned by Nova Act backends that return string error codes."""
+    code = error.get("code", "")
+    message: str | None = error.get("message")
+
+    try:
+        error_type = NovaActServiceError[code]
+    except (KeyError, TypeError, ValueError, IndexError):
+        return ActProtocolError(
+            message=f"invalid NovaActService error code: {code}",
+            metadata=act.metadata,
+        )
+
+    if error_type == NovaActServiceError.INVALID_INPUT:
+        return ActInvalidInputError(message=message, metadata=act.metadata)
+
+    if error_type == NovaActServiceError.INTERNAL_ERROR:
+        return ActInternalServerError(message=message, metadata=act.metadata)
+
+    if error_type == NovaActServiceError.UNAUTHORIZED_ERROR:
+        return ActNotAuthorizedError(
+            message="Access denied. To request access, email nova-act@amazon.com with your use case.",
+            metadata=act.metadata,
+        )
+
+    if error_type == NovaActServiceError.MODEL_ERROR:
+        message_fields = {"fields": [{"message": message}]}
+        return ActModelError(message=message_fields, metadata=act.metadata)
+
+    if error_type == NovaActServiceError.GUARDRAILS_ERROR:
+        message_fields = {"fields": [{"message": message}]}
+        return ActGuardrailsError(message=message_fields, metadata=act.metadata)
+
+    if error_type == NovaActServiceError.TOO_MANY_REQUESTS:
+        message_dict = {
+            "throttleType": "RATE_LIMIT_EXCEEDED",
+        }
+        return ActRateLimitExceededError(message=message_dict, metadata=act.metadata, raw_message=message)
+
+    if error_type == NovaActServiceError.DAILY_QUOTA_LIMIT_ERROR:
+        message_dict = {
+            "throttleType": "DAILY_QUOTA_LIMIT_EXCEEDED",
+        }
+        return ActRateLimitExceededError(message=message_dict, metadata=act.metadata, raw_message=message)
+
+    return ActProtocolError(
+        message=f"Unhandled NovaActService error: {code}",
+        metadata=act.metadata,
+    )

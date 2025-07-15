@@ -185,6 +185,44 @@ def _write_calls_json_file(session_logs_directory: str, file_name_prefix: str, a
         _LOGGER.warning(f"Failed to write request/response data to file {json_file_path}: {e}")
 
 
+def _extract_step_traces(act: Act) -> list:
+    """
+    Extract trace data from act steps.
+
+    Args:
+        act: Act object containing steps
+
+    Returns:
+        List of trace data extracted from steps
+    """
+    step_traces = []
+    for step in act.steps:
+        step_output = step.rawMessage.get("output", {})
+        if "trace" in step_output:
+            step_trace = step_output.get("trace", {}).get("external", {})
+            step_traces.append(step_trace)
+    return step_traces
+
+
+def _write_traces_json_file(session_logs_directory: str, file_name_prefix: str, act: Act) -> None:
+    """
+    Write trace data to a JSON file.
+
+    Args:
+        session_logs_directory: Directory to write the file to
+        file_name_prefix: Prefix for the file name
+        act: Act object containing steps
+    """
+    try:
+        trace_file_name = f"{file_name_prefix}_traces.json"
+        json_file_path = os.path.join(session_logs_directory, trace_file_name)
+        step_traces = _extract_step_traces(act)
+
+        if step_traces:
+            with open(json_file_path, "w", encoding="utf-8") as f:
+                json.dump(step_traces, f, indent=2)
+    except OSError as e:
+        _LOGGER.warning(f"Failed to write trace data to file {json_file_path}: {e}")
 
 
 class RunInfoCompiler:
@@ -266,5 +304,9 @@ class RunInfoCompiler:
             session_logs_directory=self._session_logs_directory, file_name_prefix=file_name_prefix, act=act
         )
 
+        # Write trace JSON file
+        _write_traces_json_file(
+            session_logs_directory=self._session_logs_directory, file_name_prefix=file_name_prefix, act=act
+        )
 
         return output_file_path

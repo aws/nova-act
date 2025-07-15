@@ -17,6 +17,7 @@ from enum import Enum
 
 class Backend(Enum):
     PROD = "prod"
+    HELIOS = "helios"
 
 
 @dataclass
@@ -32,9 +33,16 @@ URLS_BY_BACKEND = {
         "https://nova.amazon.com/agent",
         "https://nova.amazon.com/act",
     ),
+    Backend.HELIOS: BackendInfo(
+        "https://helios.nova.amazon.com",
+        "https://nova.amazon.com/act",
+    ),
 }
 
 
+HELIOS_BACKENDS = [
+    Backend.HELIOS,
+]
 
 
 def get_urls_for_backend(backend: Backend) -> BackendInfo:
@@ -46,3 +54,8 @@ def is_backend_info_for_backend(backend: Backend, backend_info: BackendInfo) -> 
     return backend_info == get_urls_for_backend(backend)
 
 
+def is_helios_backend_info(backend_info: BackendInfo) -> bool:
+    for backend in HELIOS_BACKENDS:
+        if is_backend_info_for_backend(backend=backend, backend_info=backend_info):
+            return True
+    return False

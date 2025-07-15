@@ -17,6 +17,7 @@ from contextlib import nullcontext
 from dataclasses import replace
 from typing import Any, ContextManager, Dict, cast
 
+from boto3.session import Session
 from playwright.sync_api import Error as PlaywrightError
 from retry.api import retry_call
 
@@ -35,6 +36,7 @@ from nova_act.impl.window_messages import (
 )
 from nova_act.types.act_errors import ActCanceledError, ActClientError, ActDispatchError, ActError
 from nova_act.types.act_result import ActResult
+from nova_act.types.errors import IAMAuthError
 from nova_act.types.state.act import Act, ActCanceled, ActFailed, ActSucceeded
 from nova_act.types.state.page import PageState
 from nova_act.util.logging import (
@@ -63,8 +65,6 @@ _LOGGER = setup_logging(__name__)
 _TRACE_LOGGER = make_trace_logger()
 
 
-
-
 class ExtensionDispatcher(ActDispatcher):
     """Dispatch act prompts to the Chrome Extension."""
 
@@ -80,6 +80,7 @@ class ExtensionDispatcher(ActDispatcher):
         tty: bool,
         verbose_errors: bool = False,
         retry: bool = True,
+        boto_session: Session | None = None,
     ):
         self._backend_info = backend_info
         self._nova_act_api_key = nova_act_api_key
@@ -87,6 +88,7 @@ class ExtensionDispatcher(ActDispatcher):
         self._tty = tty
         self._verbose_errors = verbose_errors
         self._retry = retry
+        self._boto_session = boto_session
 
         self._extension_version = get_extension_version(extension_path)
 
@@ -193,6 +195,8 @@ class ExtensionDispatcher(ActDispatcher):
             "sessionId": act.session_id,
             "useBedrock": True,
         }
+        if self._boto_session:
+            pending_action_message["awsCredentials"] = self._get_boto_session_credentials()
         if act.max_steps:
             pending_action_message["maxSteps"] = str(act.max_steps)
         if act.model_temperature is not None:
@@ -309,3 +313,21 @@ class ExtensionDispatcher(ActDispatcher):
 
             return output
 
+    def _get_boto_session_credentials(self) -> Dict[str, str]:
+        """Get IAM credentials from boto session to dispatch to the extension."""
+        if not self._boto_session:
+            return {}
+
+        credentials = self._boto_session.get_credentials()
+        if not credentials:
+            raise IAMAuthError("No IAM credentials found in boto session!")
+
+        credentials_dict = {
+            "accessKeyId": credentials.access_key,
+            "secretAccessKey": credentials.secret_key,
+            "region": "us-east-1",  # Hardcoded to us-east-1 as Nova Act service only works in this region
+        }
+        if credentials.token is not None:
+            credentials_dict["sessionToken"] = credentials.token
+
+        return credentials_dict

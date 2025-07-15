@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import boto3
 
 from nova_act.impl.backend import BackendInfo
 from nova_act.impl.dispatcher import ActDispatcher
@@ -26,6 +27,7 @@ def create_act_dispatcher(
     backend_info: BackendInfo,
     tty: bool,
     extension_path: str,
+    boto_session: boto3.Session | None,
     actuator: ActuatorBase | None = None,
 ) -> ActDispatcher:
     """Create a dispatcher for actuation"""
@@ -43,4 +45,5 @@ def create_act_dispatcher(
             tty=tty,
             playwright_manager=playwright_manager,
             extension_path=extension_path,
+            boto_session=boto_session,
         )

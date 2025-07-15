@@ -202,6 +202,9 @@ class ActInternalServerError(ActServerError):
     pass
 
 
+@act_error_class("Not Authorized. Check your current IAM role by running 'aws sts get-caller-identity'.")
+class ActNotAuthorizedError(ActServerError):
+    pass
 
 
 @act_error_class("Server Unavailable")
