@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import json
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from playwright.sync_api import BrowserContext
 
@@ -26,7 +26,9 @@ class StepServerTimeTracker:
     _instance = None
     _initialized: bool
 
-    def __new__(cls, browser_context=None, endpoint_pattern="/step"):
+    def __new__(
+        cls, browser_context: BrowserContext | None = None, endpoint_pattern: str = "/step"
+    ) -> "StepServerTimeTracker":
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
@@ -45,8 +47,8 @@ class StepServerTimeTracker:
         self._setup_tracking()
         self._initialized = True
 
-    def _setup_tracking(self):
-        def handle_response(response):
+    def _setup_tracking(self) -> None:
+        def handle_response(response: Any) -> None:
             if self.endpoint_pattern in response.url and response.request.post_data:
                 try:
                     body = json.loads(response.request.post_data)
@@ -66,7 +68,7 @@ class StepServerTimeTracker:
         return self._step_durations.get(key)
 
     @classmethod
-    def get_instance(cls):
+    def get_instance(cls) -> Optional["StepServerTimeTracker"]:
         if cls._instance is not None:
             return cls._instance
         return None

@@ -16,7 +16,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import requests
 from install_playwright import install
@@ -46,7 +46,6 @@ from nova_act.util.logging import setup_logging
 _LOGGER = setup_logging(__name__)
 
 _DEFAULT_USER_AGENT_SUFFIX = " Agent-NovaAct/0.9"
-_DEFAULT_GO_TO_URL_TIMEOUT = 60
 _MACOS_LOCAL_CHROME_PATH = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 _CDP_PORT = 9222
 
@@ -81,8 +80,6 @@ class PlaywrightInstanceManager:
                 raise ValidationFailed("Cannot record video when connecting over CDP")
             if self._profile_directory:
                 raise ValidationFailed("Cannot specify a profile directory when connecting over CDP")
-            if self.user_agent:
-                raise ValidationFailed("Cannot specify a user agent when connecting over CDP")
             if self._proxy:
                 raise ValidationFailed("Cannot specify a proxy when connecting over CDP")
 
@@ -97,12 +94,12 @@ class PlaywrightInstanceManager:
         return self._encrypter
 
     @property
-    def window_message_handler(self):
+    def window_message_handler(self) -> WindowMessageHandler:
         """Get the window message handler."""
         return self._window_message_handler
 
     @property
-    def started(self):
+    def started(self) -> bool:
         """Check if the client is started."""
         return self._context is not None
 
@@ -117,8 +114,10 @@ class PlaywrightInstanceManager:
 
         if not self._require_extension:
             # If the extension is not required, go to the starting page and exit.
-            trusted_page.goto(self._starting_page, timeout=self._go_to_url_timeout)
-            return trusted_page
+            first_page = context.new_page()
+            first_page.goto(self._starting_page, timeout=self._go_to_url_timeout)
+            trusted_page.close()
+            return first_page
 
         context.expose_function(HANDLE_ENCRYPTED_MESSAGE_FUNCTION_NAME, self._window_message_handler.handle_message)
 
@@ -128,7 +127,7 @@ class PlaywrightInstanceManager:
 
         # Send in the secret key through a trusted page.
         trusted_page.goto("https://nova.amazon.com/agent-loading", timeout=self._go_to_url_timeout)
-        trusted_page.wait_for_selector("#autonomy-listeners-registered", state="attached")
+        trusted_page.wait_for_selector("#autonomy-listeners-registered", state="attached", timeout=60000)
         trusted_page.evaluate(POST_MESSAGE_EXPRESSION, self._encrypter.make_set_key_message())
 
         # The default opened page may contain infobars with messages while new pages should not.
@@ -140,15 +139,18 @@ class PlaywrightInstanceManager:
 
         # Navigate to the starting page, from the default (about:blank).
         first_page.goto(self._starting_page, wait_until="domcontentloaded", timeout=self._go_to_url_timeout)
-        first_page.wait_for_selector("#autonomy-listeners-registered", state="attached")
+        first_page.wait_for_selector("#autonomy-listeners-registered", state="attached", timeout=60000)
 
         if first_video_path and os.path.exists(first_video_path):
             os.remove(first_video_path)
 
         return first_page
 
-    def _launch_browser(self, context_options):
+    def _launch_browser(self, context_options: Any) -> BrowserContext:
         """Launches a Playwright Chromium based browser with Chromium as fallback."""
+        if self._playwright is None:
+            raise ValueError("Playwright instance is not initialized")
+
         if (channel := context_options.get("channel")) != "chromium":
             try:
                 context = self._playwright.chromium.launch_persistent_context(
@@ -280,6 +282,8 @@ class PlaywrightInstanceManager:
                 if not browser.contexts:
                     raise InvalidPlaywrightState("No contexts found in the browser")
                 context = browser.contexts[0]
+                if self.user_agent:
+                    context.set_extra_http_headers({"User-Agent": self.user_agent})
                 trusted_page = context.new_page()
             else:
                 if not os.environ.get("NOVA_ACT_SKIP_PLAYWRIGHT_INSTALL"):
@@ -357,6 +361,7 @@ class PlaywrightInstanceManager:
         except StartFailed:
             raise
         except Exception as e:
+            _LOGGER.exception(f"Failed to start and initialize Playwright for NovaAct: {e}")
             self.stop()
             raise StartFailed("Failed to start and initialize Playwright for NovaAct") from e
 
@@ -392,12 +397,12 @@ class PlaywrightInstanceManager:
         self._session_logs_directory = None
 
     @property
-    def _active_page(self):
+    def _active_page(self) -> Page:
         assert self._context is not None and len(self._context.pages) > 0
         return self._context.pages[-1]
 
     @property
-    def main_page(self):
+    def main_page(self) -> Page:
         """Get an open page on which to send messages"""
         return self.get_page(-1)
 

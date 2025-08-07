@@ -11,7 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from nova_act.nova_act import NovaAct
 
 
 class StopHook(Protocol):
@@ -21,7 +24,7 @@ class StopHook(Protocol):
     or finalization logic to be executed when the NovaAct client is stopped.
     """
 
-    def on_stop(self, nova_act) -> None:
+    def on_stop(self, nova_act: "NovaAct") -> None:
         """Called when NovaAct is stopping.
 
         Parameters

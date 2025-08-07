@@ -31,7 +31,7 @@ class MessageEncrypter:
     Encrypts/decrypts message for extension <-> SDK communication.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._key = secrets.token_hex(256 // 8)  # 256-bit random string
         self._key_bytes = bytes(int(self._key[i : i + 2], 16) for i in range(0, len(self._key), 2))
         self._aesgcm = AESGCM(self._key_bytes)

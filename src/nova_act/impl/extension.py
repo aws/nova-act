@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 import time
 import uuid
 from contextlib import nullcontext
@@ -19,11 +20,14 @@ from typing import Any, ContextManager, Dict, cast
 
 from boto3.session import Session
 from playwright.sync_api import Error as PlaywrightError
+from playwright.sync_api import Page
 from retry.api import retry_call
 
 from nova_act.__version__ import VERSION as SDK_VERSION
 from nova_act.impl.backend import BackendInfo
 from nova_act.impl.common import get_extension_version
+from nova_act.impl.custom_actuation.interface.browser import BrowserActuatorBase, BrowserObservation, JSONSerializable
+from nova_act.impl.custom_actuation.interface.playwright_pages import PlaywrightPageManagerBase
 from nova_act.impl.dispatcher import ActDispatcher
 from nova_act.impl.keyboard_event_watcher import KeyboardEventWatcher
 from nova_act.impl.playwright import PlaywrightInstanceManager
@@ -46,6 +50,7 @@ from nova_act.util.logging import (
     make_trace_logger,
     setup_logging,
 )
+from nova_act.util.step_server_time_tracker import StepServerTimeTracker
 
 # Check every 0.1 seconds, for a total of 30 seconds.
 DEFAULT_POLL_SLEEP_S = 0.1
@@ -92,7 +97,7 @@ class ExtensionDispatcher(ActDispatcher):
 
         self._extension_version = get_extension_version(extension_path)
 
-    def _poll_playwright(self, timeout_s: float):
+    def _poll_playwright(self, timeout_s: float) -> None:
         try:
             self._playwright_manager.main_page.evaluate("() => {}")
         # suppress trace during polling
@@ -101,7 +106,7 @@ class ExtensionDispatcher(ActDispatcher):
                 _LOGGER.error(f"{type(e).__name__}", exc_info=True)
         time.sleep(timeout_s)
 
-    def cancel_prompt(self, act: Act | None = None):
+    def cancel_prompt(self, act: Act | None = None) -> None:
         """Dispatch a cancel message to the extension.
 
         Post a message with `type: autonomy-cancel-prompt` within the browser context.
@@ -175,7 +180,7 @@ class ExtensionDispatcher(ActDispatcher):
         self._playwright_manager.main_page.wait_for_selector("#autonomy-listeners-registered", state="attached")
         self.wait_for_page_to_settle(session_id, timeout=timeout)
 
-    def _dispatch_prompt_and_wait_for_ack(self, act: Act):
+    def _dispatch_prompt_and_wait_for_ack(self, act: Act) -> None:
         """Dispatch an act prompt to the extension.
 
         Post a message with `type: autonomy-pending-prompt` within the browser context.
@@ -331,3 +336,66 @@ class ExtensionDispatcher(ActDispatcher):
             credentials_dict["sessionToken"] = credentials.token
 
         return credentials_dict
+
+
+class ExtensionActuator(BrowserActuatorBase, PlaywrightPageManagerBase):
+
+    def __init__(self, dispatcher: ExtensionDispatcher):
+        self._extension_dispatcher = dispatcher
+
+    def agent_click(
+        self, box: str, click_type: str | None = None, click_options: str | None = None
+    ) -> JSONSerializable:
+        raise NotImplementedError("agent_click is not implemented")
+
+    def agent_scroll(self, direction: str, box: str, value: float | None = None) -> JSONSerializable:
+        raise NotImplementedError("agent_scroll is not implemented")
+
+    def agent_type(self, value: str, box: str, pressEnter: bool = False) -> JSONSerializable:
+        raise NotImplementedError("agent_type is not implemented")
+
+    def go_to_url(self, url: str) -> JSONSerializable:
+        raise NotImplementedError("go_to_url is not implemented")
+
+    def _return(self, value: str) -> JSONSerializable:
+        raise NotImplementedError("_return is not implemented")
+
+    def think(self, value: str) -> JSONSerializable:
+        raise NotImplementedError("think is not implemented")
+
+    def throw_agent_error(self, value: str) -> JSONSerializable:
+        raise NotImplementedError("throw_agent_error is not implemented")
+
+    def wait(self, seconds: float) -> JSONSerializable:
+        raise NotImplementedError("wait is not implemented")
+
+    def wait_for_page_to_settle(self) -> JSONSerializable:
+        raise NotImplementedError("wait_for_page_to_settle is not implemented")
+
+    def take_observation(self) -> BrowserObservation:
+        raise NotImplementedError("take_observation is not implemented")
+
+    def get_page(self, index: int = -1) -> Page:
+        return self._extension_dispatcher._playwright_manager.get_page(index)
+
+    @property
+    def pages(self) -> list[Page]:
+        return self._extension_dispatcher._playwright_manager.context.pages
+
+    @property
+    def started(self, **kwargs: Any) -> bool:
+        return self._extension_dispatcher._playwright_manager.started
+
+    def start(self, **kwargs: Any) -> None:
+        if "session_logs_directory" in kwargs:
+            self._extension_dispatcher._playwright_manager.start(
+                session_logs_directory=kwargs.get("session_logs_directory")
+            )
+        if os.environ.get("PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS"):
+            StepServerTimeTracker(
+                self._extension_dispatcher._playwright_manager.context,
+                endpoint_pattern=self._extension_dispatcher._backend_info.api_uri,
+            )
+
+    def stop(self, **kwargs: Any) -> None:
+        self._extension_dispatcher._playwright_manager.stop()

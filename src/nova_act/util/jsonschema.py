@@ -22,7 +22,7 @@ from nova_act.types.act_result import ActResult
 BOOL_SCHEMA = {"type": "boolean"}
 
 
-def validate_jsonschema_schema(schema: Dict[str, Any]):
+def validate_jsonschema_schema(schema: Dict[str, Any]) -> None:
     try:
         jsonschema.Draft7Validator.check_schema(schema)
     except jsonschema.SchemaError as e:

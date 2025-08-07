@@ -19,6 +19,7 @@ import re
 
 from PIL import Image, ImageDraw
 
+from nova_act.types.act_result import ActResult
 from nova_act.types.errors import ValidationFailed
 from nova_act.types.state.act import Act
 from nova_act.util.logging import setup_logging
@@ -83,7 +84,9 @@ def _add_bbox_to_image(image: str, response: str) -> str:
     return "data:image/jpeg;base64," + base64.b64encode(image_bytes_io.getvalue()).decode("utf-8")
 
 
-def format_run_info(steps: int, url: str, time: str, image: str, response: str, server_time_s: float | None = None):
+def format_run_info(
+    steps: int, url: str, time: str, image: str, response: str, server_time_s: float | None = None
+) -> str:
     image = _add_bbox_to_image(image, response)
 
     server_time_info = ""
@@ -245,7 +248,7 @@ class RunInfoCompiler:
 
         return safe[:max_length]
 
-    def _generate_html_content(self, act: Act) -> str:
+    def _generate_html_content(self, act: Act, result: ActResult | None) -> str:
         """
         Generate HTML content from act steps.
 
@@ -265,6 +268,11 @@ class RunInfoCompiler:
                 response=step.model_output.awl_raw_program,
                 server_time_s=step.server_time_s,
             )
+        if result is not None:
+            result_div = f"""<pre style="background: #f4f4f4; padding: 10px; border-radius: 5px;
+                overflow-x: auto; font-size: 14px; white-space: pre-wrap; word-wrap: break-word;
+                margin: 0; display: block; border: 1px solid #ddd;">{result}</pre>"""
+            run_info += result_div
 
         # Compile Workflow View
         html_content = HTML_TEMPLATE.format(
@@ -275,7 +283,7 @@ class RunInfoCompiler:
         )
         return html_content
 
-    def compile(self, act: Act) -> str:
+    def compile(self, act: Act, result: ActResult | None = None) -> str:
         """
         Compile run information from an Act object and write to files.
 
@@ -290,7 +298,7 @@ class RunInfoCompiler:
         file_name_prefix = f"act_{act.id}_{prompt_filename_snippet}"
 
         # Generate HTML content
-        html_content = self._generate_html_content(act=act)
+        html_content = self._generate_html_content(act=act, result=result)
 
         # Write HTML file
         output_file_path = _write_html_file(

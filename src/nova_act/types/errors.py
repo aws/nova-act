@@ -145,3 +145,7 @@ class InvalidChromeChannel(ValidationFailed):
 
 class PageNotFoundError(ValidationFailed):
     pass
+
+
+class InterpreterError(NovaActError):
+    pass

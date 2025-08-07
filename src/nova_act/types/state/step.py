@@ -70,7 +70,7 @@ class Step:
         )
 
     # Input validation
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate instance after creation."""
         if not self.model_input.image:
             raise ValueError("Screenshot is required")

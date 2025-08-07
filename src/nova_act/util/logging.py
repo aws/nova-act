@@ -15,6 +15,7 @@ import logging
 import os
 import sys
 from contextvars import ContextVar
+from typing import Callable
 
 from nova_act.__version__ import VERSION as SDK_VERSION
 
@@ -35,11 +36,11 @@ def set_logging_session(session_id: str | None) -> None:
 _LOG_ENV_VAR = "NOVA_ACT_LOG_LEVEL"
 
 
-def get_log_level():
+def get_log_level() -> int:
     return int(os.environ.get(_LOG_ENV_VAR, logging.INFO))
 
 
-def is_quiet():
+def is_quiet() -> bool:
     return get_log_level() > logging.INFO
 
 
@@ -69,7 +70,7 @@ def make_trace_logger() -> logging.Logger:
 class LoadScroller:
     """Print horizontal dots until stop condition"""
 
-    def __init__(self, condition_check=lambda: True, frequency: int = 1):
+    def __init__(self, condition_check: Callable[[], bool] = lambda: True, frequency: int = 1):
         if frequency < 1:
             raise ValueError("Frequency must be greater than 1")
 
@@ -78,7 +79,7 @@ class LoadScroller:
         self._frequency = frequency
         self._count = 0
 
-    def scroll(self):
+    def scroll(self) -> None:
         if not self.condition_check():
             return
 

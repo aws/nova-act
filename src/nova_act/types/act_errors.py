@@ -13,15 +13,18 @@
 # limitations under the License.
 import dataclasses
 from abc import ABC
+from typing import Any
 
 from nova_act.__version__ import EXTENSION_VERSION
 from nova_act.types.act_metadata import ActMetadata
 from nova_act.types.errors import NovaActError
 
+MAX_CHARS = 500
+
 
 # Decorator for allowing optional messages to override the default messages while keeping metadata mandatory
-def act_error_class(default_message: str):
-    def decorator(cls):
+def act_error_class(default_message: str) -> Any:
+    def decorator(cls: Any) -> Any:
         @dataclasses.dataclass(frozen=True, repr=False)
         class wrapped(cls):
             _DEFAULT_MESSAGE = default_message
@@ -32,8 +35,8 @@ def act_error_class(default_message: str):
                 metadata: ActMetadata,
                 message: str | None = None,
                 extension_version: str | None = None,
-                **kwargs,
-            ):
+                **kwargs: Any,
+            ) -> None:
                 if extension_version is not None:
                     message = check_extension_version(extension_version, message=message)
                 super().__init__(metadata=metadata, message=message)
@@ -47,7 +50,7 @@ def act_error_class(default_message: str):
     return decorator
 
 
-def check_extension_version(extension_version: str | None, *, message: str | None):
+def check_extension_version(extension_version: str | None, *, message: str | None) -> str:
     if extension_version is not None and extension_version != EXTENSION_VERSION:
         warning = (
             "Detected incompatible extension version, indicating a corrupted installation. "
@@ -58,7 +61,7 @@ def check_extension_version(extension_version: str | None, *, message: str | Non
             message = message + "; " + warning
         else:
             message = warning
-    return message
+    return message or ""
 
 
 """
@@ -89,7 +92,7 @@ class ActError(NovaActError):
                         line_break = "\n"
                         metadata_str = f"    {field.name} = {str(value).replace(line_break, line_break + '    ')}"
                     else:
-                        field_strings.append(f"    {field.name} = {str(value)}")
+                        field_strings.append(f"    {field.name} = {str(value)[:MAX_CHARS]}")
 
             if metadata_str:
                 field_strings.append(metadata_str)
@@ -116,7 +119,6 @@ class ActServerError(ActError, ABC):
         metadata: ActMetadata,
         message: str | None = None,
         failed_request_id: str | None = None,
-        raw_message: str | None = None,
         extension_version: str | None = None,
     ):
         super().__init__(metadata=metadata, message=message)
@@ -138,8 +140,11 @@ class ActPromptError(ActError, ABC):
     def __init__(self, *, metadata: ActMetadata, message: dict):
 
         fields = message.get("fields", [])
+        details = message.get("message", "")
         if fields is not None and len(fields) > 0:
             super().__init__(message=fields[0].get("message"), metadata=metadata)
+        elif details:
+            super().__init__(message=details, metadata=metadata)
         else:
             super().__init__(metadata=metadata)
 
@@ -226,7 +231,6 @@ class ActRateLimitExceededError(ActServerError):
         metadata: ActMetadata,
         message: dict | None,
         failed_request_id: str | None = None,
-        raw_message: str | None = None,
     ):
 
         if message is not None and "DAILY_QUOTA_LIMIT_EXCEEDED" == message.get("throttleType"):
@@ -234,21 +238,21 @@ class ActRateLimitExceededError(ActServerError):
                 metadata=metadata,
                 message="Daily API limit exceeded. " + self._QUOTA_MESSAGE,
                 failed_request_id=failed_request_id,
-                raw_message=raw_message,
             )
         elif message is not None and "RATE_LIMIT_EXCEEDED" == message.get("throttleType"):
             super().__init__(
                 message="Too many requests in a short time period. " + self._QUOTA_MESSAGE,
                 metadata=metadata,
                 failed_request_id=failed_request_id,
-                raw_message=raw_message,
             )
         else:
+            message_out = ""
+            if message is not None:
+                message_out = message.get("message") or ""
             super().__init__(
                 metadata=metadata,
-                message=self._QUOTA_MESSAGE,
+                message=self._QUOTA_MESSAGE + " " + message_out,
                 failed_request_id=failed_request_id,
-                raw_message=raw_message,
             )
 
 
@@ -261,14 +265,12 @@ class ActProtocolError(ActServerError, ActClientError):
         metadata: ActMetadata,
         message: str | None = None,
         failed_request_id: str | None = None,
-        raw_message: str | None = None,
         extension_version: str | None = None,
     ):
         super().__init__(
             metadata=metadata,
             message=message,
             failed_request_id=failed_request_id,
-            raw_message=raw_message,
             extension_version=extension_version,
         )
 

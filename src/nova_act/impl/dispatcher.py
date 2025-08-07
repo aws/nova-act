@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from abc import ABC, abstractmethod
+from typing import Any
 
 from nova_act.types.act_errors import ActError
 from nova_act.types.act_result import ActResult
@@ -33,5 +34,5 @@ class ActDispatcher(ABC):
         pass
 
     @abstractmethod
-    def cancel_prompt(self, act: Act | None = None):
+    def cancel_prompt(self, act: Act | None = None) -> Any:
         pass

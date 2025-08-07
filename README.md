@@ -12,7 +12,7 @@ Nova Act is an early research preview of an SDK + model for building agents desi
 Amazon Nova Act is an experimental SDK. When using Nova Act, please keep in mind the following:
 
 1. ⚠️ Please be aware that Nova Act may encounter commands in the content it encounters on third party websites. These unauthorized commands, known as prompt injections, may cause the model to make mistakes or act in a manner that differs from user-provided or model instructions. To reduce the risks associated with prompt injections, it is important to monitor Nova Act and limit its operations to websites you trust.
-2. Nova Act may make mistakes. You are responsible for monitoring Nova Act and using it in accordance with our [Acceptable Use Policy](https://www.amazon.com/gp/help/customer/display.html?nodeId=TTFAPMmEqemeDWZaWf). We collect information on interactions with Nova Act, including prompts and screenshots taken while Nova Act is engaged with the browser, in order to provide, develop, and improve our services. You can request to delete your Nova Act data by emailing us at nova-act@amazon.com.
+2. Nova Act may make mistakes. You are responsible for monitoring Nova Act and using it in accordance with our [Acceptable Use Policy](https://www.amazon.com/gp/help/customer/display.html?nodeId=TTFAPMmEqemeDWZaWf). When using the research preview, we collect information on interactions with Nova Act, including prompts and screenshots taken while Nova Act is engaged with the browser, in order to provide, develop, and improve our services. You can request to delete your Nova Act data by emailing us at nova-act@amazon.com.
 3. Do not share your API key. Anyone with access to your API key can use it to operate Nova Act under your Amazon account. If you lose your API key or believe someone else may have access to it, go to https://nova.amazon.com/act to deactivate your key and obtain a new one.
 4. We recommend that you do not provide sensitive information to Nova Act, such as account passwords. Note that if you use sensitive information through Playwright calls, the information could be collected in screenshots if it appears unobstructed on the browser when Nova Act is engaged in completing an action. (See [Entering sensitive information](#entering-sensitive-information) below.)
 5. If you are using our browsing environment defaults, to identify our agent, look for `NovaAct` in the user agent string. If you operate Nova Act in your own browsing environment or customize the user agent, we recommend that you include that same string.
@@ -34,10 +34,13 @@ Amazon Nova Act is an experimental SDK. When using Nova Act, please keep in mind
 * [Using a proxy](#using-a-proxy)
 * [Logging and viewing traces](#logging)
 * [Recording a video of a session](#recording-a-session)
+* [Storing Session Data in Amazon S3](#storing-session-data-in-your-amazon-s3-bucket)
+* [Navigating Pages](#navigating-pages)
+* [Viewing headless sessions](#viewing-a-session-that-is-running-in-headless-mode)
+* [Custom Actuation](#custom-actutation)
 * [Known limitations](#known-limitations)
 * [Reference: Nova Act constructor parameters](#initializing-novaact)
-* [Reference: Customizing the browser actuation](#actuating-the-browser)
-* [Reference: Viewing a session that is running in headless mode](#viewing-a-session-that-is-running-in-headless-mode)
+* [Reference: Actuating the browser](#actuating-the-browser)
 
 ## Pre-requisites
 
@@ -122,6 +125,9 @@ Once the agent completes the step above, you can enter the next step:
 ```
 
 Feel free to manipulate the browser in between these `act()` calls as well, but please don't interact with the browser when an `act()` is running because the underlying model will not know what you've changed!
+
+> Note: When using interactive mode, `ctrl+x` can exit the agent action leaving the browser intact for another `act()` call. `ctrl+c` does not do this -- it will exit the browser and require a `NovaAct` restart.
+
 
 ### Samples
 
@@ -507,6 +513,81 @@ The S3Writer requires the following AWS permissions:
 
 When the NovaAct session ends, all session files will be automatically uploaded to the specified S3 bucket with the provided prefix.
 
+### Navigating pages
+
+> **Use `nova.go_to_url` instead of `nova.page.goto`**
+
+The Playwright Page's `goto()` method has a default timeout of 30 seconds, which may cause failures for slow-loading websites. If the page does not finish loading within this time, `goto()` will raise a `TimeoutError`, potentially interrupting your workflow. Additionally, goto() does not always work well with act, as Playwright may consider the page ready before it has fully loaded.
+To address these issues, we have implemented a new function, `go_to_url()`, which provides more reliable navigation. You can use it by calling: `nova.go_to_url(url)` after `nova.start()`. You can also use the `go_to_url_timeout` parameter on `NovaAct` initialization to modify the default max wait time in seconds for the start page load and subsequent `got_to_url()` calls.
+
+### Viewing a session that is running in headless mode
+
+When running the browser in headless mode (`headless: True`), you may need to see how the workflow is progressing as the agent is going through it. To do this:
+1. set the following environment variables before starting your Nova Act workflow
+```bash
+export NOVA_ACT_BROWSER_ARGS="--remote-debugging-port=9222"
+```
+2. start your Nova Act workflow as you normally do, with `headless: True`
+3. Open a local browser to `http://localhost:9222/json`
+4. Look for the item of type `page` and copy and paste its `devtoolsFrontendUrl` into the browser
+
+You'll now be observing the activity happening within the headless browser. You can also interact with the browser window as you normally would, which can be helpful for handling captchas. For example, in your Python script:
+1. ask Nova Act to check if there is a captcha
+2. if there is, `sleep()` for a period of time. Loop back to step 1. During `sleep()`...
+3. send an email / SMS alert (eg, with [Amazon Simple Notification Service](https://aws.amazon.com/sns/)) containing the `devtoolsFrontendUrl` signaling human intervention is required
+4. a human opens the `devtoolsFrontendUrl` and solves the captcha
+5. the next time step 1 is run, Nova Act will see the captcha has been solved, and the script will continue
+
+Note that if you are running Nova Act on a remote host, you may need to set up port forwarding to enable access from another system.
+
+## Custom Actutation
+
+For advanced control over your agent's browser interactions, you can create a custom actuator that extends our default actuator. This feature provides maximum flexibility in defining how your agent performs actions in the browser by allowing you to override agent behavior such as `click`, `think`, `scroll`, `take_observation`, etc.
+
+### Creating a Custom Actuator
+
+1. Extend the `DefaultNovaLocalBrowserActuator` class
+2. Override specific methods to customize behavior (e.g., click, think, scroll, take_observation)
+3. Pass your custom actuator type to the `NovaAct` constructor
+
+#### Usage
+
+```
+from nova_act import DefaultNovaLocalBrowserActuator
+
+class MyCustomActuator(DefaultNovaLocalBrowserActuator):
+    def agent_click(self, box, click_type, click_options):
+        # Custom click behavior
+        pass
+
+    def agent_scroll(self, direction, box, value):
+        # Custom scroll behavior
+        pass
+
+# When initializing NovaAct
+agent = NovaAct(..., actuator=MyCustomActuator)
+
+```
+
+See the [samples](./src/nova_act/samples) folder for [a reference implementation](./src/nova_act/samples/custom_actuator.py) of the simplest case of customizing the `agent_click()` method.
+
+### Custom Browser Implementation
+
+While we recommend extending the `DefaultNovaLocalBrowserActuator` for most custom actuation use cases, you can provide your own browser automation implementation by creating a class that implements the `BrowserActuatorBase` interface. Instead of extending the default actuator, pass an instance of your custom implementation to the `actuator` argument of the `NovaAct` constructor.
+
+> Important notes about implementing `BrowserActuatorBase`:
+> - You are responsible for managing resource creation and cleanup
+> - Significant deviations from NovaAct's standard observation and I/O formats may impact model performance
+> - If using Playwright, implement `PlaywrightPageManagerBase` to maintain standard nova.page access points
+
+### Revert to Legacy Actuation
+
+To revert to legacy actuation, pass the `ExtensionActuator` as a type to the actuator argument.
+```
+from nova_act import ExtensionActuator
+agent = NovaAct(..., actuator=ExtensionActuator)
+```
+
 ## Known limitations
 Nova Act is a research preview intended for prototyping and exploration. It’s the first step in our vision for building the key capabilities for useful agents at scale. You can expect to encounter many limitations at this stage — please provide feedback to [nova-act@amazon.com](mailto:nova-act@amazon.com?subject=Nova%20Act%20Bug%20Report) to help us make it better.
 
@@ -524,11 +605,12 @@ For example:
 ## Reference
 
 
-### Initializing NovaAct
+### Initializing `NovaAct`
 
 The constructor accepts the following:
 
 * `starting_page (str)`: The URL of the starting page; supports both web URLs (`https://`) and local file URLs (`file://`) (required argument)
+* `actuator(type or instance of BrowserActuatorBase)`: A optional custom actuator to specialize act behavior
   * Note: file URLs require passing `ignore_https_errors=True` to the constructor
 * `headless (bool)`: Whether to launch the browser in headless mode (defaults to `False`)
 * `quiet (bool)`: Whether to suppress logs to terminal (defaults to `False`)
@@ -552,6 +634,7 @@ This creates one browser session. You can create as many browser sessions as you
 
 * `max_steps` (int): Configure the maximum number of steps (browser actuations) `act()` will take before giving up on the task. Use this to make sure the agent doesn't get stuck forever trying different paths. Default is 30.
 * `timeout` (int): Number of seconds timeout for the entire act call. Prefer using `max_steps` as time per step can vary based on model server load and website latency.
+* `observation_delay_ms`: Additional delay in milliseconds before taking an observation of the page. Useful to wait for UI animations to complete.
 
 Returns an `ActResult`.
 
@@ -572,8 +655,6 @@ class ActMetadata:
     prompt: string
 ```
 
-When using interactive mode, ctrl+x can exit the agent action leaving the browser intact for another act() call. ctrl+c does not do this -- it will exit the browser and require a `NovaAct` restart.
-
 #### Do it programmatically
 
 `NovaAct` exposes a Playwright [`Page`](https://playwright.dev/python/docs/api/class-page) object directly under the `page` attribute.
@@ -585,31 +666,6 @@ screenshot_bytes = nova.page.screenshot()
 dom_string = nova.page.content()
 nova.page.keyboard.type("hello")
 ```
-
-**Caution: Use `nova.go_to_url` instead of `nova.page.goto`**
-
-The Playwright Page's `goto()` method has a default timeout of 30 seconds, which may cause failures for slow-loading websites. If the page does not finish loading within this time, `goto()` will raise a `TimeoutError`, potentially interrupting your workflow. Additionally, goto() does not always work well with act, as Playwright may consider the page ready before it has fully loaded.
-To address these issues, we have implemented a new function, `go_to_url()`, which provides more reliable navigation. You can use it by calling: `nova.go_to_url(url)` after `nova.start()`. You can also use the `go_to_url_timeout` parameter on `NovaAct` initialization to modify the default max wait time in seconds for the start page load and subsequent `got_to_url()` calls
-
-### Viewing a session that is running in headless mode
-
-When running the browser in headless mode (`headless: True`), you may need to see how the workflow is progressing as the agent is going through it. To do this:
-1. set the following environment variables before starting your Nova Act workflow
-```bash
-export NOVA_ACT_BROWSER_ARGS="--remote-debugging-port=9222"
-```
-2. start your Nova Act workflow as you normally do, with `headless: True`
-3. Open a local browser to `http://localhost:9222/json`
-4. Look for the item of type `page` and copy and paste its `devtoolsFrontendUrl` into the browser
-
-You'll now be observing the activity happening within the headless browser. You can also interact with the browser window as you normally would, which can be helpful for handling captchas. For example, in your Python script:
-1. ask Nova Act to check if there is a captcha
-2. if there is, `sleep()` for a period of time. Loop back to step 1. During `sleep()`...
-3. send an email / SMS alert (eg, with [Amazon Simple Notification Service](https://aws.amazon.com/sns/)) containing the `devtoolsFrontendUrl` signaling human intervention is required
-4. a human opens the `devtoolsFrontendUrl` and solves the captcha
-5. the next time step 1 is run, Nova Act will see the captcha has been solved, and the script will continue
-
-Note that if you are running Nova Act on a remote host, you may need to set up port forwarding to enable access from another system.
 
 ## Report a Bug
 Help us improve! If you notice any issues, please let us know by submitting a bug report via nova-act@amazon.com. 

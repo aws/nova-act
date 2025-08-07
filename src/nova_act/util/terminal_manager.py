@@ -13,6 +13,7 @@
 # limitations under the License.
 import os
 import sys
+from typing import Any
 
 DEFAULT_TERMINAL_COLS = 80
 
@@ -33,11 +34,11 @@ class TerminalInputManager:
     old_term: list
     is_interactive: bool = False
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Check if running in an interactive terminal
         self.is_interactive = sys.stdin.isatty() and os.isatty(sys.stdin.fileno())
 
-    def __enter__(self):
+    def __enter__(self) -> "TerminalInputManager":
         if not self.is_interactive:
             return self
 
@@ -60,7 +61,7 @@ class TerminalInputManager:
 
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         if not self.is_interactive:
             return
 

@@ -39,7 +39,7 @@ class PlaywrightInstanceOptions:
     cdp_headers: dict[str, str] | None = None
     proxy: dict[str, str] | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.owns_playwright = self.maybe_playwright is None
         self.owns_context = self.cdp_endpoint_url is None and not self.use_default_chrome_browser
         self.go_to_url_timeout = 1000 * (self.go_to_url_timeout or _DEFAULT_GO_TO_URL_TIMEOUT)

@@ -54,20 +54,20 @@ class WindowMessageHandler:
         self._page_state: PageState | None = None
         self._encrypter: MessageEncrypter = encrypter
 
-    def bind(self, act: Act):
+    def bind(self, act: Act) -> None:
         """Bind an active Act object for accumulating observations"""
         if act.is_complete:
             raise ValueError("Cannot bind a completed act for more observations")
         self._act = act
         self._page_state = None
 
-    def bind_page(self, page_state: PageState):
+    def bind_page(self, page_state: PageState) -> None:
         if page_state.is_settled:
             raise ValueError("Cannot bind a settled page for more observations")
         self._act = None
         self._page_state = page_state
 
-    def handle_message(self, encrypted_message: dict | str):
+    def handle_message(self, encrypted_message: dict | str) -> None:
         """Register observations in bound Act, if any"""
         try:
             _LOGGER.debug("Got message %s", encrypted_message)

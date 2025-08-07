@@ -14,6 +14,7 @@
 import os
 import sys
 import uuid
+from typing import Any
 from urllib.parse import urlparse
 
 from nova_act.impl.backend import Backend, get_urls_for_backend
@@ -59,7 +60,7 @@ SUPPORTED_CHANNELS = {
 }
 
 
-def _get_key_length_by_backend(backend):
+def _get_key_length_by_backend(backend: Backend) -> int:
     return 36
 
 
@@ -222,7 +223,7 @@ def validate_proxy(proxy: dict[str, str] | None) -> None:
             raise ValidationFailed(f"Proxy {key} must be a string")
 
 
-def validate_url_ssl_certificate(ignore_https_errors: bool, url: str):
+def validate_url_ssl_certificate(ignore_https_errors: bool, url: str) -> None:
     """
     Validate the SSL certificate for the given URL.
 
@@ -252,7 +253,7 @@ def validate_base_parameters(
     ignore_https_errors: bool,
     use_default_chrome_browser: bool,
     proxy: dict[str, str] | None = None,
-):
+) -> None:
     if extension_path:
         validate_path(extension_path, "extension_path")
     validate_url(starting_page, "starting_page")
@@ -287,12 +288,12 @@ def validate_length(
     profile_directory: str | None,
     user_data_dir: str,
     nova_act_api_key: str,
-    endpoint_name: str,
+    endpoint_name: str | None,
     cdp_endpoint_url: str | None,
     user_agent: str | None,
     logs_directory: str | None,
     backend: Backend,
-):
+) -> None:
     fields = {
         "extension_path": extension_path,
         "starting_page": starting_page,

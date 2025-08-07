@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import threading
+from typing import Any, Literal
 
 from nova_act.util.terminal_manager import TerminalInputManager
 
@@ -40,7 +41,7 @@ class KeyboardEventWatcher:
         self.final_stop = False
         self.watcher_thread = None
 
-    def _watch_for_trigger(self):
+    def _watch_for_trigger(self) -> None:
         while not self.final_stop:
             key = self.terminal_manager.get_char(block=False)
             if self.key == key:
@@ -48,7 +49,7 @@ class KeyboardEventWatcher:
                     continue
                 self.trigger.set()
 
-    def __enter__(self):
+    def __enter__(self) -> "KeyboardEventWatcher":
         """Override terminal and start new thread when watcher is entered."""
         self.terminal_manager = TerminalInputManager().__enter__()
 
@@ -58,7 +59,7 @@ class KeyboardEventWatcher:
 
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> Literal[False]:
         """Clean up the watcher thread and reset terminal when exiting the context."""
         if self.terminal_manager:
             self.terminal_manager.__exit__(exc_type, exc_val, exc_tb)
@@ -68,8 +69,8 @@ class KeyboardEventWatcher:
             self.watcher_thread.join()
         return False  # Don't suppress any exceptions
 
-    def is_triggered(self):
+    def is_triggered(self) -> bool:
         return self.trigger.is_set()
 
-    def reset(self):
+    def reset(self) -> None:
         self.trigger.clear()

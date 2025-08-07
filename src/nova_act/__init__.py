@@ -11,6 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from nova_act.impl.custom_actuation.interface.browser import BrowserActuatorBase, JSONSerializable
+from nova_act.impl.custom_actuation.interface.playwright_pages import PlaywrightPageManagerBase
+from nova_act.impl.custom_actuation.playwright.default_nova_local_browser_actuator import (
+    DefaultNovaLocalBrowserActuator,
+)
+from nova_act.impl.extension import ExtensionActuator
 from nova_act.nova_act import NovaAct
 from nova_act.types.act_errors import (
     ActAgentError,
@@ -54,4 +60,9 @@ __all__ = [
     "StopFailed",
     "ValidationFailed",
     "BOOL_SCHEMA",
+    "BrowserActuatorBase",
+    "ExtensionActuator",
+    "DefaultNovaLocalBrowserActuator",
+    "JSONSerializable",
+    "PlaywrightPageManagerBase",
 ]

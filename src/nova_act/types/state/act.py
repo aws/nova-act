@@ -28,9 +28,13 @@ from nova_act.types.state.step import Step
 DEFAULT_ACT_MAX_STEPS = 30
 
 
+def _convert_max_steps(x: int | None) -> int:
+    return x if x is not None else DEFAULT_ACT_MAX_STEPS
+
+
 @dataclass
 class ActSucceeded:
-    response: str
+    response: str | None
 
 
 @dataclass
@@ -48,18 +52,19 @@ class Act:
     # Required constructor params (immutable)
     prompt: str = field(on_setattr=frozen)
     session_id: str = field(on_setattr=frozen)
-    endpoint_name: str = field(on_setattr=frozen)
+    endpoint_name: str | None = field(on_setattr=frozen)
     timeout: float = field(on_setattr=frozen)
 
     # Optional constructor params (immutable)
     max_steps: int = field(
         default=DEFAULT_ACT_MAX_STEPS,
-        converter=lambda x: x if x is not None else DEFAULT_ACT_MAX_STEPS,
+        converter=_convert_max_steps,
         on_setattr=frozen,
     )
     model_temperature: int | None = field(default=None, on_setattr=frozen)
     model_top_k: int | None = field(default=None, on_setattr=frozen)
     model_seed: int | None = field(default=None, on_setattr=frozen)
+    observation_delay_ms: int | None = field(default=None, on_setattr=frozen)
 
     # generate act_id and start_time on construction; make immutable
     id: str = field(factory=lambda: str(uuid.uuid4()), on_setattr=frozen, init=False)
@@ -103,7 +108,7 @@ class Act:
             raise ValueError("Cannot add steps to a completed Act")
         self._steps.append(step)
 
-    def complete(self, response: str) -> None:
+    def complete(self, response: str | None) -> None:
         self.end_time = time.time()
         self._result = ActSucceeded(response)
         self.is_complete = True
@@ -113,7 +118,7 @@ class Act:
         self._result = ActCanceled()
         self.is_complete = True
 
-    def fail(self, error_message: dict):
+    def fail(self, error_message: dict) -> None:
         self.end_time = time.time()
         self._result = ActFailed(error_message)
         self.is_complete = True

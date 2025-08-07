@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from boto3.session import Session
 from botocore.exceptions import ClientError
@@ -211,7 +211,7 @@ class S3Writer(StopHook):
         else:
             return f"{session_id}/{relative_path}"
 
-    def _upload_file_to_s3(self, bucket, local_path: str, s3_key: str) -> None:
+    def _upload_file_to_s3(self, bucket: Any, local_path: str, s3_key: str) -> None:
         """Upload a file to S3 with error handling.
 
         Parameters
