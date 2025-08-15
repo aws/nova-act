@@ -11,16 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Dict
-
 from nova_act.impl.custom_actuation.playwright.dom_actuation.create_dom_events import (
     create_focus_event_init,
     create_mouse_event_init,
     create_pointer_event_init,
 )
+from nova_act.impl.custom_actuation.playwright.dom_actuation.dispatch_events_dict import DispatchEvents
 
 
-def get_after_click_events(point: Dict[str, float]) -> list:
+def get_after_click_events(point: dict[str, float]) -> list[DispatchEvents]:
     """Get events for after a click."""
     return [
         {"type": "pointermove", "init": create_pointer_event_init(point, -1, 0)},

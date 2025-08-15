@@ -119,12 +119,17 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
     @action
     def throw_agent_error(self, value: str) -> JSONSerializable:
         """Used when the task requested by the user is not possible."""
-        pass
+        return value
 
     @action
     def wait(self, seconds: float) -> JSONSerializable:
         """Pauses execution for the specified number of seconds."""
-        time.sleep(seconds)
+        if seconds < 0:
+            raise ValueError("Seconds must be non-negative")
+        if seconds == 0:
+            self.wait_for_page_to_settle()
+        else:
+            time.sleep(seconds)
         return None
 
     @action
@@ -163,10 +168,10 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
         return {
             "activeURL": self._playwright_manager.main_page.url,
             "browserDimensions": {
-                "scrollHeight": 5845,
-                "scrollLeft": 0,
-                "scrollTop": 0,
-                "scrollWidth": 1454,
+                "scrollHeight": dimensions["scrollHeight"],
+                "scrollLeft": dimensions["scrollLeft"],
+                "scrollTop": dimensions["scrollTop"],
+                "scrollWidth": dimensions["scrollWidth"],
                 "windowHeight": dimensions["height"],
                 "windowWidth": dimensions["width"],
             },

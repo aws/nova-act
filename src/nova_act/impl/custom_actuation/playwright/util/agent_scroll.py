@@ -39,7 +39,7 @@ def get_target_bbox_dimensions(bounding_box: str | None) -> DimensionsDict | Non
 def get_scroll_element_dimensions(page: Page, bounding_box: str | None = None) -> DimensionsDict:
     # No bounding box means we want to scroll the window
     if bounding_box is None:
-        dimensions = page.evaluate(
+        dimensions: DimensionsDict = page.evaluate(
             """() => {
             return {
                 width: document.documentElement.clientWidth,

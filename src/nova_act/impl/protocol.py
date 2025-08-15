@@ -182,7 +182,9 @@ def handle_nova_act_client_error(error: dict, act: Act, extension_version: str |
     if error_type == NovaActClientErrors.MAX_STEPS_EXCEEDED:
         return ActExceededMaxStepsError(metadata=act.metadata)
     if error_type == NovaActClientErrors.ACTUATION_ERROR:
-        return ActActuationError(metadata=act.metadata, message=error.get("message", ""))
+        return ActActuationError(
+            metadata=act.metadata, message=error.get("message", ""), exception=error.get("exception", None)
+        )
     if error_type == NovaActClientErrors.INTERPRETATION_ERROR:
         return ActModelError(metadata=act.metadata, message=error)
 

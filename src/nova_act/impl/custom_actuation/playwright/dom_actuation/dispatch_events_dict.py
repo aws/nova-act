@@ -11,14 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing_extensions import Literal, NotRequired, TypedDict
+from typing_extensions import TypedDict
+
+from nova_act.impl.custom_actuation.playwright.dom_actuation.create_dom_events import DomEvents
 
 
-class ProgramErrorResponse(TypedDict):
-    error: NotRequired[str]
-    type: Literal["NovaActService", "NovaActClient"]
-    subErrorCode: NotRequired[str]
-    requestId: NotRequired[str]
-    exception: NotRequired[Exception]
-    code: NotRequired[str | int]
-    message: NotRequired[str]
+class DispatchEvents(TypedDict):
+    type: str
+    init: DomEvents | dict[str, bool]

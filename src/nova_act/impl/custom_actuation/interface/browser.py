@@ -73,7 +73,7 @@ class BrowserActuatorBase(ActuatorBase):
 
     @action
     @abstractmethod
-    def _return(self, value: str) -> JSONSerializable:
+    def _return(self, value: str | None) -> JSONSerializable:
         """Complete execution of the task and return to the user.
 
         Return can either be bare (no value) or a string literal."""

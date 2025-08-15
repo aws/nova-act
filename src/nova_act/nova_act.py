@@ -24,9 +24,12 @@ from playwright.sync_api import Page, Playwright
 
 from nova_act.impl.backend import Backend, get_urls_for_backend
 from nova_act.impl.common import get_default_extension_path, rsync
+from nova_act.impl.controller import NovaStateController
 from nova_act.impl.custom_actuation.custom_dispatcher import CustomActDispatcher
 from nova_act.impl.custom_actuation.interface.browser import BrowserActuatorBase
-from nova_act.impl.custom_actuation.interface.playwright_pages import PlaywrightPageManagerBase
+from nova_act.impl.custom_actuation.interface.playwright_pages import (
+    PlaywrightPageManagerBase,
+)
 from nova_act.impl.custom_actuation.playwright.default_nova_local_browser_actuator import (
     DefaultNovaLocalBrowserActuator,
 )
@@ -47,18 +50,37 @@ from nova_act.impl.run_info_compiler import RunInfoCompiler
 from nova_act.impl.telemetry import send_act_telemetry, send_environment_telemetry
 from nova_act.types.act_errors import ActError
 from nova_act.types.act_result import ActResult
-from nova_act.types.errors import AuthError, ClientNotStarted, IAMAuthError, StartFailed, StopFailed, ValidationFailed
+from nova_act.types.errors import (
+    AuthError,
+    ClientNotStarted,
+    IAMAuthError,
+    StartFailed,
+    StopFailed,
+    ValidationFailed,
+)
+from nova_act.types.events import EventType, LogType
 from nova_act.types.features import PreviewFeatures
 from nova_act.types.hooks import StopHook
 from nova_act.types.state.act import Act
-from nova_act.util.jsonschema import add_schema_to_prompt, populate_json_schema_response, validate_jsonschema_schema
-from nova_act.util.logging import get_session_id_prefix, make_trace_logger, set_logging_session, setup_logging
+from nova_act.util.event_handler import EventHandler
+from nova_act.util.jsonschema import (
+    add_schema_to_prompt,
+    populate_json_schema_response,
+    validate_jsonschema_schema,
+)
+from nova_act.util.logging import (
+    get_session_id_prefix,
+    make_trace_logger,
+    set_logging_session,
+    setup_logging,
+)
 
 DEFAULT_SCREEN_WIDTH = 1600
 DEFAULT_SCREEN_HEIGHT = 900
 
 _LOGGER = setup_logging(__name__)
 _TRACE_LOGGER = make_trace_logger()
+
 
 ManagedActuatorType = Type[DefaultNovaLocalBrowserActuator | ExtensionActuator]
 
@@ -144,6 +166,9 @@ class NovaAct:
             If True (default), will make a copy of user_data_dir into a temp dir for each instance of NovaAct.
             This ensures the original is not modified and that each instance has its own user_data_dir.
             If user_data_dir is not specified, this flag has no effect.
+        actuator: ManagedActuatorType
+            Type or instance of a custom actuator.
+            Note that deviations from NovaAct's standard observation and I/O formats may impact model performance
         profile_directory: str
             Directory for the Chrome user profile within user_data_dir. Only needed if using an existing Chrome profile.
         extension_path : str, optional
@@ -219,6 +244,7 @@ class NovaAct:
             )
             extension_path = extension_path
         extension_path = get_default_extension_path()
+        actuate_with_extension = actuator is ExtensionActuator
 
         clone_user_data_dir = clone_user_data_dir and not use_default_chrome_browser
         if user_data_dir:  # pragma: no cover
@@ -246,7 +272,12 @@ class NovaAct:
         self._logs_directory = logs_directory
         self._session_logs_directory: str = ""
 
-        _chrome_channel = cast(str, chrome_channel or os.environ.get("NOVA_ACT_CHROME_CHANNEL", "chrome"))
+        if actuate_with_extension:
+            # The extension no longer works with chrome v138 or above, so we default to chromium
+            _chrome_channel = chrome_channel or "chromium"
+        else:
+            _chrome_channel = cast(str, chrome_channel or os.environ.get("NOVA_ACT_CHROME_CHANNEL", "chrome"))
+
         _headless = headless or bool(os.environ.get("NOVA_ACT_HEADLESS"))
 
         validate_base_parameters(
@@ -294,8 +325,6 @@ class NovaAct:
 
         self._session_id: str | None = None
 
-        actuate_with_extension = actuator is ExtensionActuator
-
 
         self._stop_hooks = stop_hooks
 
@@ -328,6 +357,11 @@ class NovaAct:
         self._actuator: BrowserActuatorBase
         self._dispatcher: ActDispatcher
 
+        self._event_callback = None
+
+        self._event_handler = EventHandler(self._event_callback)
+        self._controller = NovaStateController(self._tty)
+
         if actuate_with_extension:
             _LOGGER.debug("Using Extension Actuator")
             playwright = PlaywrightInstanceManager(playwright_options)
@@ -343,6 +377,12 @@ class NovaAct:
         else:
             if isinstance(actuator, type):
                 if issubclass(actuator, DefaultNovaLocalBrowserActuator):
+                    if actuator is not DefaultNovaLocalBrowserActuator:
+                        _LOGGER.warning(
+                            f"Using a custom actuator: {actuator.__name__}\n"
+                            "Deviations from NovaAct's standard observation"
+                            " and I/O formats may impact model performance"
+                        )
                     _LOGGER.debug(f"Using a DefaultNovaLocalBrowserActuator: {actuator.__name__}")
                     self._actuator = actuator(
                         playwright_options=playwright_options,
@@ -352,7 +392,10 @@ class NovaAct:
                         "Please subclass DefaultNovaLocalBrowserActuator if passing a custom actuator by type"
                     )
             else:
-                _LOGGER.debug(f"Using User-Defined Actuator: {type(actuator).__name__}")
+                _LOGGER.warning(
+                    f"Using a user-defined actuator instance: {type(actuator).__name__}\n"
+                    "Deviations from NovaAct's standard observation and I/O formats may impact model performance"
+                )
                 self._actuator = actuator
 
             self._dispatcher = CustomActDispatcher(
@@ -360,6 +403,8 @@ class NovaAct:
                 backend_info=self._backend_info,
                 actuator=self._actuator,
                 tty=self._tty,
+                event_handler=self._event_handler,
+                controller=self._controller,
                 boto_session=self._boto_session,
             )
 
@@ -567,11 +612,16 @@ class NovaAct:
             session_logs_str = f" logs dir {self._session_logs_directory}" if self._session_logs_directory else ""
 
             _TRACE_LOGGER.info(f"\nstart session {self._session_id} on {self._starting_page}{session_logs_str}\n")
+            self._event_handler.send_event(
+                type=EventType.LOG,
+                log_level=LogType.INFO,
+                data=f"start session {self._session_id} on {self._starting_page}{session_logs_str}",
+            )
 
         except Exception as e:
             _LOGGER.exception(f"Failed to start the actuator: {e}")
             self._stop()
-            raise StartFailed from e
+            raise StartFailed(str(e)) from e
 
     def register_stop_hook(self, hook: StopHook) -> None:
         """Register a stop hook that will be called during stop().
@@ -610,12 +660,15 @@ class NovaAct:
             self._execute_stop_hooks()
             self._dispatcher.cancel_prompt()
             self._actuator.stop()
-            self._session_id = None
-
             _TRACE_LOGGER.info(f"\nend session: {self._session_id}\n")
+            self._event_handler.send_event(
+                type=EventType.LOG, log_level=LogType.INFO, data=f"end session: {self._session_id}"
+            )
+
+            self._session_id = None
             set_logging_session(None)
         except Exception as e:
-            raise StopFailed from e
+            raise StopFailed(str(e)) from e
 
     def stop(self) -> None:
         """Stop the client."""
@@ -623,6 +676,7 @@ class NovaAct:
             _LOGGER.warning("Attention: Client is already stopped.")
             return
         self._stop()
+
 
     def act(
         self,
@@ -692,6 +746,9 @@ class NovaAct:
         )
         _TRACE_LOGGER.info(f'{get_session_id_prefix()}act("{prompt}")')
 
+        self._event_handler.set_act(act)
+        self._event_handler.send_event(type=EventType.LOG, log_level=LogType.INFO, data=f'act("{prompt}")')
+
         error = None
         result = None
 
@@ -715,5 +772,10 @@ class NovaAct:
             if self._run_info_compiler:
                 file_path = self._run_info_compiler.compile(act, result)
                 _TRACE_LOGGER.info(f"\n{get_session_id_prefix()}** View your act run here: {file_path}\n")
+                self._event_handler.send_event(
+                    type=EventType.LOG,
+                    log_level=LogType.INFO,
+                    data=f"** View your act run here: {file_path}",
+                )
 
         return result

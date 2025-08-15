@@ -30,7 +30,6 @@ DEFAULT_REQUEST_READ_TIMEOUT = 5 * 60  # 5min
 
 
 
-
 class Routes:
     """
     Routes class for Nova Act SDK.
@@ -107,7 +106,7 @@ class Routes:
         session_id: str,
         metadata: ActMetadata,
     ) -> tuple[
-        dict | None,
+        dict[str, Any] | None,
         str | None,
         dict[str, Any],
     ]:

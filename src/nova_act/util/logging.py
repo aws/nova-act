@@ -29,6 +29,13 @@ def get_session_id_prefix() -> str:
     return f"{session_id[:4]}> "
 
 
+def get_session_id() -> str:
+    session_id = _session_id.get()
+    if session_id is None:
+        session_id = ""
+    return session_id
+
+
 def set_logging_session(session_id: str | None) -> None:
     _session_id.set(session_id)  # type: ignore
 

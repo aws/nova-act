@@ -14,11 +14,18 @@
 from playwright.sync_api import Locator, Page
 
 from nova_act.impl.custom_actuation.interface.types.element_dict import ElementDict
+from nova_act.util.logging import setup_logging
+
+_LOGGER = setup_logging(__name__)
 
 
 def blur(element_info: ElementDict, page: Page) -> None:
-    element = locate_element(element_info, page)
-    element.blur()
+    try:
+        element = locate_element(element_info, page)
+        element.blur()
+    except Exception as e:
+        _LOGGER.debug(f"Error blurring element: {e}")
+        return
 
 
 def locate_element(element_info: ElementDict, page: Page) -> Locator:
@@ -58,7 +65,7 @@ def get_element_at_point(page: Page, x: float, y: float) -> ElementDict:
         Dictionary containing element information or None if no element found
     """
     # Execute JavaScript to get the element at the specified point
-    element_info = page.evaluate(
+    element_info: ElementDict = page.evaluate(
         """
         ([x, y]) => {
             const elem = document.elementFromPoint(x, y);
@@ -106,7 +113,7 @@ def is_element_focused(page: Page, x: float, y: float) -> bool:
     Returns:
         True if the element is focused, False otherwise
     """
-    return page.evaluate(
+    result: bool = page.evaluate(
         """
         ([x, y]) => {
             const elem = document.elementFromPoint(x, y);
@@ -115,3 +122,4 @@ def is_element_focused(page: Page, x: float, y: float) -> bool:
         """,
         [x, y],
     )
+    return result

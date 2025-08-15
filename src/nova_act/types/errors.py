@@ -34,6 +34,18 @@ class StopFailed(NovaActError):
     """Exception raised when the client fails during stop() for an otherwise unhandled reason."""
 
 
+class PauseFailed(NovaActError):
+    """Exception raised when the client fails during stop() for an otherwise unhandled reason."""
+
+
+class ResumeFailed(NovaActError):
+    """Exception raised when the client fails during stop() for an otherwise unhandled reason."""
+
+
+class CancelFailed(NovaActError):
+    """Exception raised when the client fails during stop() for an otherwise unhandled reason."""
+
+
 """
 Known Usage Errors
 """

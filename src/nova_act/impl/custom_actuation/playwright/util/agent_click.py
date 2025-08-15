@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import json
-from typing import Any, Dict, Literal, Optional
+from typing import Literal
 
 from playwright.sync_api import Page
 
@@ -36,7 +36,7 @@ def agent_click(
     bounding_box: str,
     page: Page,
     click_type: Literal["left", "left-double", "right"] = "left",
-    click_options: Optional[ClickOptions] = None,
+    click_options: ClickOptions | None = None,
 ) -> None:
     """
     Click at a point within a bounding box.
@@ -73,8 +73,8 @@ def agent_click(
 
 def maybe_blur_field(
     page: Page,
-    point: Dict[str, float],
-    click_options: Optional[ClickOptions] = None,
+    point: dict[str, float],
+    click_options: ClickOptions | None = None,
 ) -> None:
     if click_options is None or not click_options.get("blurField"):
         return
@@ -90,11 +90,11 @@ def maybe_blur_field(
     dispatch_event_sequence(element, after_click_events)
 
 
-def get_dropdown_options(page: Page, x: float, y: float) -> Any | None:
+def get_dropdown_options(page: Page, x: float, y: float) -> list[dict[str, str]] | None:
     """Get options from a select element."""
 
     # Use evaluate to extract options
-    options = page.evaluate(
+    options: list[dict[str, str]] | None = page.evaluate(
         """
         ([x, y]) => {
             const elem = document.elementFromPoint(x, y);
@@ -102,6 +102,7 @@ def get_dropdown_options(page: Page, x: float, y: float) -> Any | None:
             if (!elem.options) return null;
             return Array.from(elem.options).map(option => ({
                 value: option.label,
+                label: option.label,
             }));
         }
     """,

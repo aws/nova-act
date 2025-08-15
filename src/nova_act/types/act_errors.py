@@ -280,9 +280,25 @@ class ActInvalidInputError(ActClientError):
     pass
 
 
-@act_error_class("Actuation Error")
+@dataclasses.dataclass(frozen=True, repr=False)
 class ActActuationError(ActClientError):
-    pass
+    exception: Exception | None = None
+    _DEFAULT_MESSAGE = "Actuation Error"
+
+    def __init__(
+        self,
+        *,
+        metadata: ActMetadata,
+        message: str | None = None,
+        extension_version: str | None = None,
+        exception: Exception | None = None,
+    ):
+        super().__init__(
+            metadata=metadata,
+            message=message,
+            extension_version=extension_version,
+        )
+        object.__setattr__(self, "exception", exception)
 
 
 @act_error_class("Bad Request")

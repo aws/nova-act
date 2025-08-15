@@ -158,7 +158,7 @@ def compare_images(image1_data_url: str, image2_data_url: str, threshold: int = 
             diff_pixels = np.sum(diff_array > threshold)
 
         # Calculate the percentage of different pixels
-        percentage_diff = (diff_pixels / total_pixels) * 100.0
+        percentage_diff: float = (diff_pixels / total_pixels) * 100.0
 
         return percentage_diff
 

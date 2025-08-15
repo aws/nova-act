@@ -11,17 +11,27 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Any, Dict
+from typing_extensions import TypedDict
+
+
+class DomEvents(TypedDict):
+    bubbles: bool
+    button: int
+    clientX: float
+    clientY: float
+    cancelable: bool
+    composed: bool
+    detail: int
 
 
 def create_pointer_event_init(
-    point: Dict[str, float],
+    point: dict[str, float],
     button: int = -1,
     detail: int = 0,
     bubbles: bool = True,
     cancelable: bool = True,
     composed: bool = True,
-) -> Dict[str, Any]:
+) -> DomEvents:
     """Create initialization parameters for pointer events."""
     return {
         "bubbles": bubbles,
@@ -35,13 +45,13 @@ def create_pointer_event_init(
 
 
 def create_mouse_event_init(
-    point: Dict[str, float],
+    point: dict[str, float],
     button: int = 0,
     detail: int = 0,
     bubbles: bool = True,
     cancelable: bool = True,
     composed: bool = True,
-) -> Dict[str, Any]:
+) -> DomEvents:
     """Create initialization parameters for mouse events."""
     return {
         "bubbles": bubbles,
@@ -54,6 +64,6 @@ def create_mouse_event_init(
     }
 
 
-def create_focus_event_init(bubbles: bool = False, cancelable: bool = False, composed: bool = True) -> Dict[str, bool]:
+def create_focus_event_init(bubbles: bool = False, cancelable: bool = False, composed: bool = True) -> dict[str, bool]:
     """Create initialization parameters for focus events."""
     return {"bubbles": bubbles, "cancelable": cancelable, "composed": composed}

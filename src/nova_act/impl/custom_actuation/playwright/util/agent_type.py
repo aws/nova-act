@@ -78,7 +78,6 @@ def agent_type(
     if check_if_native_dropdown(page, point["x"], point["y"]):
         page.mouse.click(point["x"], point["y"])
         page.keyboard.type(value)
-        page.keyboard.press("Enter")
         blur(element_info, page)
         return
 
@@ -103,12 +102,15 @@ def agent_type(
     else:
         # blur the input box
         if element_info.get("blurField"):
-            blur(element_info, page)
+            try:
+                blur(element_info, page)
 
-            element = locate_element(element_info, page)
-            after_type_events = get_after_type_events(point)
+                element = locate_element(element_info, page)
+                after_type_events = get_after_type_events(point)
 
-            dispatch_event_sequence(element, after_type_events)
+                dispatch_event_sequence(element, after_type_events)
+            except Exception as e:
+                _LOGGER.debug(f"Error blurring element: {e}")
 
 
 def handle_color_input(page: Page, element_info: ElementDict, color_value: str) -> None:

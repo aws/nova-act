@@ -357,7 +357,7 @@ class ExtensionActuator(BrowserActuatorBase, PlaywrightPageManagerBase):
     def go_to_url(self, url: str) -> JSONSerializable:
         raise NotImplementedError("go_to_url is not implemented")
 
-    def _return(self, value: str) -> JSONSerializable:
+    def _return(self, value: str | None) -> JSONSerializable:
         raise NotImplementedError("_return is not implemented")
 
     def think(self, value: str) -> JSONSerializable:

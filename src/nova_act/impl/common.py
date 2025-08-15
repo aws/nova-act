@@ -16,24 +16,9 @@ import os
 import pathlib
 import subprocess
 from platform import freedesktop_os_release, system
-from typing import Any, Union
+from typing import cast
 
 from nova_act.types.errors import UnsupportedOperatingSystem
-
-
-def decode_nested_json(obj: Union[dict, list, str]) -> Any:
-    """Decode a mixed JSON dict/list/string."""
-    if isinstance(obj, dict):
-        return {key: decode_nested_json(value) for key, value in obj.items()}
-    elif isinstance(obj, list):
-        return [decode_nested_json(value) for value in obj]
-    elif isinstance(obj, str):
-        try:
-            return decode_nested_json(json.loads(obj))
-        except json.JSONDecodeError:
-            return obj
-    else:
-        return obj
 
 
 def should_install_chromium_dependencies() -> bool:
@@ -74,7 +59,7 @@ def get_extension_version(extension_path: str) -> str:
     manifest_path = os.path.join(extension_path, "manifest.json")
     with open(manifest_path) as f:
         manifest = json.load(f)
-    return manifest["description"]
+    return cast(str, manifest["description"])
 
 
 def get_default_extension_path() -> str:

@@ -13,8 +13,10 @@
 # limitations under the License.
 from playwright.sync_api import Locator
 
+from nova_act.impl.custom_actuation.playwright.dom_actuation.dispatch_events_dict import DispatchEvents
 
-def dispatch_event_sequence(element: Locator, events_config: list) -> None:
+
+def dispatch_event_sequence(element: Locator, events_config: list[DispatchEvents]) -> None:
     """
     Dispatch a sequence of events to an element.
 
@@ -26,4 +28,4 @@ def dispatch_event_sequence(element: Locator, events_config: list) -> None:
     """
 
     for event in events_config:
-        element.dispatch_event(event["type"], event["init"])
+        element.dispatch_event(event["type"], dict(event["init"]))

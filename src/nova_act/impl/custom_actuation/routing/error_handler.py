@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import json
-from typing import Any, cast
+from typing import cast
 
 from nova_act.impl.backend import BackendInfo
 from nova_act.impl.protocol import (
@@ -56,7 +56,7 @@ def handle_error(act: Act, backend_info: BackendInfo) -> ActResult | ActError:
         return ActClientError(message="Unhandled act result", metadata=act.metadata)
 
 
-def parse_act_failed(act: Act, backend_info: BackendInfo) -> Any:
+def parse_act_failed(act: Act, backend_info: BackendInfo) -> ActResult | ActError:
     result = cast(ActFailed, act.result)
     message = result.response
     error = message.get("error", "")

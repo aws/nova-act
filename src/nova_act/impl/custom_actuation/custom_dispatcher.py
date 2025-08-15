@@ -12,30 +12,40 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import time
-from contextlib import nullcontext
 
 from boto3.session import Session
 
 from nova_act.impl.backend import BackendInfo
+from nova_act.impl.controller import ControlState, NovaStateController
 from nova_act.impl.custom_actuation.interface.actuator import ActuatorBase
-from nova_act.impl.custom_actuation.interface.browser import BrowserActuatorBase, BrowserObservation
-from nova_act.impl.custom_actuation.interface.types.agent_redirect_error import AgentRedirectError
+from nova_act.impl.custom_actuation.interface.browser import (
+    BrowserActuatorBase,
+    BrowserObservation,
+)
+from nova_act.impl.custom_actuation.interface.types.agent_redirect_error import (
+    AgentRedirectError,
+)
 from nova_act.impl.custom_actuation.routing.error_handler import handle_error
 from nova_act.impl.custom_actuation.routing.interpreter import NovaActInterpreter
-from nova_act.impl.custom_actuation.routing.request import (
-    construct_plan_request,
-)
+from nova_act.impl.custom_actuation.routing.request import construct_plan_request
 from nova_act.impl.custom_actuation.routing.routes import Routes
 from nova_act.impl.dispatcher import ActDispatcher
 from nova_act.impl.extension import DEFAULT_ENDPOINT_NAME
-from nova_act.impl.keyboard_event_watcher import KeyboardEventWatcher
 from nova_act.impl.protocol import NovaActClientErrors
 from nova_act.types.act_errors import ActError
 from nova_act.types.act_result import ActResult
 from nova_act.types.errors import ClientNotStarted, InterpreterError, ValidationFailed
+from nova_act.types.events import (
+    EventType,
+    LogType,
+)
 from nova_act.types.state.act import Act
 from nova_act.types.state.step import Step
-from nova_act.util.logging import get_session_id_prefix, make_trace_logger
+from nova_act.util.event_handler import EventHandler
+from nova_act.util.logging import (
+    get_session_id_prefix,
+    make_trace_logger,
+)
 
 _TRACE_LOGGER = make_trace_logger()
 
@@ -54,6 +64,8 @@ class CustomActDispatcher(ActDispatcher):
     def __init__(
         self,
         backend_info: BackendInfo,
+        event_handler: EventHandler,
+        controller: NovaStateController,
         nova_act_api_key: str | None,
         actuator: ActuatorBase | None,
         tty: bool,
@@ -71,8 +83,10 @@ class CustomActDispatcher(ActDispatcher):
             self._nova_act_api_key,
             boto_session=boto_session,
         )
-        self._interpreter = NovaActInterpreter(actuator=self._actuator)
+        self._interpreter = NovaActInterpreter(actuator=self._actuator, event_handler=event_handler)
         self._canceled = False
+        self._event_handler = event_handler
+        self._controller = controller
 
     def dispatch_and_wait_for_prompt_completion(self, act: Act) -> ActResult | ActError:
         """Act using custom actuation"""
@@ -83,17 +97,11 @@ class CustomActDispatcher(ActDispatcher):
         if not isinstance(self._actuator, BrowserActuatorBase):
             raise ValidationFailed("actuator must be an instance of BrowserActuatorBase")
 
-        kb_cm: KeyboardEventWatcher | ContextManager[None] = (
-            KeyboardEventWatcher(chr(24), "ctrl+x", "stop agent act() call without quitting the browser")
-            if self._tty
-            else nullcontext()
-        )
-
         endpoint_name = act.endpoint_name
 
         error_executing_previous_step = None
 
-        with kb_cm as watcher:
+        with self._controller as control:
             end_time = time.time() + act.timeout
             for i in range(1, act.max_steps + 1):
                 if time.time() > end_time:
@@ -102,28 +110,49 @@ class CustomActDispatcher(ActDispatcher):
                     act.fail(error)
                     break
 
-                if self._tty:
-                    assert watcher is not None
-                    triggered = watcher.is_triggered()
-                    if triggered:
-                        self._canceled = True
-
-                if self._canceled:
+                if control.state == ControlState.CANCELLED:
                     _TRACE_LOGGER.info(f"\n{get_session_id_prefix()}Terminating agent workflow")
+                    self._event_handler.send_event(
+                        type=EventType.LOG,
+                        log_level=LogType.INFO,
+                        data="Terminating agent workflow",
+                    )
                     act.cancel()
-                    if watcher:
-                        watcher.reset()
-                    self._canceled = False
                     break
 
                 try:
                     if act.observation_delay_ms:
                         _TRACE_LOGGER.info(f"{get_session_id_prefix()}Observation delay: {act.observation_delay_ms}ms")
+                        self._event_handler.send_event(
+                            type=EventType.ACTION,
+                            action="wait",
+                            data=f"Observation delay: {act.observation_delay_ms}ms",
+                        )
                         self._actuator.wait(act.observation_delay_ms / 1000)
 
                     self._actuator.wait_for_page_to_settle()
 
                     observation: BrowserObservation = self._actuator.take_observation()
+                    self._event_handler.send_event(type=EventType.ACTION, action="observation", data=observation)
+                    paused = False
+
+                    while control.state == ControlState.PAUSED:
+                        paused = True
+                        time.sleep(0.1)
+                    if control.state == ControlState.CANCELLED:
+                        _TRACE_LOGGER.info(f"\n{get_session_id_prefix()}Terminating agent workflow")
+                        self._event_handler.send_event(
+                            type=EventType.LOG,
+                            log_level=LogType.INFO,
+                            data="Terminating agent workflow",
+                        )
+                        act.cancel()
+                        break
+
+                    # Take another observation if we were paused
+                    if paused:
+                        observation = self._actuator.take_observation()
+                        self._event_handler.send_event(type=EventType.ACTION, action="observation", data=observation)
 
                     plan_request = construct_plan_request(
                         act_id=act.id,
@@ -178,8 +207,13 @@ class CustomActDispatcher(ActDispatcher):
             if not act.is_complete:
                 error = {"type": "NovaActClient", "code": "MAX_STEPS_EXCEEDED"}
                 act.fail(error)
-
-        return handle_error(act, self._backend_info)
+        act_result = handle_error(act, self._backend_info)
+        self._event_handler.send_event(
+            type=EventType.ACTION,
+            action="result",
+            data=act_result,
+        )
+        return act_result
 
     def wait_for_page_to_settle(self, session_id: str, timeout: int | None = None) -> None:
         self._actuator.wait_for_page_to_settle()

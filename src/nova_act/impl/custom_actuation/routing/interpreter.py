@@ -15,10 +15,16 @@ import codecs
 from typing import Any
 
 from nova_act.impl.custom_actuation.interface.browser import BrowserActuatorBase
-from nova_act.impl.custom_actuation.interface.types.agent_redirect_error import AgentRedirectError
-from nova_act.impl.custom_actuation.interface.types.program_error_response import ProgramErrorResponse
+from nova_act.impl.custom_actuation.interface.types.agent_redirect_error import (
+    AgentRedirectError,
+)
+from nova_act.impl.custom_actuation.interface.types.program_error_response import (
+    ProgramErrorResponse,
+)
 from nova_act.impl.protocol import NovaActClientErrors
 from nova_act.types.errors import InterpreterError
+from nova_act.types.events import EventType, LogType
+from nova_act.util.event_handler import EventHandler
 
 
 class NovaActInterpreter:
@@ -27,8 +33,9 @@ class NovaActInterpreter:
     Returns True iff Agent is done, False otherwise
     """
 
-    def __init__(self, actuator: BrowserActuatorBase):
+    def __init__(self, actuator: BrowserActuatorBase, event_handler: EventHandler):
         self.actuator = actuator
+        self._event_handler = event_handler
 
     def _decode_string(self, value: Any) -> str:
         """Helper to decode unicode strings"""
@@ -53,6 +60,7 @@ class NovaActInterpreter:
             value = None
             if expr := last_stmt.get("expr"):
                 value = self._decode_string(expr["value"])
+            self._event_handler.send_event(type=EventType.ACTION, action="return", data=value)
             return True, self.actuator._return(value), None
 
         # Handle throw
@@ -60,13 +68,12 @@ class NovaActInterpreter:
             error_msg = ""
             if "expr" in last_stmt and last_stmt["expr"]["kind"] == "NewExpression" and last_stmt["expr"]["args"]:
                 error_msg = self._decode_string(last_stmt["expr"]["args"][0]["value"])
-
-            self.actuator.throw_agent_error(error_msg)
             error: ProgramErrorResponse = {
                 "type": "NovaActService",
                 "subErrorCode": "AGENT_ERROR",
-                "error": error_msg,
+                "error": self.actuator.throw_agent_error(error_msg),
             }
+            self._event_handler.send_event(type=EventType.ACTION, action="throw", data=error_msg)
             return True, "Error", error
 
         # Handle function calls
@@ -77,6 +84,19 @@ class NovaActInterpreter:
             args = [self._extract_arg_value(arg) for arg in call_args]
 
             try:
+                if len(statements) > 1:
+                    prev_stmt = statements[-2]
+                    if (
+                        prev_stmt["kind"] == "ExprStmt"
+                        and prev_stmt["expr"]["kind"] == "Call"
+                        and prev_stmt["expr"]["func"]["var"] == "think"
+                    ):
+                        think_value = self._decode_string(prev_stmt["expr"]["args"][0]["value"])
+                        self._event_handler.send_event(type=EventType.ACTION, action="think", data=think_value)
+                        self.actuator.think(value=think_value)
+
+                self._event_handler.send_event(type=EventType.ACTION, action=fn_name, data=args)
+
                 if fn_name == "agentClick":
                     if len(args) < 1:
                         raise InterpreterError(
@@ -114,23 +134,10 @@ class NovaActInterpreter:
                         )
                     self.actuator.go_to_url(url=args[0])
                 elif fn_name == "wait":
-                    self.actuator.wait_for_page_to_settle()
+                    seconds = float(args[0]) if args else 0.0
+                    self.actuator.wait(seconds)
                 else:
                     raise InterpreterError(f"Unknown function: {fn_name}")
-
-                # Handle think from previous statement
-                if len(statements) <= 1:
-                    return False, None, None
-
-                prev_stmt = statements[-2]
-                if (
-                    prev_stmt["kind"] == "ExprStmt"
-                    and prev_stmt["expr"]["kind"] == "Call"
-                    and prev_stmt["expr"]["func"]["var"] == "think"
-                ):
-                    think_value = self._decode_string(prev_stmt["expr"]["args"][0]["value"])
-                    self.actuator.think(value=think_value)
-
                 return False, None, None
 
             except AgentRedirectError:
@@ -141,13 +148,16 @@ class NovaActInterpreter:
                     "message": str(e),
                     "code": NovaActClientErrors.INTERPRETATION_ERROR.value,
                 }
+                self._event_handler.send_event(type=EventType.LOG, log_level=LogType.ERROR, data=err)
                 return True, "Error", err
             except Exception as e:
                 err = {
                     "type": "NovaActClient",
                     "message": str(e),
+                    "exception": e,
                     "code": NovaActClientErrors.ACTUATION_ERROR.value,
                 }
+                self._event_handler.send_event(type=EventType.LOG, log_level=LogType.ERROR, data=err)
                 return False, "Error", err
 
         raise InterpreterError(f"Unhandled statement type: {stmt_kind}")
@@ -156,10 +166,15 @@ class NovaActInterpreter:
         """Extract statements from AST"""
         return program_ast["body"][0]["body"]["body"]
 
-    def _extract_arg_value(self, arg: Any) -> str:
+    def _extract_arg_value(self, arg: Any) -> Any:
         """Safely extract argument value from AST node"""
         if isinstance(arg, dict) and (value := arg.get("value")) is not None:
-            return self._decode_string(value)
+            if arg.get("kind") == "Str":
+                return self._decode_string(value)
+            elif arg.get("kind") == "Number":
+                return value
+            else:
+                return value
         return str(arg)
 
     # Handle "pressEnter" sub program

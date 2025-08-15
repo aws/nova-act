@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import base64
+import html
 import io
 import json
 import os
@@ -89,6 +90,9 @@ def format_run_info(
 ) -> str:
     image = _add_bbox_to_image(image, response)
 
+    # HTML escape the response to prevent HTML interpretation of <box> tags
+    escaped_response = html.escape(response)
+
     server_time_info = ""
     if server_time_s is not None:
         server_time_info = (
@@ -120,7 +124,7 @@ def format_run_info(
 
             <pre style="background: #f4f4f4; padding: 10px; border-radius: 5px;
                 overflow-x: auto; font-size: 14px; white-space: pre-wrap; word-wrap: break-word;
-                margin: 0; display: block; border: 1px solid #ddd;">{response}</pre>
+                margin: 0; display: block; border: 1px solid #ddd;">{escaped_response}</pre>
         </div>
     """
 

@@ -12,3 +12,4 @@ retry
 pytz
 strands-agents>=0.1.9
 strands-agents-tools
+websockets

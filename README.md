@@ -37,7 +37,7 @@ Amazon Nova Act is an experimental SDK. When using Nova Act, please keep in mind
 * [Storing Session Data in Amazon S3](#storing-session-data-in-your-amazon-s3-bucket)
 * [Navigating Pages](#navigating-pages)
 * [Viewing headless sessions](#viewing-a-session-that-is-running-in-headless-mode)
-* [Custom Actuation](#custom-actutation)
+* [Use Nova Act SDK with Amazon Bedrock AgentCore Browser Tool](#use-nova-act-sdk-with-amazon-bedrock-agentcore-browser-tool)
 * [Known limitations](#known-limitations)
 * [Reference: Nova Act constructor parameters](#initializing-novaact)
 * [Reference: Actuating the browser](#actuating-the-browser)
@@ -397,6 +397,14 @@ print(f"Downloaded file {download_info.value.path()}")
 download_info.value.save_as("my_downloaded_file")
 ```
 
+> **Important notes**:
+>
+> - The browser will show the file being downloaded to the temporary path defined by Playwright ([see docs](https://playwright.dev/docs/downloads#introduction))
+>    - This temporary path is accessible via `download_info.value.path()`
+>  - When using `download_info.value.save_as()`:
+>    - If a full path is provided (e.g., "/path/to/my_downloaded_file"), the file will be saved there
+>    - If only a filename is provided (e.g., "my_downloaded_file"), it will be saved in the current working directory where the Python script was executed from
+
 To download the current page:
 
 1. If it's HTML, then accessing `nova.page.content()` will give you the rendered DOM. You can save that to a file.
@@ -540,53 +548,12 @@ You'll now be observing the activity happening within the headless browser. You 
 
 Note that if you are running Nova Act on a remote host, you may need to set up port forwarding to enable access from another system.
 
-## Custom Actutation
 
-For advanced control over your agent's browser interactions, you can create a custom actuator that extends our default actuator. This feature provides maximum flexibility in defining how your agent performs actions in the browser by allowing you to override agent behavior such as `click`, `think`, `scroll`, `take_observation`, etc.
+## Use Nova Act SDK with Amazon Bedrock AgentCore Browser Tool
 
-### Creating a Custom Actuator
+The Nova Act SDK can be used together with the [Amazon Bedrock AgentCore Browser Tool](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/browser-tool.html) for production-ready browser automation at scale. The AgentCore Browser Tool provides a fully managed cloud-based browser automation solution that addresses limitations around real-time data access, while the Nova Act SDK gives you the flexibility to build sophisticated agent workflows.
 
-1. Extend the `DefaultNovaLocalBrowserActuator` class
-2. Override specific methods to customize behavior (e.g., click, think, scroll, take_observation)
-3. Pass your custom actuator type to the `NovaAct` constructor
-
-#### Usage
-
-```
-from nova_act import DefaultNovaLocalBrowserActuator
-
-class MyCustomActuator(DefaultNovaLocalBrowserActuator):
-    def agent_click(self, box, click_type, click_options):
-        # Custom click behavior
-        pass
-
-    def agent_scroll(self, direction, box, value):
-        # Custom scroll behavior
-        pass
-
-# When initializing NovaAct
-agent = NovaAct(..., actuator=MyCustomActuator)
-
-```
-
-See the [samples](./src/nova_act/samples) folder for [a reference implementation](./src/nova_act/samples/custom_actuator.py) of the simplest case of customizing the `agent_click()` method.
-
-### Custom Browser Implementation
-
-While we recommend extending the `DefaultNovaLocalBrowserActuator` for most custom actuation use cases, you can provide your own browser automation implementation by creating a class that implements the `BrowserActuatorBase` interface. Instead of extending the default actuator, pass an instance of your custom implementation to the `actuator` argument of the `NovaAct` constructor.
-
-> Important notes about implementing `BrowserActuatorBase`:
-> - You are responsible for managing resource creation and cleanup
-> - Significant deviations from NovaAct's standard observation and I/O formats may impact model performance
-> - If using Playwright, implement `PlaywrightPageManagerBase` to maintain standard nova.page access points
-
-### Revert to Legacy Actuation
-
-To revert to legacy actuation, pass the `ExtensionActuator` as a type to the actuator argument.
-```
-from nova_act import ExtensionActuator
-agent = NovaAct(..., actuator=ExtensionActuator)
-```
+See [this blog post](https://aws.amazon.com/blogs/machine-learning/introducing-amazon-bedrock-agentcore-browser-tool/) for integration instructions.
 
 ## Known limitations
 Nova Act is a research preview intended for prototyping and exploration. It’s the first step in our vision for building the key capabilities for useful agents at scale. You can expect to encounter many limitations at this stage — please provide feedback to [nova-act@amazon.com](mailto:nova-act@amazon.com?subject=Nova%20Act%20Bug%20Report) to help us make it better.
@@ -610,7 +577,6 @@ For example:
 The constructor accepts the following:
 
 * `starting_page (str)`: The URL of the starting page; supports both web URLs (`https://`) and local file URLs (`file://`) (required argument)
-* `actuator(type or instance of BrowserActuatorBase)`: A optional custom actuator to specialize act behavior
   * Note: file URLs require passing `ignore_https_errors=True` to the constructor
 * `headless (bool)`: Whether to launch the browser in headless mode (defaults to `False`)
 * `quiet (bool)`: Whether to suppress logs to terminal (defaults to `False`)

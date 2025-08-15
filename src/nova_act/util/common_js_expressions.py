@@ -19,6 +19,10 @@ class Expressions(Enum):
 
     GET_VIEWPORT_SIZE = """() => {
         return {
+            scrollHeight: document.body.scrollHeight,
+            scrollLeft: window.scrollX,
+            scrollTop: window.scrollY,
+            scrollWidth: document.body.scrollWidth,
             width: window.innerWidth,
             height: window.innerHeight,
         }

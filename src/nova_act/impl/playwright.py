@@ -35,6 +35,7 @@ from nova_act.impl.window_messages import (
 )
 from nova_act.types.errors import (
     ClientNotStarted,
+    InvalidChromeChannel,
     InvalidPlaywrightState,
     PageNotFoundError,
     StartFailed,
@@ -118,6 +119,19 @@ class PlaywrightInstanceManager:
             first_page.goto(self._starting_page, timeout=self._go_to_url_timeout)
             trusted_page.close()
             return first_page
+
+        if self._require_extension and self._chrome_channel == "chrome" and context.browser:
+            try:
+                major_browser_version = context.browser.version.split(".")[0]
+                if int(major_browser_version) >= 138:
+                    raise InvalidChromeChannel(
+                        "Nova Act with ExtensionActuator is not supported for Chrome v138 and above."
+                    )
+            except InvalidChromeChannel:
+                raise
+            except Exception:
+                _LOGGER.warning("Nova Act with ExtensionActuator is not supported for Chrome v138 and above.")
+                pass
 
         context.expose_function(HANDLE_ENCRYPTED_MESSAGE_FUNCTION_NAME, self._window_message_handler.handle_message)
 
