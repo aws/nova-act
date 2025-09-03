@@ -20,12 +20,13 @@ them to the format expected by the protocol layer.
 """
 
 import json
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable, Dict
 
 import requests
 
 from nova_act.impl.helios.validation import is_valid_helios_error_response
 from nova_act.types.act_errors import ActBadResponseError
+from nova_act.types.api.step import ProgramErrorResponse, StepObjectInput, StepRequest
 from nova_act.types.state.act import Act
 
 
@@ -56,7 +57,7 @@ def has_valid_error_response(json_response: Dict[str, Any]) -> bool:
     return True
 
 
-def handle_error_response(error_data: Dict[str, Any], act: Act) -> Tuple[None, None, Dict[str, Any]]:
+def handle_error_response(error_data: Dict[str, Any], act: Act) -> ProgramErrorResponse:
     """
     Convert Helios service error to the format expected by protocol.py.
 
@@ -80,18 +81,20 @@ def handle_error_response(error_data: Dict[str, Any], act: Act) -> Tuple[None, N
                 )
 
     # Convert to protocol-expected format for string code handling
-    error_dict = {
+    return {
         "type": "NovaActService",
         "code": error_data["code"],  # String code like "INVALID_INPUT"
         "message": error_data["message"],
         "requestId": act.id,
     }
-    return None, None, error_dict
 
 
 def handle_http_error(
-    response: requests.Response, plan_request: str, act: Act, create_step_object_input_func: Callable
-) -> Tuple[None, None, Dict[str, Any]]:
+    response: requests.Response,
+    plan_request: StepRequest,
+    act: Act,
+    create_step_object_input_func: Callable[[StepRequest, Act], StepObjectInput],
+) -> ProgramErrorResponse:
     """Handle HTTP-level errors from the Helios service."""
     create_step_object_input_func(plan_request, act)
 
@@ -104,11 +107,10 @@ def handle_http_error(
         pass
 
     # Map HTTP status codes to error format expected by protocol.py
-    error_dict = map_http_status_to_error(response=response, request_id=act.id)
-    return None, None, error_dict
+    return map_http_status_to_error(response=response, request_id=act.id)
 
 
-def map_http_status_to_error(response: requests.Response, request_id: str) -> Dict[str, Any]:
+def map_http_status_to_error(response: requests.Response, request_id: str) -> ProgramErrorResponse:
     """Map HTTP status codes to the error format expected by protocol.py."""
     status_code = response.status_code
 
@@ -125,7 +127,7 @@ def map_http_status_to_error(response: requests.Response, request_id: str) -> Di
         fields = []
 
     # Create error structure matching protocol format
-    error_dict = {
+    error_dict: ProgramErrorResponse = {
         "type": "NovaActService",
         "code": status_code,  # Integer HTTP status code (not string)
         "message": json.dumps(

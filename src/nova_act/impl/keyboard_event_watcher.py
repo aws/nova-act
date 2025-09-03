@@ -12,9 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import threading
+import time
 from typing import Any, Literal
 
+from nova_act.util.logging import setup_logging
 from nova_act.util.terminal_manager import TerminalInputManager
+
+# Shared event indicating a debugger is attached.
+DEBUGGER_ATTACHED_EVENT = threading.Event()
+
+_LOGGER = setup_logging(__name__)
 
 
 class KeyboardEventWatcher:
@@ -43,11 +50,19 @@ class KeyboardEventWatcher:
 
     def _watch_for_trigger(self) -> None:
         while not self.final_stop:
+            if DEBUGGER_ATTACHED_EVENT.is_set():
+                _LOGGER.warning(f"Detected attached debugger; disabling {type(self).__name__}")
+                self.final_stop = True
+                break
+
             key = self.terminal_manager.get_char(block=False)
             if self.key == key:
                 if self.trigger.is_set():
                     continue
                 self.trigger.set()
+
+            # Short sleep to avoid a tight loop and reduce CPU usage
+            time.sleep(0.1)
 
     def __enter__(self) -> "KeyboardEventWatcher":
         """Override terminal and start new thread when watcher is entered."""

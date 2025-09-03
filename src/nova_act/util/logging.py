@@ -17,8 +17,6 @@ import sys
 from contextvars import ContextVar
 from typing import Callable
 
-from nova_act.__version__ import VERSION as SDK_VERSION
-
 _session_id = ContextVar("session_id", default=None)
 
 

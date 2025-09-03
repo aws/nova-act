@@ -11,14 +11,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import json
 import os
-import pathlib
 import subprocess
+import tempfile
+from pathlib import Path
 from platform import freedesktop_os_release, system
-from typing import cast
 
-from nova_act.types.errors import UnsupportedOperatingSystem
+from nova_act.types.errors import UnsupportedOperatingSystem, ValidationFailed
+from nova_act.util.logging import setup_logging
+
+_LOGGER = setup_logging(__name__)
 
 
 def should_install_chromium_dependencies() -> bool:
@@ -54,28 +56,30 @@ def should_install_chromium_dependencies() -> bool:
     return True
 
 
-def get_extension_version(extension_path: str) -> str:
-    """Retrieve the Extension Description in the Manifest for Version Info"""
-    manifest_path = os.path.join(extension_path, "manifest.json")
-    with open(manifest_path) as f:
-        manifest = json.load(f)
-    return cast(str, manifest["description"])
-
-
-def get_default_extension_path() -> str:
-    """Retrieve the Extension Path"""
-    path = os.path.join(pathlib.Path(__file__).parent.parent.resolve(), "artifacts", "chrome-mv3-prod")
-    if path is None:
-        raise FileNotFoundError("Extension not found")
-    return path
-
-
-def rsync(src_dir: str, dest_dir: str, extra_args: list[str]) -> None:
-    """rsync from src_dir to dest_dir for cheaper copies of diffs"""
-    if not os.path.exists(src_dir):
+def rsync_to_temp_dir(src_dir: str, extra_args: list[str] = ['--exclude="Singleton*"']) -> str:
+    """rsync from src_dir to a temp_dir after normalizing paths; return the created directory"""
+    temp_dir = tempfile.mkdtemp(suffix="_nova_act_user_data_dir")
+    normalized_src_dir = src_dir.rstrip("/") + "/"
+    if not os.path.exists(normalized_src_dir):
         raise ValueError(f"Source directory {src_dir} does not exist")
-    os.makedirs(dest_dir, exist_ok=True)
-
-    rsync_cmd = ["rsync", "-a", "--delete", *extra_args, src_dir, dest_dir]
-
+    rsync_cmd = ["rsync", "-a", "--delete", *extra_args, normalized_src_dir, temp_dir]
     subprocess.run(rsync_cmd, check=True)
+    return temp_dir
+
+
+def rsync_from_default_user_data(dest_dir: str, extra_args: list[str] = ['--exclude="Singleton*"']) -> str:
+    """rsync from system default user_data_dir (MacOs only)"""
+    assert system() == "Darwin", "This function is only supported on macOS"
+
+    # empty string at end to create path with trailing slash
+    # This ensures rsync copies the contents rather than the folder
+    src_dir = os.path.join(str(Path.home()), "Library", "Application Support", "Google", "Chrome", "")
+
+    normalized_dest = os.path.abspath(dest_dir)
+    common_path = os.path.commonpath([src_dir, normalized_dest])
+    if os.path.samefile(common_path, src_dir):
+        raise ValidationFailed(f"Cannot copy Chrome directory into itself or its subdirectory: {dest_dir}")
+    os.makedirs(dest_dir, exist_ok=True)
+    rsync_cmd = ["rsync", "-a", "--delete", *extra_args, src_dir, dest_dir]
+    subprocess.run(rsync_cmd, check=True)
+    return dest_dir

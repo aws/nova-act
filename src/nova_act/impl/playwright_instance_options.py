@@ -24,7 +24,6 @@ class PlaywrightInstanceOptions:
     starting_page: str
     chrome_channel: str
     headless: bool
-    extension_path: str
     user_data_dir: str
     profile_directory: str | None
     cdp_endpoint_url: str | None
@@ -35,7 +34,6 @@ class PlaywrightInstanceOptions:
     ignore_https_errors: bool
     use_default_chrome_browser: bool = False
     go_to_url_timeout: int | None = None
-    require_extension: bool = True
     cdp_headers: dict[str, str] | None = None
     proxy: dict[str, str] | None = None
 

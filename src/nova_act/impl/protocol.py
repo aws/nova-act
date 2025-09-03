@@ -13,15 +13,13 @@
 # limitations under the License.
 import json
 from enum import Enum
-from typing import Any, cast
+from typing import Any
 
 from nova_act.impl.backend import BackendInfo
 from nova_act.types.act_errors import (
     ActActuationError,
-    ActAgentError,
     ActBadRequestError,
     ActBadResponseError,
-    ActCanceledError,
     ActError,
     ActExceededMaxStepsError,
     ActGuardrailsError,
@@ -32,10 +30,10 @@ from nova_act.types.act_errors import (
     ActProtocolError,
     ActRateLimitExceededError,
     ActServiceUnavailableError,
-    ActTimeoutError,
 )
+from nova_act.types.api.step import ProgramErrorResponse
 from nova_act.types.errors import AuthError
-from nova_act.types.state.act import Act, ActFailed
+from nova_act.types.state.act import Act
 
 NOVA_ACT_SERVICE = "NovaActService"
 NOVA_ACT_CLIENT = "NovaActClient"
@@ -58,55 +56,7 @@ class NovaActServiceError(Enum):
     DAILY_QUOTA_LIMIT_ERROR = "DAILY_QUOTA_LIMIT_ERROR"
 
 
-def parse_errors(act: Act, backend_info: BackendInfo, extension_version: str) -> ActError:
-    if not isinstance(act.result, ActFailed) or not act.is_complete:
-        raise ValueError(f"Expected ActFailed result when attempting to parse, got act: {act}")
-
-    result = cast(ActFailed, act.result)
-    message = result.response
-    error = message.get("error", "")
-
-    if act.did_timeout:
-        return ActTimeoutError(metadata=act.metadata)
-    if message.get("subErrorCode") == "AGENT_ERROR":
-        return ActAgentError(message=error, metadata=act.metadata)
-    if error == "Canceled.":
-        return ActCanceledError(metadata=act.metadata)
-
-    try:
-        error_message = json.loads(error)
-        request_id = error_message.get("requestId", "")
-    except json.JSONDecodeError:
-        return ActProtocolError(
-            metadata=act.metadata,
-            message="failed to load error message as json: " + error,
-            extension_version=extension_version,
-        )
-
-    if "type" not in error_message:
-        return ActProtocolError(
-            metadata=act.metadata,
-            message="missing type in error message: " + error,
-            failed_request_id=request_id,
-            extension_version=extension_version,
-        )
-
-    if error_message.get("type") == NOVA_ACT_SERVICE:
-        return handle_nova_act_service_error(error_message, act, backend_info, extension_version)
-    if error_message.get("type") == NOVA_ACT_CLIENT:
-        return handle_nova_act_client_error(error_message, act, extension_version)
-
-    return ActProtocolError(
-        metadata=act.metadata,
-        message="unhandled failure type: " + error,
-        failed_request_id=request_id,
-        extension_version=extension_version,
-    )
-
-
-def handle_nova_act_service_error(
-    error: dict, act: Act, backend_info: BackendInfo, extension_version: str | None
-) -> ActError:
+def handle_nova_act_service_error(error: ProgramErrorResponse, act: Act, backend_info: BackendInfo) -> ActError:
     request_id = error.get("requestId", "")
     code = error.get("code")
     message = error.get("message")
@@ -120,12 +70,11 @@ def handle_nova_act_service_error(
             metadata=act.metadata,
             message="invalid error code in Server Response: " + json.dumps(error),
             failed_request_id=request_id,
-            extension_version=extension_version,
         )
 
     if 400 == code:
         error_dict = check_error_is_json(message)
-        if error_dict is None:
+        if not isinstance(error_dict, dict):
             return ActBadRequestError(metadata=act.metadata, failed_request_id=request_id, message=json.dumps(error))
 
         if "AGENT_GUARDRAILS_TRIGGERED" == error_dict.get("reason"):
@@ -136,11 +85,10 @@ def handle_nova_act_service_error(
             return ActModelError(message=error_dict, metadata=act.metadata)
     if 403 == code:
         raise AuthError(backend_info, request_id=request_id)
-        # else continue, fall back to generic 4xx
     if 429 == code:
         maybe_error_dict = check_error_is_json(message)
         return ActRateLimitExceededError(
-            message=maybe_error_dict if maybe_error_dict else {"message": message},
+            message=maybe_error_dict if isinstance(maybe_error_dict, dict) else {"message": message},
             metadata=act.metadata,
             failed_request_id=request_id,
         )
@@ -159,13 +107,12 @@ def handle_nova_act_service_error(
         message="Unhandled NovaActService error: " + json.dumps(error),
         metadata=act.metadata,
         failed_request_id=request_id,
-        extension_version=extension_version,
     )
 
 
-def handle_nova_act_client_error(error: dict, act: Act, extension_version: str | None) -> ActError:
+def handle_nova_act_client_error(error: ProgramErrorResponse, act: Act) -> ActError:
     request_id = error.get("requestId", "")
-    code = error.get("code", "")
+    code = str(error.get("code", ""))
 
     try:
         error_type = NovaActClientErrors[code]
@@ -174,7 +121,6 @@ def handle_nova_act_client_error(error: dict, act: Act, extension_version: str |
             message="invalid NovaActClient error code: " + json.dumps(error) + "; " + str(e),
             metadata=act.metadata,
             failed_request_id=request_id,
-            extension_version=extension_version,
         )
 
     if error_type == NovaActClientErrors.BAD_RESPONSE:
@@ -186,26 +132,25 @@ def handle_nova_act_client_error(error: dict, act: Act, extension_version: str |
             metadata=act.metadata, message=error.get("message", ""), exception=error.get("exception", None)
         )
     if error_type == NovaActClientErrors.INTERPRETATION_ERROR:
-        return ActModelError(metadata=act.metadata, message=error)
+        return ActModelError(metadata=act.metadata, message=dict(error))
 
     return ActProtocolError(
         message="Unhandled NovaActClient error: " + json.dumps(error),
         metadata=act.metadata,
         failed_request_id=request_id,
-        extension_version=extension_version,
     )
 
 
-def check_error_is_json(message: Any) -> dict | None:
+def check_error_is_json(message: Any) -> Any:
     try:
         return json.loads(message)
     except (json.JSONDecodeError, TypeError):
         return None
 
 
-def _handle_service_error_with_string_code(error: dict, act: Act) -> ActError:
+def _handle_service_error_with_string_code(error: ProgramErrorResponse, act: Act) -> ActError:
     """Translates errors returned by Nova Act backends that return string error codes."""
-    code = error.get("code", "")
+    code = str(error.get("code") or "")
     message: str | None = error.get("message")
 
     try:

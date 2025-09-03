@@ -11,16 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from deprecated import deprecated
+from typing_extensions import TypedDict
 
-from nova_act.impl.actuation.interface.browser import BrowserActuatorBase
-from nova_act.impl.actuation.interface.playwright_pages import PlaywrightPageManagerBase
+from nova_act.impl.actuation.playwright.dom_actuation.create_dom_events import DomEvents
 
 
-@deprecated(version="2.1", reason="NovaAct no longer supports extension-based actuation.")
-class ExtensionActuator(BrowserActuatorBase, PlaywrightPageManagerBase):
-    """Dummy class kept for better error messaging.
-
-    TODO: Remove, eventually.
-
-    """
+class DispatchEvents(TypedDict):
+    type: str
+    init: DomEvents | dict[str, bool]

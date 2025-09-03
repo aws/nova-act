@@ -23,6 +23,7 @@ from attrs import define, field
 from attrs.setters import frozen
 
 from nova_act.types.act_metadata import ActMetadata
+from nova_act.types.api.step import ProgramErrorResponse
 from nova_act.types.state.step import Step
 
 DEFAULT_ACT_MAX_STEPS = 30
@@ -44,7 +45,7 @@ class ActCanceled:
 
 @dataclass
 class ActFailed:
-    response: dict
+    response: ProgramErrorResponse
 
 
 @define
@@ -118,7 +119,7 @@ class Act:
         self._result = ActCanceled()
         self.is_complete = True
 
-    def fail(self, error_message: dict) -> None:
+    def fail(self, error_message: ProgramErrorResponse) -> None:
         self.end_time = time.time()
         self._result = ActFailed(error_message)
         self.is_complete = True

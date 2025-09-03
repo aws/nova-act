@@ -159,6 +159,14 @@ class S3Writer(StopHook):
             raise TypeError("metadata must be a dictionary")
         self._metadata = metadata
 
+    def _log_upload_start(self, session_id: str) -> None:
+        """Log the start of S3 upload."""
+        print(f"S3 upload starting for session {session_id}")
+
+    def _log_upload_success(self) -> None:
+        """Log successful S3 upload."""
+        print(f"S3 upload completed to s3://{self._s3_bucket_name}/{self._s3_prefix}")
+
     def on_stop(self, nova_act: NovaAct) -> None:
         """Upload session files to S3 when NovaAct is stopping.
 
@@ -174,6 +182,8 @@ class S3Writer(StopHook):
         if nova_act.get_session_id() is None:
             raise ValueError("Session ID is not set. Cannot upload session files to S3.")
 
+        self._log_upload_start(nova_act.get_session_id())
+
         bucket = self._s3_resource.Bucket(self._s3_bucket_name)
 
         for root, _, files in os.walk(nova_act.get_logs_directory()):
@@ -187,6 +197,8 @@ class S3Writer(StopHook):
 
                 # Upload file
                 self._upload_file_to_s3(bucket, local_path, s3_key)
+
+        self._log_upload_success()
 
     def _construct_s3_key(self, session_id: str, relative_path: str) -> str:
         """Construct an S3 key from the session ID and relative path.

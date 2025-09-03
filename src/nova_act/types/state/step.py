@@ -14,7 +14,8 @@
 import time
 from dataclasses import dataclass
 from datetime import datetime as dt
-from typing import Any
+
+from nova_act.types.api.step import StepObject
 
 
 @dataclass(frozen=True)
@@ -22,7 +23,6 @@ class ModelInput:
     image: str
     prompt: str
     active_url: str
-    legacy_workflow_run_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -36,18 +36,17 @@ class Step:
     model_input: ModelInput
     model_output: ModelOutput
     observed_time: dt
-    rawMessage: dict[str, Any]
+    rawMessage: StepObject
     server_time_s: float | None
 
     @classmethod
-    def from_message(cls, message: dict[str, Any]) -> "Step":
+    def from_message(cls, message: StepObject) -> "Step":
         # Extract input data
         input_data = message.get("input", {})
         model_input = ModelInput(
             image=input_data.get("screenshot", ""),
             prompt=input_data.get("prompt", ""),
             active_url=input_data.get("metadata", {}).get("activeURL", ""),
-            legacy_workflow_run_id=input_data.get("agentRunCreate", {}).get("workflowRunId", ""),
         )
 
         # Extract output data

@@ -17,25 +17,23 @@ import os
 import shutil
 import tempfile
 import uuid
-from typing import Any, Dict, Type, cast
+from typing import Any, Dict, Literal, Type, cast
 
 from boto3.session import Session
 from playwright.sync_api import Page, Playwright
 
-from nova_act.impl.backend import Backend, get_urls_for_backend
-from nova_act.impl.common import get_default_extension_path, rsync
-from nova_act.impl.controller import NovaStateController
-from nova_act.impl.custom_actuation.custom_dispatcher import CustomActDispatcher
-from nova_act.impl.custom_actuation.interface.browser import BrowserActuatorBase
-from nova_act.impl.custom_actuation.interface.playwright_pages import (
+from nova_act.impl.actuation.interface.browser import BrowserActuatorBase
+from nova_act.impl.actuation.interface.playwright_pages import (
     PlaywrightPageManagerBase,
 )
-from nova_act.impl.custom_actuation.playwright.default_nova_local_browser_actuator import (
+from nova_act.impl.actuation.playwright.default_nova_local_browser_actuator import (
     DefaultNovaLocalBrowserActuator,
 )
-
+from nova_act.impl.backend import Backend, get_urls_for_backend
+from nova_act.impl.common import rsync_to_temp_dir
+from nova_act.impl.controller import NovaStateController
 from nova_act.impl.dispatcher import ActDispatcher
-from nova_act.impl.extension import ExtensionActuator, ExtensionDispatcher
+from nova_act.impl.extension import ExtensionActuator
 from nova_act.impl.inputs import (
     validate_base_parameters,
     validate_length,
@@ -44,10 +42,11 @@ from nova_act.impl.inputs import (
     validate_timeout,
     validate_url,
 )
-from nova_act.impl.playwright import PlaywrightInstanceManager
 from nova_act.impl.playwright_instance_options import PlaywrightInstanceOptions
 from nova_act.impl.run_info_compiler import RunInfoCompiler
 from nova_act.impl.telemetry import send_act_telemetry, send_environment_telemetry
+
+
 from nova_act.types.act_errors import ActError
 from nova_act.types.act_result import ActResult
 from nova_act.types.errors import (
@@ -91,9 +90,9 @@ class NovaAct:
     Example:
     ```
     >>> from nova_act import NovaAct
-    >>> n = NovaAct(starting_page="https://www.amazon.com")
+    >>> n = NovaAct(starting_page="https://nova.amazon.com/act")
     >>> n.start()
-    >>> n.act("search for a coffee maker")
+    >>> n.act("Click learn more. Then, return the title and publication date of the blog.")
     ```
 
     Attributes
@@ -147,8 +146,6 @@ class NovaAct:
         use_default_chrome_browser: bool = False,
         user_agent: str | None = None,
         user_data_dir: str | None = None,
-        # deprecated params
-        extension_path: str | None = None,
     ):
         """Initialize a client object.
 
@@ -170,9 +167,8 @@ class NovaAct:
             Type or instance of a custom actuator.
             Note that deviations from NovaAct's standard observation and I/O formats may impact model performance
         profile_directory: str
-            Directory for the Chrome user profile within user_data_dir. Only needed if using an existing Chrome profile.
-        extension_path : str, optional
-            Path to the compiled Chrome extension for browser actuation
+            Name of the Chrome user profile. Only needed if using an existing, non-Default Chrome profile.
+            Must be relative path within user_data_dir.
         screen_width: int
             Width of the screen for the playwright instance. Within range [1536, 2304].
         screen_height: int
@@ -237,28 +233,41 @@ class NovaAct:
             if not actuator and (custom_actuator := preview.get("custom_actuator")):
                 actuator = cast(BrowserActuatorBase, custom_actuator)
 
-        if extension_path is not None:
+        if actuator is ExtensionActuator:
             _LOGGER.warning(
-                "The extension_path parameter is deprecated and will no longer be supported in a future release. "
-                "Please submit an issue at https://github.com/aws/nova-act/issues if you still need this feature."
+                "`ExtensionActuator` is deprecated and no longer has any effect. Falling back to default behavior."
             )
-            extension_path = extension_path
-        extension_path = get_default_extension_path()
-        actuate_with_extension = actuator is ExtensionActuator
+            actuator = DefaultNovaLocalBrowserActuator
 
-        clone_user_data_dir = clone_user_data_dir and not use_default_chrome_browser
+        _chrome_channel = str(chrome_channel or os.environ.get("NOVA_ACT_CHROME_CHANNEL", "chrome"))
+        _headless = headless or bool(os.environ.get("NOVA_ACT_HEADLESS"))
+
+        validate_base_parameters(
+            starting_page=self._starting_page,
+            backend_uri=self._backend_info.api_uri,
+            profile_directory=profile_directory,
+            user_data_dir=user_data_dir,
+            screen_width=screen_width,
+            screen_height=screen_height,
+            logs_directory=logs_directory,
+            chrome_channel=_chrome_channel,
+            ignore_https_errors=ignore_https_errors,
+            clone_user_data_dir=clone_user_data_dir,
+            use_default_chrome_browser=use_default_chrome_browser,
+            proxy=proxy,
+        )
+
+        self._session_user_data_dir_is_temp: bool = False
         if user_data_dir:  # pragma: no cover
-            # We were supplied an existing user_data_dir.
             if clone_user_data_dir:
                 # We want to make a copy so the original is unmodified.
-                self._session_user_data_dir = tempfile.mkdtemp(suffix="_nova_act_user_data_dir")
-                _LOGGER.debug(f"Copying {user_data_dir} to {self._session_user_data_dir=}")
-                rsync(user_data_dir, self._session_user_data_dir, [])
+                _LOGGER.info(f"Copying {user_data_dir} to temp dir")
+                self._session_user_data_dir = rsync_to_temp_dir(user_data_dir)
+                _LOGGER.info(f"Copied {user_data_dir} to {self._session_user_data_dir=}")
                 self._session_user_data_dir_is_temp = True
             else:
                 # We want to just use the original.
                 self._session_user_data_dir = user_data_dir
-                self._session_user_data_dir_is_temp = False
         else:
             # We weren't given an existing user_data_dir, just make a temp directory.
             self._session_user_data_dir = tempfile.mkdtemp(suffix="_nova_act_user_data_dir")
@@ -271,29 +280,6 @@ class NovaAct:
 
         self._logs_directory = logs_directory
         self._session_logs_directory: str = ""
-
-        if actuate_with_extension:
-            # The extension no longer works with chrome v138 or above, so we default to chromium
-            _chrome_channel = chrome_channel or "chromium"
-        else:
-            _chrome_channel = cast(str, chrome_channel or os.environ.get("NOVA_ACT_CHROME_CHANNEL", "chrome"))
-
-        _headless = headless or bool(os.environ.get("NOVA_ACT_HEADLESS"))
-
-        validate_base_parameters(
-            extension_path=extension_path,
-            starting_page=self._starting_page,
-            backend_uri=self._backend_info.api_uri,
-            profile_directory=profile_directory,
-            user_data_dir=self._session_user_data_dir,
-            screen_width=screen_width,
-            screen_height=screen_height,
-            logs_directory=logs_directory,
-            chrome_channel=_chrome_channel,
-            ignore_https_errors=ignore_https_errors,
-            use_default_chrome_browser=use_default_chrome_browser,
-            proxy=proxy,
-        )
         if go_to_url_timeout is not None:
             validate_timeout(go_to_url_timeout)
         self.go_to_url_timeout = go_to_url_timeout
@@ -306,7 +292,6 @@ class NovaAct:
 
         if self._nova_act_api_key:
             validate_length(
-                extension_path=extension_path,
                 starting_page=self._starting_page,
                 profile_directory=profile_directory,
                 user_data_dir=self._session_user_data_dir,
@@ -327,18 +312,13 @@ class NovaAct:
 
 
         self._stop_hooks = stop_hooks
-
-        if actuate_with_extension and cdp_endpoint_url is not None:
-            raise ValidationFailed(
-                "The 'ExtensionActuator' actuator may not be used with a CDP endpoint URL. Please use another actuator."
-            )
+        self._log_stop_hooks_registration()
 
         playwright_options = PlaywrightInstanceOptions(
             maybe_playwright=playwright_instance,
             starting_page=self._starting_page,
             chrome_channel=_chrome_channel,
             headless=_headless,
-            extension_path=extension_path,
             user_data_dir=self._session_user_data_dir,
             profile_directory=profile_directory,
             cdp_endpoint_url=cdp_endpoint_url,
@@ -350,7 +330,6 @@ class NovaAct:
             go_to_url_timeout=self.go_to_url_timeout,
             use_default_chrome_browser=use_default_chrome_browser,
             cdp_headers=cdp_headers,
-            require_extension=actuate_with_extension,
             proxy=proxy,
         )
 
@@ -362,51 +341,47 @@ class NovaAct:
         self._event_handler = EventHandler(self._event_callback)
         self._controller = NovaStateController(self._tty)
 
-        if actuate_with_extension:
-            _LOGGER.debug("Using Extension Actuator")
-            playwright = PlaywrightInstanceManager(playwright_options)
-            self._dispatcher = ExtensionDispatcher(
-                backend_info=self._backend_info,
-                nova_act_api_key=self._nova_act_api_key,
-                tty=self._tty,
-                playwright_manager=playwright,
-                extension_path=extension_path,
-                boto_session=self._boto_session,
-            )
-            self._actuator = ExtensionActuator(self._dispatcher)
-        else:
-            if isinstance(actuator, type):
-                if issubclass(actuator, DefaultNovaLocalBrowserActuator):
-                    if actuator is not DefaultNovaLocalBrowserActuator:
-                        _LOGGER.warning(
-                            f"Using a custom actuator: {actuator.__name__}\n"
-                            "Deviations from NovaAct's standard observation"
-                            " and I/O formats may impact model performance"
-                        )
-                    _LOGGER.debug(f"Using a DefaultNovaLocalBrowserActuator: {actuator.__name__}")
-                    self._actuator = actuator(
-                        playwright_options=playwright_options,
+        if isinstance(actuator, type):
+            if issubclass(actuator, DefaultNovaLocalBrowserActuator):
+                if actuator is not DefaultNovaLocalBrowserActuator:
+                    _LOGGER.warning(
+                        f"Using a custom actuator: {actuator.__name__}\n"
+                        "Deviations from NovaAct's standard observation"
+                        " and I/O formats may impact model performance"
                     )
-                else:
-                    raise ValidationFailed(
-                        "Please subclass DefaultNovaLocalBrowserActuator if passing a custom actuator by type"
-                    )
-            else:
-                _LOGGER.warning(
-                    f"Using a user-defined actuator instance: {type(actuator).__name__}\n"
-                    "Deviations from NovaAct's standard observation and I/O formats may impact model performance"
+                _LOGGER.debug(f"Using a DefaultNovaLocalBrowserActuator: {actuator.__name__}")
+                self._actuator = actuator(
+                    playwright_options=playwright_options,
                 )
-                self._actuator = actuator
-
-            self._dispatcher = CustomActDispatcher(
-                nova_act_api_key=self._nova_act_api_key,
-                backend_info=self._backend_info,
-                actuator=self._actuator,
-                tty=self._tty,
-                event_handler=self._event_handler,
-                controller=self._controller,
-                boto_session=self._boto_session,
+            else:
+                raise ValidationFailed(
+                    "Please subclass DefaultNovaLocalBrowserActuator if passing a custom actuator by type"
+                )
+        else:
+            _LOGGER.warning(
+                f"Using a user-defined actuator instance: {type(actuator).__name__}\n"
+                "Deviations from NovaAct's standard observation and I/O formats may impact model performance"
             )
+            self._actuator = actuator
+
+
+        self._dispatcher = ActDispatcher(
+            nova_act_api_key=self._nova_act_api_key,
+            backend_info=self._backend_info,
+            actuator=self._actuator,
+            tty=self._tty,
+            event_handler=self._event_handler,
+            controller=self._controller,
+            boto_session=self._boto_session,
+        )
+
+    def _log_stop_hooks_registration(self) -> None:
+        """Log registered stop hooks for debugging purposes."""
+        if self._stop_hooks:
+            hook_names = [type(hook).__name__ for hook in self._stop_hooks]
+            _LOGGER.info(f"Registered stop hooks: {', '.join(hook_names)}")
+        else:
+            _LOGGER.debug("No stop hooks registered")
 
     def _determine_backend(self) -> Backend:
         """Determines which Nova Act backend to use."""
@@ -535,7 +510,7 @@ class NovaAct:
         if not self.started or self._session_id is None:
             raise ClientNotStarted("Run start() to start the client before running go_to_url")
 
-        self.dispatcher.go_to_url(url, self._session_id, timeout=self.go_to_url_timeout)
+        self.dispatcher.go_to_url(url)
 
     @property
     def dispatcher(self) -> ActDispatcher:
@@ -601,13 +576,16 @@ class NovaAct:
             set_logging_session(self._session_id)
             self._session_logs_directory = self._init_session_logs_directory(self._logs_directory, self._session_id)
 
+            actuator_type: Literal["custom", "playwright"]
+            actuator_type = "playwright" if isinstance(self._actuator, DefaultNovaLocalBrowserActuator) else "custom"
+
             send_environment_telemetry(
-                self._backend_info.api_uri, self._nova_act_api_key, self._session_id, self._dispatcher
+                self._backend_info.api_uri, self._nova_act_api_key, self._session_id, actuator_type
             )
 
             self._actuator.start(starting_page=self._starting_page, session_logs_directory=self._session_logs_directory)
 
-            self._dispatcher.wait_for_page_to_settle(session_id=self._session_id, timeout=self.go_to_url_timeout)
+            self._dispatcher.wait_for_page_to_settle()
             self._run_info_compiler = RunInfoCompiler(self._session_logs_directory)
             session_logs_str = f" logs dir {self._session_logs_directory}" if self._session_logs_directory else ""
 
@@ -753,7 +731,7 @@ class NovaAct:
         result = None
 
         try:
-            response = self.dispatcher.dispatch_and_wait_for_prompt_completion(act)
+            response = self.dispatcher.dispatch(act)
             if isinstance(response, ActError):
                 raise response
 

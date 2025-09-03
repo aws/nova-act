@@ -240,8 +240,27 @@ def validate_url_ssl_certificate(ignore_https_errors: bool, url: str) -> None:
     verify_certificate(url)
 
 
+def _validate_chrome_user_data_dir(user_data_dir: str) -> None:
+    """Validate that user_data_dir appears to be a valid Chrome directory."""
+    # Check for key Chrome files that should exist
+    local_state = os.path.join(user_data_dir, "Local State")
+    if not os.path.exists(local_state):
+        raise ValidationFailed(
+            f"user_data_dir does not appear to be a Chrome directory (missing Local State): {user_data_dir}"
+        )
+
+
+def _validate_chrome_user_data_dir_ok_for_cdp(user_data_dir: str) -> None:
+    if sys.platform == "darwin":
+        default_chrome_path = os.path.expanduser("~/Library/Application Support/Google/Chrome")
+        if os.path.samefile(user_data_dir, default_chrome_path):
+            raise ValidationFailed(
+                f"Cannot use system default Chrome directory for CDP: {user_data_dir}. "
+                f"Please copy to a different location first."
+            )
+
+
 def validate_base_parameters(
-    extension_path: str,
     starting_page: str,
     backend_uri: str,
     user_data_dir: str | None,
@@ -251,19 +270,41 @@ def validate_base_parameters(
     screen_height: int,
     chrome_channel: str,
     ignore_https_errors: bool,
+    clone_user_data_dir: bool,
     use_default_chrome_browser: bool,
     proxy: dict[str, str] | None = None,
 ) -> None:
-    if extension_path:
-        validate_path(extension_path, "extension_path")
     validate_url(starting_page, "starting_page")
     validate_url_ssl_certificate(ignore_https_errors, starting_page)
     validate_url(backend_uri, "backend_uri")
-    if user_data_dir:
-        validate_path(user_data_dir, "user_data_dir", empty_directory_allowed=True)
 
-    if profile_directory:
-        validate_path(profile_directory, "profile_directory", empty_directory_allowed=True)
+    if use_default_chrome_browser:
+        if sys.platform != "darwin":
+            raise NotImplementedError("use_default_chrome_browser is only supported on macOS")
+        if clone_user_data_dir:
+            raise ValidationFailed("Must specify clone_user_data_dir=False when using default Chrome browser")
+        if user_data_dir is None:
+            raise ValidationFailed("Must specify a user_data_dir when using the default Chrome browser")
+        _validate_chrome_user_data_dir(user_data_dir)
+        _validate_chrome_user_data_dir_ok_for_cdp(user_data_dir)
+
+    if user_data_dir is not None:
+        validate_path(user_data_dir, "user_data_dir", empty_directory_allowed=not clone_user_data_dir)
+        if clone_user_data_dir:
+            _validate_chrome_user_data_dir(user_data_dir)
+        if profile_directory:
+            profile_path = os.path.join(user_data_dir, profile_directory)
+            if not os.path.exists(profile_path):
+                raise ValidationFailed(f"Profile directory '{profile_directory}' not found in {user_data_dir}")
+    elif profile_directory is not None:
+        _LOGGER.warning(
+            "If you don't specify `user_data_dir`, a temp path is created for act; "
+            "This will not have any custom profiles even if you specify `profile_directory`"
+        )
+
+    if not clone_user_data_dir:
+        if user_data_dir is None:
+            _LOGGER.info("No need to specify clone_user_data_dir False when not using custom user_data_dir")
 
     validate_screen_resolution(screen_width=screen_width, screen_height=screen_height)
 
@@ -272,18 +313,11 @@ def validate_base_parameters(
 
     validate_chrome_channel(chrome_channel)
 
-    if use_default_chrome_browser:
-        if sys.platform != "darwin":
-            raise NotImplementedError("use_default_chrome_browser is only supported on macOS")
-        if not user_data_dir:
-            raise InvalidPath("use_default_chrome_browser requires user_data_dir to be provided")
-
     validate_proxy(proxy)
 
 
 
 def validate_length(
-    extension_path: str,
     starting_page: str,
     profile_directory: str | None,
     user_data_dir: str,
@@ -295,7 +329,6 @@ def validate_length(
     backend: Backend,
 ) -> None:
     fields = {
-        "extension_path": extension_path,
         "starting_page": starting_page,
         "profile_directory": profile_directory,
         "user_data_dir": user_data_dir,

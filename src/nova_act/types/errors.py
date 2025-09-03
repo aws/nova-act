@@ -78,12 +78,7 @@ class AuthError(NovaActError):
 
     def _get_api_key_warning_message(self, backend_info: BackendInfo, message: str, request_id: str) -> str:
         warning = create_warning_box(
-            [
-                message,
-                "",
-                f"Please ensure you are using a key from: {backend_info.keygen_uri}",
-                "and accessing NovaAct from within the United States.",
-            ]
+            [message, "", f"Please ensure you are using a key from: {backend_info.keygen_uri}"]
         )
 
         if request_id:
@@ -161,3 +156,5 @@ class PageNotFoundError(ValidationFailed):
 
 class InterpreterError(NovaActError):
     pass
+
+

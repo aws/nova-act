@@ -30,8 +30,8 @@ class TerminalInputManager:
     """
 
     fd: int
-    new_term: list
-    old_term: list
+    new_term: list  # type: ignore[type-arg]
+    old_term: list  # type: ignore[type-arg]
     is_interactive: bool = False
 
     def __init__(self) -> None:

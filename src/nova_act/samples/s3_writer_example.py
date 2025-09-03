@@ -62,13 +62,12 @@ def main(
 
     # Use the S3Writer with NovaAct
     with NovaAct(
-        starting_page="https://www.amazon.com",
+        starting_page="https://nova.amazon.com/act",
         record_video=record_video,
         boto_session=boto_session,
         stop_hooks=[s3_writer],
     ) as nova:
-        nova.act("search for a coffee maker")
-        nova.act("select the first result")
+        nova.act("Click learn more. Then, return the title and publication date of the blog.")
 
 
 if __name__ == "__main__":

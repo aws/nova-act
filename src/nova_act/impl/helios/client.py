@@ -19,7 +19,7 @@ allowing the SDK to make authenticated requests to the Helios service.
 """
 
 import json
-from typing import Any, Dict, Tuple
+from typing import Any, Dict
 
 import botocore.auth
 import requests
@@ -42,6 +42,14 @@ from nova_act.impl.helios.validation import (
 )
 from nova_act.types.act_errors import ActBadResponseError
 from nova_act.types.act_metadata import ActMetadata
+from nova_act.types.api.step import (
+    ParsedStepResponse,
+    PlanResponse,
+    StepObject,
+    StepObjectInput,
+    StepObjectOutput,
+    StepRequest,
+)
 from nova_act.types.errors import IAMAuthError
 from nova_act.types.state.act import Act
 
@@ -77,24 +85,22 @@ class HeliosActServiceClient:
 
     def step(
         self,
-        plan_request: str,
+        plan_request: StepRequest,
         act: Act,
         session_id: str,
         metadata: ActMetadata,
-    ) -> Tuple[dict | None, str | None, Dict[str, Any]]:
+    ) -> ParsedStepResponse:
         """
         Execute a step request using Helios service.
 
         Args:
-            plan_request: JSON string containing the actuation plan request
+            plan_request: the actuation plan request
             act: Act object containing information about the current action
             session_id: String identifier for the current session
             metadata: ActMetadata object containing additional metadata
 
         Returns:
-            A tuple containing:
-                - The raw program body (str or None if there was an error)
-                - A step object (dict) containing input and output information or error object
+            ParsedStepResponse
         """
         headers = {"Content-Type": "application/json"}
         payload = self._create_request_payload(plan_request, act, session_id)
@@ -110,13 +116,13 @@ class HeliosActServiceClient:
         return self._send_request(headers, body, plan_request, act, metadata)
 
     def _create_request_payload(
-        self, plan_request: str, act: Act, session_id: str, enable_trace: bool = True
+        self, plan_request: StepRequest, act: Act, session_id: str, enable_trace: bool = True
     ) -> HeliosRequestDict:
         """
         Create the request payload for the Helios service.
 
         Args:
-            plan_request: JSON string containing the actuation plan request
+            plan_request: the actuation plan request
             act: Act object containing information about the current action
             session_id: String identifier for the current session
             enable_trace: Whether to enable tracing in the request
@@ -124,8 +130,7 @@ class HeliosActServiceClient:
         Returns:
             A dictionary containing the request payload
         """
-        plan_request_obj: Dict[str, Any] = json.loads(plan_request)
-        validated_plan_request = validate_plan_request_structure(request=plan_request_obj, act=act)
+        validated_plan_request = validate_plan_request_structure(request=plan_request, act=act)
 
         return {
             "enableTrace": enable_trace,
@@ -135,15 +140,15 @@ class HeliosActServiceClient:
         }
 
     def _send_request(
-        self, headers: Dict[str, str], body: str, plan_request: str, act: Act, metadata: ActMetadata
-    ) -> Tuple[dict | None, str | None, Dict[str, Any]]:
+        self, headers: Dict[str, str], body: str, plan_request: StepRequest, act: Act, metadata: ActMetadata
+    ) -> ParsedStepResponse:
         """
         Send a request to the Helios service and process the response.
 
         Args:
             headers: HTTP headers to include in the request
             body: Request body as a string
-            plan_request: Original plan request as a JSON string
+            plan_request: Original plan request
             act: Act object containing information about the current action
             metadata: ActMetadata object containing additional metadata
 
@@ -161,12 +166,16 @@ class HeliosActServiceClient:
 
         # Handle HTTP-level errors first
         if response.status_code >= 400:
-            return handle_http_error(
-                response=response,
-                plan_request=plan_request,
-                act=act,
-                create_step_object_input_func=self._create_step_object_input,
+            return ParsedStepResponse(
+                error=handle_http_error(
+                    response=response,
+                    plan_request=plan_request,
+                    act=act,
+                    create_step_object_input_func=self._create_step_object_input,
+                )
             )
+
+        server_time_s = response.elapsed.total_seconds()
 
         # Parse JSON for successful HTTP responses
         try:
@@ -178,30 +187,29 @@ class HeliosActServiceClient:
                 failed_request_id=act.id,
             )
 
-        return self._process_response(json_response=json_response, plan_request=plan_request, act=act)
+        return self._process_response(
+            json_response=json_response, plan_request=plan_request, act=act, server_time_s=server_time_s
+        )
 
     def _process_response(
-        self, json_response: Dict[str, Any], plan_request: str, act: Act
-    ) -> Tuple[dict | None, str | None, Dict[str, Any]]:
+        self, json_response: Dict[str, Any], plan_request: StepRequest, act: Act, server_time_s: float
+    ) -> ParsedStepResponse:
         """
         Process the JSON response from the Helios service.
 
         Args:
             json_response: JSON response from the Helios service
-            plan_request: Original plan request as a JSON string
+            plan_request: Original plan request
             act: Act object containing information about the current action
             metadata: ActMetadata object containing additional metadata
 
         Returns:
-            A tuple containing:
-                - The raw program body (str or None if there was an error)
-                - A step object (dict) containing input and output information or error object
+            ParsedStepResponse
         """
-        step_object = self._create_step_object_input(plan_request=plan_request, act=act)
 
         # Check for error response FIRST before validating success structure
         if has_valid_error_response(json_response):
-            return handle_error_response(json_response["error"], act)
+            return ParsedStepResponse(error=handle_error_response(json_response["error"], act))
 
         # Only validate success structure if no error
         validated_response = validate_helios_response_structure(response=json_response, act=act)
@@ -210,12 +218,20 @@ class HeliosActServiceClient:
         raw_program_body = plan_response["rawProgramBody"]
         program = plan_response["program"]
 
-        step_object["output"] = plan_response
+        step_object = StepObject(
+            input=self._create_step_object_input(plan_request=plan_request, act=act),
+            output=self._create_step_object_output(plan_response=plan_response),
+            server_time_s=server_time_s,
+        )
         self._set_trace_in_step_object(step_object=step_object, validated_response=validated_response)
 
-        return program, raw_program_body, step_object
+        return ParsedStepResponse(
+            program_statements=program["body"][0]["body"]["body"],
+            raw_program_body=raw_program_body,
+            step_object=step_object,
+        )
 
-    def _set_trace_in_step_object(self, step_object: Dict[str, Any], validated_response: HeliosResponseDict) -> None:
+    def _set_trace_in_step_object(self, step_object: StepObject, validated_response: HeliosResponseDict) -> None:
         """
         Set trace data in step object if present in response.
 
@@ -223,33 +239,45 @@ class HeliosActServiceClient:
             step_object: The step object to update
             validated_response: The validated Helios response
         """
-        step_object["output"]["trace"] = None
         trace_data = validated_response.get("trace")
         if trace_data:
             step_object["output"]["trace"] = trace_data
 
-    def _create_step_object_input(self, plan_request: str, act: Act) -> Dict[str, Any]:
+    def _create_step_object_input(self, plan_request: StepRequest, act: Act) -> StepObjectInput:
         """
         Create the input portion of the step object.
 
         Args:
-            plan_request: Original plan request as a JSON string
+            plan_request: Original plan request
             act: Act object containing information about the current action
 
         Returns:
             A dictionary containing the input portion of the step object
         """
-        request_object: Dict[str, Any] = json.loads(plan_request)
-        step_object: Dict[str, Any] = {
-            "input": {
-                "screenshot": request_object["screenshotBase64"],
-                "prompt": act.prompt,
-                "metadata": {"activeUrl": request_object["observation"]["activeURL"]},
-                "agentRunCreate": request_object.get("agentRunCreate", {}),
-            },
-        }
 
+        step_object: StepObjectInput = {
+            "screenshot": plan_request["screenshotBase64"],
+            "prompt": act.prompt,
+            "metadata": {"activeURL": plan_request["observation"]["activeURL"]},
+        }
+        if "agentRunCreate" in plan_request:
+            step_object["agentRunCreate"] = plan_request["agentRunCreate"]
         return step_object
+
+    def _create_step_object_output(self, plan_response: PlanResponse) -> StepObjectOutput:
+        """
+        Create the output portion of the step object.
+
+        Args:
+            plan_response: Plan response from Helios service
+
+        Returns:
+            A dictionary containing the output portion of the step object
+        """
+        return StepObjectOutput(
+            program=plan_response["program"],
+            rawProgramBody=plan_response["rawProgramBody"],
+        )
 
     def _sign_request(self, method: str, url: str, headers: Dict[str, str], body: str | None = None) -> Dict[str, str]:
         """

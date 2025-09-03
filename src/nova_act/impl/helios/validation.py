@@ -26,6 +26,7 @@ from nova_act.impl.helios.types import (
     PlanRequestDict,
 )
 from nova_act.types.act_errors import ActBadResponseError
+from nova_act.types.api.step import StepRequest
 from nova_act.types.state.act import Act
 
 
@@ -51,7 +52,7 @@ def is_valid_helios_error_response(data: Dict[str, Any]) -> TypeGuard[HeliosErro
     )
 
 
-def is_valid_plan_request(data: Dict[str, Any]) -> TypeGuard[PlanRequestDict]:
+def is_valid_plan_request(data: StepRequest) -> TypeGuard[PlanRequestDict]:
     """
     Type guard to validate plan request structure.
 
@@ -146,7 +147,7 @@ def validate_helios_response_structure(response: Dict[str, Any], act: Act) -> He
     )
 
 
-def validate_plan_request_structure(request: Dict[str, Any], act: Act) -> PlanRequestDict:
+def validate_plan_request_structure(request: StepRequest, act: Act) -> PlanRequestDict:
     """
     Validate and return typed plan request.
 

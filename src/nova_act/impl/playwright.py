@@ -13,29 +13,19 @@
 # limitations under the License.
 import os
 import subprocess
-import sys
 import time
-from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import requests
 from install_playwright import install
 from playwright.sync_api import BrowserContext
 from playwright.sync_api import Error as PlaywrightError
-from playwright.sync_api import Page, Video, sync_playwright
+from playwright.sync_api import Page, sync_playwright
 
-from nova_act.impl.common import rsync, should_install_chromium_dependencies
-from nova_act.impl.message_encrypter import MessageEncrypter
+from nova_act.impl.common import should_install_chromium_dependencies
 from nova_act.impl.playwright_instance_options import PlaywrightInstanceOptions
-from nova_act.impl.window_messages import (
-    ADD_COMPLETION_LISTENER_EXPRESSION,
-    HANDLE_ENCRYPTED_MESSAGE_FUNCTION_NAME,
-    POST_MESSAGE_EXPRESSION,
-    WindowMessageHandler,
-)
 from nova_act.types.errors import (
     ClientNotStarted,
-    InvalidChromeChannel,
     InvalidPlaywrightState,
     PageNotFoundError,
     StartFailed,
@@ -60,7 +50,6 @@ class PlaywrightInstanceManager:
         self._starting_page = options.starting_page
         self._chrome_channel = options.chrome_channel
         self._headless = options.headless
-        self._extension_path = options.extension_path
         self._user_data_dir = options.user_data_dir
         self._profile_directory = options.profile_directory
         self._cdp_endpoint_url = options.cdp_endpoint_url
@@ -72,7 +61,6 @@ class PlaywrightInstanceManager:
         self._ignore_https_errors = options.ignore_https_errors
         self._go_to_url_timeout = options.go_to_url_timeout
         self._use_default_chrome_browser = options.use_default_chrome_browser
-        self._require_extension = options.require_extension
         self._cdp_headers = options.cdp_headers
         self._proxy = options.proxy
 
@@ -85,19 +73,8 @@ class PlaywrightInstanceManager:
                 raise ValidationFailed("Cannot specify a proxy when connecting over CDP")
 
         self._context: BrowserContext | None = None
+        self._launched_default_chrome_popen: subprocess.Popen[bytes] | None = None
         self._session_logs_directory: str | None = None
-        self._encrypter = MessageEncrypter()
-        self._window_message_handler = WindowMessageHandler(self._encrypter)
-
-    @property
-    def encrypter(self) -> MessageEncrypter:
-        """Get the encrypter."""
-        return self._encrypter
-
-    @property
-    def window_message_handler(self) -> WindowMessageHandler:
-        """Get the window message handler."""
-        return self._window_message_handler
 
     @property
     def started(self) -> bool:
@@ -105,59 +82,11 @@ class PlaywrightInstanceManager:
         return self._context is not None
 
     def _init_browser_context(self, context: BrowserContext, trusted_page: Page) -> Page:
-        # The protocol here is as follows:
-        #
-        # - Navigate a trusted page. Trusted here means it won't tamper with the content script.
-        # - Wait for the page to register listeners.
-        # - Send the encryption key through that page to the extension service worker.
-        # - Service worker will then register the tab id with the SDK.
-        # - Open the starting page and close the trusted page.
+        """Go to the starting page and exit."""
 
-        if not self._require_extension:
-            # If the extension is not required, go to the starting page and exit.
-            first_page = context.new_page()
-            first_page.goto(self._starting_page, timeout=self._go_to_url_timeout)
-            trusted_page.close()
-            return first_page
-
-        if self._require_extension and self._chrome_channel == "chrome" and context.browser:
-            try:
-                major_browser_version = context.browser.version.split(".")[0]
-                if int(major_browser_version) >= 138:
-                    raise InvalidChromeChannel(
-                        "Nova Act with ExtensionActuator is not supported for Chrome v138 and above."
-                    )
-            except InvalidChromeChannel:
-                raise
-            except Exception:
-                _LOGGER.warning("Nova Act with ExtensionActuator is not supported for Chrome v138 and above.")
-                pass
-
-        context.expose_function(HANDLE_ENCRYPTED_MESSAGE_FUNCTION_NAME, self._window_message_handler.handle_message)
-
-        # This will handle adding the message handler to all pages that gets created/navigated in the browser context.
-        # This seems to be more robust than adding the listeners to each page via domcontentloaded
-        context.add_init_script(f"({ADD_COMPLETION_LISTENER_EXPRESSION})();")
-
-        # Send in the secret key through a trusted page.
-        trusted_page.goto("https://nova.amazon.com/agent-loading", timeout=self._go_to_url_timeout)
-        trusted_page.wait_for_selector("#autonomy-listeners-registered", state="attached", timeout=60000)
-        trusted_page.evaluate(POST_MESSAGE_EXPRESSION, self._encrypter.make_set_key_message())
-
-        # The default opened page may contain infobars with messages while new pages should not.
         first_page = context.new_page()
-        first_video_path = None
-        if self._record_video:  # We will delete this video since we're closing this page
-            first_video_path = cast(Video, trusted_page.video).path()
+        first_page.goto(self._starting_page)
         trusted_page.close()
-
-        # Navigate to the starting page, from the default (about:blank).
-        first_page.goto(self._starting_page, wait_until="domcontentloaded", timeout=self._go_to_url_timeout)
-        first_page.wait_for_selector("#autonomy-listeners-registered", state="attached", timeout=60000)
-
-        if first_video_path and os.path.exists(first_video_path):
-            os.remove(first_video_path)
-
         return first_page
 
     def _launch_browser(self, context_options: Any) -> BrowserContext:
@@ -167,9 +96,7 @@ class PlaywrightInstanceManager:
 
         if (channel := context_options.get("channel")) != "chromium":
             try:
-                context = self._playwright.chromium.launch_persistent_context(
-                    self._user_data_dir, **context_options  # type: ignore[arg-type]
-                )
+                context = self._playwright.chromium.launch_persistent_context(self._user_data_dir, **context_options)
                 return context
             except PlaywrightError:
                 _LOGGER.warning(
@@ -182,8 +109,10 @@ class PlaywrightInstanceManager:
 
         context = self._playwright.chromium.launch_persistent_context(
             self._user_data_dir,
-            **context_options,  # type: ignore[arg-type]
+            **context_options,
         )
+        if self._go_to_url_timeout is not None:
+            context.set_default_navigation_timeout(self._go_to_url_timeout)
         return context
 
     def start(self, session_logs_directory: str | None) -> None:
@@ -212,9 +141,6 @@ class PlaywrightInstanceManager:
             if self._use_default_chrome_browser:
                 # Launch the default browser with a debug port and a freshly copied user data dir.
 
-                # Only works on macos.
-                assert sys.platform == "darwin"
-
                 _LOGGER.info("Quitting Chrome if it's running...")
                 subprocess.run(["osascript", "-e", 'quit app "Google Chrome"'], check=True)
 
@@ -233,18 +159,6 @@ class PlaywrightInstanceManager:
 
                 assert exited, "Could not quit Chrome"
 
-                # rsync the default user data dir to the temp location. Can't start the default Chrome with a debug
-                # port without this.
-                home = str(Path.home())
-                src_dir = os.path.join(home, "Library", "Application Support", "Google", "Chrome")
-                _LOGGER.info(f"Copying Chrome user data from {src_dir} to {self._user_data_dir}...")
-
-                rsync(
-                    src_dir + "/",
-                    self._user_data_dir,
-                    ["--exclude=Singleton*"],
-                )
-
                 # Start Chrome with a debug port and the new user data dir.
                 _LOGGER.info(
                     f"Launching Chrome with user-data-dir={self._user_data_dir} remote-debugging-port={_CDP_PORT}"
@@ -256,14 +170,7 @@ class PlaywrightInstanceManager:
                         f"--user-data-dir={self._user_data_dir}",
                         f"--profile-directory={self._profile_directory if self._profile_directory else 'Default'}",
                         f"--window-size={self.screen_width},{self.screen_height}",
-                        *(
-                            [
-                                f"--disable-extensions-except={self._extension_path}",
-                                f"--load-extension={self._extension_path}",
-                            ]
-                            if self._require_extension
-                            else []
-                        ),
+                        "--no-first-run",
                         *(["--headless=new"] if self._headless else []),
                     ],
                     stdout=subprocess.DEVNULL,
@@ -299,6 +206,8 @@ class PlaywrightInstanceManager:
                 if self.user_agent:
                     context.set_extra_http_headers({"User-Agent": self.user_agent})
                 trusted_page = context.new_page()
+
+
             else:
                 if not os.environ.get("NOVA_ACT_SKIP_PLAYWRIGHT_INSTALL"):
                     with_deps = should_install_chromium_dependencies()
@@ -316,14 +225,6 @@ class PlaywrightInstanceManager:
                 user_browser_args = os.environ.get("NOVA_ACT_BROWSER_ARGS", "").split()
 
                 launch_args = [
-                    *(
-                        [
-                            f"--disable-extensions-except={self._extension_path}",
-                            f"--load-extension={self._extension_path}",
-                        ]
-                        if self._require_extension
-                        else []
-                    ),
                     f"--window-size={self.screen_width},{self.screen_height}",
                     "--disable-blink-features=AutomationControlled",  # Suppress navigator.webdriver flag
                     *(["--headless=new"] if self._headless else []),
@@ -337,8 +238,11 @@ class PlaywrightInstanceManager:
                     "headless": self._headless,
                     "args": launch_args,
                     "ignore_default_args": [
-                        "--enable-automation"
-                    ],  # Disable infobar with automated test software message
+                        # Disable infobar with automated test software message
+                        "--enable-automation",
+                        # Overwrite Playwright default to hide scrollbars in headless mode
+                        "--hide-scrollbars",
+                    ],
                     # If you set viewport any user changes to the browser size will skew screenshots
                     "no_viewport": True,
                     "ignore_https_errors": self._ignore_https_errors,
@@ -401,6 +305,9 @@ class PlaywrightInstanceManager:
         if self._owns_context and self._context is not None:
             self._context.close()
 
+        if self._launched_default_chrome_popen is not None:
+            self._launched_default_chrome_popen.terminate()
+            self._launched_default_chrome_popen = None
 
         # Stop playwright instance if one was created by us
         if self._owns_playwright and self._playwright is not None:

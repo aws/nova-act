@@ -15,7 +15,6 @@ import dataclasses
 from abc import ABC
 from typing import Any
 
-from nova_act.__version__ import EXTENSION_VERSION
 from nova_act.types.act_metadata import ActMetadata
 from nova_act.types.errors import NovaActError
 
@@ -26,7 +25,7 @@ MAX_CHARS = 500
 def act_error_class(default_message: str) -> Any:
     def decorator(cls: Any) -> Any:
         @dataclasses.dataclass(frozen=True, repr=False)
-        class wrapped(cls):
+        class wrapped(cls):  # type: ignore[misc]
             _DEFAULT_MESSAGE = default_message
 
             def __init__(
@@ -34,11 +33,8 @@ def act_error_class(default_message: str) -> Any:
                 *,
                 metadata: ActMetadata,
                 message: str | None = None,
-                extension_version: str | None = None,
                 **kwargs: Any,
             ) -> None:
-                if extension_version is not None:
-                    message = check_extension_version(extension_version, message=message)
                 super().__init__(metadata=metadata, message=message)
                 wrapped.__name__ = cls.__name__
                 for key, value in kwargs.items():
@@ -48,20 +44,6 @@ def act_error_class(default_message: str) -> Any:
         return wrapped
 
     return decorator
-
-
-def check_extension_version(extension_version: str | None, *, message: str | None) -> str:
-    if extension_version is not None and extension_version != EXTENSION_VERSION:
-        warning = (
-            "Detected incompatible extension version, indicating a corrupted installation. "
-            "Re-install nova-act to proceed."
-            f"Expected: {EXTENSION_VERSION} Received: {extension_version}"
-        )
-        if message is not None:
-            message = message + "; " + warning
-        else:
-            message = warning
-    return message or ""
 
 
 """
@@ -75,7 +57,7 @@ class ActError(NovaActError):
     message: str = dataclasses.field(init=False)
     _DEFAULT_MESSAGE = "An error occurred during act()"
 
-    def __init__(self, *, metadata: ActMetadata, message: str | None = None, extension_version: str | None = None):
+    def __init__(self, *, metadata: ActMetadata, message: str | None = None):
         final_message = message or self.__class__._DEFAULT_MESSAGE
         super().__init__(final_message)
         object.__setattr__(self, "metadata", metadata)
@@ -119,7 +101,6 @@ class ActServerError(ActError, ABC):
         metadata: ActMetadata,
         message: str | None = None,
         failed_request_id: str | None = None,
-        extension_version: str | None = None,
     ):
         super().__init__(metadata=metadata, message=message)
         object.__setattr__(self, "failed_request_id", failed_request_id)
@@ -127,17 +108,16 @@ class ActServerError(ActError, ABC):
 
 @dataclasses.dataclass(frozen=True, repr=False)
 class ActClientError(ActError, ABC):
-    extension_version: str | None = None
 
-    def __init__(self, *, metadata: ActMetadata, message: str | None = None, extension_version: str | None = None):
-        super().__init__(metadata=metadata, message=message, extension_version=extension_version)
+    def __init__(self, *, metadata: ActMetadata, message: str | None = None):
+        super().__init__(metadata=metadata, message=message)
 
 
 @dataclasses.dataclass(frozen=True, repr=False)
 class ActPromptError(ActError, ABC):
     """Represents an error specific to the given prompt."""
 
-    def __init__(self, *, metadata: ActMetadata, message: dict):
+    def __init__(self, *, metadata: ActMetadata, message: dict):  # type: ignore[type-arg]
 
         fields = message.get("fields", [])
         details = message.get("message", "")
@@ -193,12 +173,10 @@ class ActDispatchError(ActClientError):
         *,
         metadata: ActMetadata,
         message: str | None = None,
-        extension_version: str | None = None,
     ):
         super().__init__(
             metadata=metadata,
             message=message,
-            extension_version=extension_version,
         )
 
 
@@ -229,7 +207,7 @@ class ActRateLimitExceededError(ActServerError):
         self,
         *,
         metadata: ActMetadata,
-        message: dict | None,
+        message: dict | None,  # type: ignore[type-arg]
         failed_request_id: str | None = None,
     ):
 
@@ -265,13 +243,11 @@ class ActProtocolError(ActServerError, ActClientError):
         metadata: ActMetadata,
         message: str | None = None,
         failed_request_id: str | None = None,
-        extension_version: str | None = None,
     ):
         super().__init__(
             metadata=metadata,
             message=message,
             failed_request_id=failed_request_id,
-            extension_version=extension_version,
         )
 
 
@@ -290,15 +266,15 @@ class ActActuationError(ActClientError):
         *,
         metadata: ActMetadata,
         message: str | None = None,
-        extension_version: str | None = None,
         exception: Exception | None = None,
     ):
         super().__init__(
             metadata=metadata,
             message=message,
-            extension_version=extension_version,
         )
         object.__setattr__(self, "exception", exception)
+
+
 
 
 @act_error_class("Bad Request")

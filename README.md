@@ -14,7 +14,7 @@ Amazon Nova Act is an experimental SDK. When using Nova Act, please keep in mind
 1. ⚠️ Please be aware that Nova Act may encounter commands in the content it encounters on third party websites. These unauthorized commands, known as prompt injections, may cause the model to make mistakes or act in a manner that differs from user-provided or model instructions. To reduce the risks associated with prompt injections, it is important to monitor Nova Act and limit its operations to websites you trust.
 2. Nova Act may make mistakes. You are responsible for monitoring Nova Act and using it in accordance with our [Acceptable Use Policy](https://www.amazon.com/gp/help/customer/display.html?nodeId=TTFAPMmEqemeDWZaWf). When using the research preview, we collect information on interactions with Nova Act, including prompts and screenshots taken while Nova Act is engaged with the browser, in order to provide, develop, and improve our services. You can request to delete your Nova Act data by emailing us at nova-act@amazon.com.
 3. Do not share your API key. Anyone with access to your API key can use it to operate Nova Act under your Amazon account. If you lose your API key or believe someone else may have access to it, go to https://nova.amazon.com/act to deactivate your key and obtain a new one.
-4. We recommend that you do not provide sensitive information to Nova Act, such as account passwords. Note that if you use sensitive information through Playwright calls, the information could be collected in screenshots if it appears unobstructed on the browser when Nova Act is engaged in completing an action. (See [Entering sensitive information](#entering-sensitive-information) below.)
+4. We recommend that you do not provide sensitive information to Nova Act, such as account passwords. Note that if you use sensitive information through Playwright calls, the information could be collected in screenshots if it appears unobstructed on the browser when Nova Act is engaged in completing an action. (See [Entering sensitive information](#entering-sensitive-information) below.).
 5. If you are using our browsing environment defaults, to identify our agent, look for `NovaAct` in the user agent string. If you operate Nova Act in your own browsing environment or customize the user agent, we recommend that you include that same string.
 
 ## Table of contents
@@ -92,10 +92,8 @@ playwright install chrome
 ```python
 from nova_act import NovaAct
 
-with NovaAct(starting_page="https://www.amazon.com") as nova:
-    nova.act("search for a coffee maker")
-    nova.act("select the first result")
-    nova.act("scroll down or up until you see 'add to cart' and then click 'add to cart'")
+with NovaAct(starting_page="https://nova.amazon.com/act") as nova:
+    nova.act("Click learn more. Then, return the title and publication date of the blog.")
 ```
 
 The SDK will (1) open Chrome, (2) navigate to a coffee maker product detail page on Amazon.com and add it to the cart, and then (3) close Chrome. Details of the run will be printed as console log messages.
@@ -113,9 +111,9 @@ Using interactive Python is a nice way to experiment:
 Python 3.10.16 (main, Dec  3 2024, 17:27:57) [Clang 16.0.0 (clang-1600.0.26.4)] on darwin
 Type "help", "copyright", "credits" or "license" for more information.
 >>> from nova_act import NovaAct
->>> nova = NovaAct(starting_page="https://www.amazon.com")
+>>> nova = NovaAct(starting_page="https://nova.amazon.com/act")
 >>> nova.start()
->>> nova.act("search for a coffee maker")
+>>> nova.act("Click learn more. Then, return the title and publication date of the blog.")
 ```
 
 Once the agent completes the step above, you can enter the next step:
@@ -238,7 +236,7 @@ Example:
 ```python
 from nova_act import NovaAct, BOOL_SCHEMA
 
-with NovaAct(starting_page="https://www.amazon.com") as nova:
+with NovaAct(starting_page="https://nova.amazon.com/act") as nova:
     result = nova.act("Am I logged in?", schema=BOOL_SCHEMA)
     if not result.matches_schema:
         # act response did not match the schema ¯\_(ツ)_/¯
@@ -307,7 +305,7 @@ from nova_act import NovaAct
 
 os.makedirs(user_data_dir, exist_ok=True)
 
-with NovaAct(starting_page="https://amazon.com/", user_data_dir=user_data_dir, clone_user_data_dir=False) as nova:
+with NovaAct(starting_page="https://nova.amazon.com/act", user_data_dir=user_data_dir, clone_user_data_dir=False) as nova:
     input("Log into your websites, then press enter...")
     # Add your nova.act() statements here.
 
@@ -318,18 +316,33 @@ The script is included in the installation: `python -m nova_act.samples.setup_ch
 
 #### Run against the local default Chrome browser
 
-If your local default Chrome browser has extensions or security features you need for sites you need your workflow to access, you can configure the SDK to use the Chrome browser installed on your machine rather than the one managed by the SDK using the `NovaAct` parameters below.  `use_default_chrome_browser` requires `user_data_dir` to also be specified because we take a copy of the user data dir before starting default Chrome.
+If your local default Chrome browser has extensions or security features you need for sites you need your workflow to access, you can configure the SDK to use the Chrome browser installed on your machine rather than the one managed by the SDK using the `NovaAct` parameters below.
 
 > **Important notes:**
 > 
+> - This feature currently only works for MacOS
 > - This will quit your default running Chrome and restart it with new arguments. At the end of the session, it will quit Chrome.
 > - If your Chrome browser has many tabs open, consider closing unnecessary ones before running the automation, as Chrome's performance during the restart can be affected by high numbers of open tabs.
 
+Before starting NovaAct with this feature, you must copy the files from your system Chrome user_data_dir to a location of your choice. 
+This is necessary as Chrome does not allow CDP connections into instances started with the system default user_data_dir.
+
+Manually, this is can be done with:
+```
+rsync -a --exclude="Singleton*" /Users/$USER/Library/Application\ Support/Google/Chrome/ <your choice of location>
+```
+You can also use the convenience function `rsync_from_default_user_data(<your choice of location>)` to create and update that directory as part of your script.
+Note that invoking `rsync_from_default_user_data` will overwrite changes in the destination directory and make it an exact mirror of `/Users/$USER/Library/Application\ Support/Google/Chrome/` by overwriting existing files with the same name as in the source and deleting files not in it. If you want to persist profile changes that NovaAct made in the working directory back to your system, you must then mirror the changes back into the system default dir with your own implementation after stopping NovaAct.
+
+When using this feature, you must specify `clone_user_data_dir=False` and pass the desired working dir as `user_data_dir` with the appropriate files populated. This is because `NovaAct` will not be cloning or deleting the `user_data_dir`s for you in this mode.
+
 ```python
->>> from nova_act import NovaAct
->>> nova = NovaAct(use_default_chrome_browser=True, user_data_dir="/tmp/chrome-temp", starting_page="https://www.amazon.com")
+>>> from nova_act import NovaAct, rsync_from_default_user_data
+>>> working_user_data_dir = "/Users/$USER/your_choice_of_path"
+>>> rsync_from_default_user_data(working_user_data_dir)
+>>> nova = NovaAct(use_default_chrome_browser=True, clone_user_data_dir=False, user_data_dir=working_user_data_dir, starting_page="https://nova.amazon.com/act")
 >>> nova.start()
->>> nova.act('search for a bird')
+>>> nova.act("Click learn more. Then, return the title and publication date of the blog.")
 ...
 >>> nova.stop()
 >>> quit()
@@ -338,6 +351,8 @@ If your local default Chrome browser has extensions or security features you nee
 ### Entering sensitive information
 
 To enter a password or sensitive information (credit card, social security number), do not prompt the model with the sensitive information. Ask the model to focus on the element you want to fill in. Then use Playwright APIs directly to type the data, using `client.page.keyboard.type(sensitive_string)`. You can get that data in the way you wish: prompting in the command line using [`getpass`](https://docs.python.org/3/library/getpass.html), using an argument, or setting env variable.
+
+Note that any passwords or other sensitive data saved with a Chromium-based browser's password manager on Linux systems without a system-level keyring (ex. Libsecret, KWallet) will be stored in plaintext within a user's profile directory.
 
 > **Caution:** If you instruct Nova Act to take an action on any browser screen displaying sensitive information, including information provided through Playwright APIs, that information will be included in the screenshots collected.
 
@@ -508,11 +523,11 @@ s3_writer = S3Writer(
 
 # Use the S3Writer with NovaAct
 with NovaAct(
-    starting_page="https://www.amazon.com",
+    starting_page="https://nova.amazon.com/act",
     boto_session=boto_session,  # You may use API key here instead
     stop_hooks=[s3_writer]
 ) as nova:
-    nova.act("search for a coffee maker")
+    nova.act("Click learn more. Then, return the title and publication date of the blog.")
 ```
 
 The S3Writer requires the following AWS permissions:
@@ -520,6 +535,12 @@ The S3Writer requires the following AWS permissions:
 - s3:PutObject on the bucket and prefix
 
 When the NovaAct session ends, all session files will be automatically uploaded to the specified S3 bucket with the provided prefix.
+
+#### S3 Upload Troubleshooting
+
+**No files in S3 bucket?**
+- Check logs for "Registered stop hooks" message during initialization
+- Verify your code path actually executes the NovaAct context manager
 
 ### Navigating pages
 

@@ -11,16 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from deprecated import deprecated
-
-from nova_act.impl.actuation.interface.browser import BrowserActuatorBase
-from nova_act.impl.actuation.interface.playwright_pages import PlaywrightPageManagerBase
+from typing_extensions import Literal, TypedDict
 
 
-@deprecated(version="2.1", reason="NovaAct no longer supports extension-based actuation.")
-class ExtensionActuator(BrowserActuatorBase, PlaywrightPageManagerBase):
-    """Dummy class kept for better error messaging.
+class ClickOptions(TypedDict):
+    blurField: bool | None
 
-    TODO: Remove, eventually.
 
-    """
+ClickType = Literal["left", "left-double", "right"]

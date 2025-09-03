@@ -11,31 +11,30 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Any, Dict, TypedDict
+from typing_extensions import TypedDict
+
+from nova_act.types.api.step import (
+    AgentRunCreate,
+    Observation,
+    PlanResponse,
+)
+from nova_act.types.api.trace import TraceDict
 
 """
 TypedDict definitions for Helios service API structures.
 
 This module provides formal type definitions for all request and response
-structures used in the Helios service integration, improving type safety
-and code maintainability.
+structures used in the Helios service integration.
 """
 
-
-
-# Base request structures
-class ObservationDict(TypedDict):
-    """Observation data structure containing browser state information."""
-
-    activeURL: str
 
 
 class PlanRequestDict(TypedDict):
     """Plan request structure sent to Helios service."""
 
     screenshotBase64: str
-    observation: ObservationDict
-    agentRunCreate: Dict[str, Any] | None
+    observation: Observation
+    agentRunCreate: AgentRunCreate | None
 
 
 class PlanInputDict(TypedDict):
@@ -54,70 +53,10 @@ class HeliosRequestDict(TypedDict):
 
 
 # Base response structures
-class PlanResponseDict(TypedDict):
-    """Plan response structure from Helios service."""
-
-    program: dict
-    rawProgramBody: str
-
-
 class PlanOutputDict(TypedDict):
     """Container for plan response data."""
 
-    planResponse: PlanResponseDict
-
-
-# Trace structures
-class TraceMetadataDict(TypedDict):
-    """Metadata for trace information."""
-
-    sessionId: str
-    actId: str
-    stepId: str
-    stepCount: int
-    startTime: str
-
-
-class ScreenshotDict(TypedDict):
-    """Screenshot data structure in trace."""
-
-    source: str
-    sourceType: str
-
-
-class OrchestrationTraceInputDict(TypedDict):
-    """Input data for orchestration trace."""
-
-    screenshot: ScreenshotDict
-    activeURL: str
-    prompt: str
-
-
-class OrchestrationTraceOutputDict(TypedDict):
-    """Output data for orchestration trace."""
-
-    rawResponse: str
-
-
-class OrchestrationTraceDict(TypedDict):
-    """Complete orchestration trace structure."""
-
-    input: OrchestrationTraceInputDict
-    output: OrchestrationTraceOutputDict
-
-
-class ExternalTraceDict(TypedDict):
-    """External trace structure."""
-
-    metadata: TraceMetadataDict
-    orchestrationTrace: OrchestrationTraceDict
-    failureTrace: Dict[str, Any] | None
-
-
-class TraceDict(TypedDict):
-    """Complete trace structure with external wrapper."""
-
-    external: ExternalTraceDict
+    planResponse: PlanResponse
 
 
 class HeliosResponseDict(TypedDict):
@@ -140,33 +79,3 @@ class HeliosErrorResponseDict(TypedDict):
 
     planOutput: None  # Always null when error is present
     error: HeliosErrorDict
-
-
-# Step object structures (internal SDK format)
-class StepInputMetadataDict(TypedDict):
-    """Metadata for step input."""
-
-    activeUrl: str  # Note: different casing from API
-
-
-class StepInputDict(TypedDict):
-    """Input data for step object."""
-
-    screenshot: str
-    prompt: str
-    metadata: StepInputMetadataDict
-    agentRunCreate: Dict[str, Any] | None
-
-
-class StepOutputDict(TypedDict, total=False):
-    """Output data for step object."""
-
-    rawProgramBody: str
-    trace: TraceDict | None
-
-
-class StepObjectDict(TypedDict):
-    """Complete step object structure used internally by SDK."""
-
-    input: StepInputDict
-    output: StepOutputDict

@@ -13,16 +13,11 @@
 # limitations under the License.
 import platform
 import sys
+from typing import Literal
 
 import requests
 
 from nova_act.__version__ import VERSION
-from nova_act.impl.custom_actuation.custom_dispatcher import CustomActDispatcher
-from nova_act.impl.custom_actuation.playwright.default_nova_local_browser_actuator import (
-    DefaultNovaLocalBrowserActuator,
-)
-from nova_act.impl.dispatcher import ActDispatcher
-from nova_act.impl.extension import ExtensionDispatcher
 from nova_act.types.act_result import ActResult
 from nova_act.types.errors import NovaActError
 from nova_act.types.state.act import Act
@@ -84,7 +79,10 @@ def send_act_telemetry(
 
 
 def send_environment_telemetry(
-    endpoint: str, nova_act_api_key: str | None, session_id: str, dispatcher: ActDispatcher
+    endpoint: str,
+    nova_act_api_key: str | None,
+    session_id: str,
+    actuator_type: Literal["custom", "playwright"],
 ) -> None:
     """Send environment telemetry"""
     if not nova_act_api_key:
@@ -96,13 +94,6 @@ def send_environment_telemetry(
         "X-Api-Key": f"{nova_act_api_key}",
     }
 
-    actuatorType = "custom"
-    if isinstance(dispatcher, CustomActDispatcher):
-        if isinstance(dispatcher._actuator, DefaultNovaLocalBrowserActuator):
-            actuatorType = "playwright"
-    elif isinstance(dispatcher, ExtensionDispatcher):
-        actuatorType = "extension"
-
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
 
     system_name = platform.system().lower() or "unknown"
@@ -111,7 +102,7 @@ def send_environment_telemetry(
 
     payload = {
         "environment": {
-            "actuatorType": actuatorType,
+            "actuatorType": actuator_type,
             "pythonVersion": python_version,
             "sessionId": session_id,
             "sdkVersion": VERSION,

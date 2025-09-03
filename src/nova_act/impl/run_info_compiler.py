@@ -19,8 +19,11 @@ import os
 import re
 
 from PIL import Image, ImageDraw
+from typing_extensions import TypedDict, cast
 
 from nova_act.types.act_result import ActResult
+from nova_act.types.api.step import StepObjectInput, StepObjectOutput
+from nova_act.types.api.trace import ExternalTraceDict
 from nova_act.types.errors import ValidationFailed
 from nova_act.types.state.act import Act
 from nova_act.util.logging import setup_logging
@@ -56,6 +59,15 @@ _BBOX_MATCHER = re.compile(r"<box>(\d+),(\d+),(\d+),(\d+)</box>")
 _IMAGE_PREFIX_MATCHER = re.compile(r"^data:image/[^;]+;base64,(.+)$")
 
 _LOGGER = setup_logging(__name__)
+
+
+class EmptyRequest(TypedDict):
+    """An empty request."""
+
+
+class _StepInfo(TypedDict):
+    request: StepObjectInput | EmptyRequest
+    response: StepObjectOutput | None
 
 
 def _add_bbox_to_image(image: str, response: str) -> str:
@@ -151,7 +163,7 @@ def _write_html_file(session_logs_directory: str, file_name_prefix: str, html_co
         return ""
 
 
-def _extract_step_info(act: Act) -> list:
+def _extract_step_info(act: Act) -> list[_StepInfo]:
     """
     Extract request/response data from act steps.
 
@@ -163,10 +175,10 @@ def _extract_step_info(act: Act) -> list:
     """
     step_info = []
     for step in act.steps:
-        step_data = {
-            "request": step.rawMessage.get("input", {}),
-            "response": step.rawMessage.get("output"),
-        }
+        step_data = _StepInfo(
+            request=step.rawMessage.get("input", {}),
+            response=step.rawMessage.get("output"),
+        )
         step_info.append(step_data)
     return step_info
 
@@ -192,7 +204,7 @@ def _write_calls_json_file(session_logs_directory: str, file_name_prefix: str, a
         _LOGGER.warning(f"Failed to write request/response data to file {json_file_path}: {e}")
 
 
-def _extract_step_traces(act: Act) -> list:
+def _extract_step_traces(act: Act) -> list[ExternalTraceDict]:
     """
     Extract trace data from act steps.
 
@@ -207,7 +219,7 @@ def _extract_step_traces(act: Act) -> list:
         step_output = step.rawMessage.get("output", {})
         if "trace" in step_output:
             step_trace = step_output.get("trace", {}).get("external", {})
-            step_traces.append(step_trace)
+            step_traces.append(cast(ExternalTraceDict, step_trace))
     return step_traces
 
 
