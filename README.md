@@ -20,7 +20,7 @@ Amazon Nova Act is an experimental SDK. When using Nova Act, please keep in mind
 ## Table of contents
 * [Pre-requisites](#pre-requisites)
 * [Nova Act Authentication and Installation](#set-up)
-* [Quick Start: Order a coffee maker on Amazon](#quick-start-ordering-a-coffee-maker-on-amazon)
+* [Quick Start](#quick-start)
 * [How to prompt Nova Act](#how-to-prompt-act)
 * [Extract information from a web page](#extracting-information-from-a-web-page)
 * [Run multiple sessions in parallel](#running-multiple-sessions-in-parallel)
@@ -83,7 +83,7 @@ playwright install chrome
 ```
 
 
-## Quick Start: ordering a coffee maker on Amazon
+## Quick Start
 
 *Note: The first time you run NovaAct, it may take 1 to 2 minutes to start. This is because NovaAct needs to [install Playwright modules](https://playwright.dev/python/docs/browsers#install-browsers). Subsequent runs will only take a few seconds to start. This functionality can be toggled off by setting the `NOVA_ACT_SKIP_PLAYWRIGHT_INSTALL` environment variable.*
 
