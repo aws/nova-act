@@ -96,7 +96,7 @@ with NovaAct(starting_page="https://nova.amazon.com/act") as nova:
     nova.act("Click learn more. Then, return the title and publication date of the blog.")
 ```
 
-The SDK will (1) open Chrome, (2) navigate to a coffee maker product detail page on Amazon.com and add it to the cart, and then (3) close Chrome. Details of the run will be printed as console log messages.
+The SDK will (1) open Chrome, (2) perform the task as described in the prompt, and then (3) close Chrome. Details of the run will be printed as console log messages.
 
 Refer to the section [Initializing NovaAct](#initializing-novaact) to learn about other runtime options that can be passed into NovaAct.
 
@@ -114,12 +114,6 @@ Type "help", "copyright", "credits" or "license" for more information.
 >>> nova = NovaAct(starting_page="https://nova.amazon.com/act")
 >>> nova.start()
 >>> nova.act("Click learn more. Then, return the title and publication date of the blog.")
-```
-
-Once the agent completes the step above, you can enter the next step:
-
-```sh
->>> nova.act("select the first result")
 ```
 
 Feel free to manipulate the browser in between these `act()` calls as well, but please don't interact with the browser when an `act()` is running because the underlying model will not know what you've changed!
