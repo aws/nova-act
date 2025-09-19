@@ -15,7 +15,6 @@ import time
 import uuid
 
 # using dataclasses for end states
-from dataclasses import dataclass
 from typing import Dict
 
 # using attrs to finely control mutability of types
@@ -23,7 +22,7 @@ from attrs import define, field
 from attrs.setters import frozen
 
 from nova_act.types.act_metadata import ActMetadata
-from nova_act.types.api.step import ProgramErrorResponse
+from nova_act.types.act_result import ActResult
 from nova_act.types.state.step import Step
 
 DEFAULT_ACT_MAX_STEPS = 30
@@ -31,21 +30,6 @@ DEFAULT_ACT_MAX_STEPS = 30
 
 def _convert_max_steps(x: int | None) -> int:
     return x if x is not None else DEFAULT_ACT_MAX_STEPS
-
-
-@dataclass
-class ActSucceeded:
-    response: str | None
-
-
-@dataclass
-class ActCanceled:
-    pass
-
-
-@dataclass
-class ActFailed:
-    response: ProgramErrorResponse
 
 
 @define
@@ -62,7 +46,7 @@ class Act:
         converter=_convert_max_steps,
         on_setattr=frozen,
     )
-    model_temperature: int | None = field(default=None, on_setattr=frozen)
+    model_temperature: float | None = field(default=None, on_setattr=frozen)
     model_top_k: int | None = field(default=None, on_setattr=frozen)
     model_seed: int | None = field(default=None, on_setattr=frozen)
     observation_delay_ms: int | None = field(default=None, on_setattr=frozen)
@@ -74,7 +58,7 @@ class Act:
     # rest of fields are mutable
     end_time: float | None = field(factory=lambda: None, init=False)
     _steps: list[Step] = field(factory=list, init=False)
-    _result: ActSucceeded | ActCanceled | ActFailed | None = field(factory=lambda: None, init=False)
+    _result: ActResult | None = field(factory=lambda: None, init=False)
 
     acknowledged: bool = field(factory=lambda: False, init=False)
     is_complete: bool = field(factory=lambda: False, init=False)
@@ -101,7 +85,7 @@ class Act:
         return [round(step.server_time_s, 3) for step in self._steps if step.server_time_s is not None]
 
     @property
-    def result(self) -> ActSucceeded | ActCanceled | ActFailed | None:
+    def result(self) -> ActResult | None:
         return self._result
 
     def add_step(self, step: Step) -> None:
@@ -111,15 +95,5 @@ class Act:
 
     def complete(self, response: str | None) -> None:
         self.end_time = time.time()
-        self._result = ActSucceeded(response)
-        self.is_complete = True
-
-    def cancel(self) -> None:
-        self.end_time = time.time()
-        self._result = ActCanceled()
-        self.is_complete = True
-
-    def fail(self, error_message: ProgramErrorResponse) -> None:
-        self.end_time = time.time()
-        self._result = ActFailed(error_message)
+        self._result = ActResult(response=response, metadata=self.metadata)
         self.is_complete = True

@@ -13,7 +13,7 @@
 # limitations under the License.
 from typing import Dict
 
-from nova_act.types.errors import InterpreterError
+from nova_act.impl.actuation.interpreter import InterpreterError
 
 
 def parse_bbox_string(bbox_string: str) -> Dict[str, float]:

@@ -23,9 +23,7 @@ from boto3.session import Session
 from playwright.sync_api import Page, Playwright
 
 from nova_act.impl.actuation.interface.browser import BrowserActuatorBase
-from nova_act.impl.actuation.interface.playwright_pages import (
-    PlaywrightPageManagerBase,
-)
+from nova_act.impl.actuation.interface.playwright_pages import PlaywrightPageManagerBase
 from nova_act.impl.actuation.playwright.default_nova_local_browser_actuator import (
     DefaultNovaLocalBrowserActuator,
 )
@@ -47,12 +45,14 @@ from nova_act.impl.run_info_compiler import RunInfoCompiler
 from nova_act.impl.telemetry import send_act_telemetry, send_environment_telemetry
 
 
+from nova_act.impl.routes.factory import for_backend
 from nova_act.types.act_errors import ActError
 from nova_act.types.act_result import ActResult
 from nova_act.types.errors import (
     AuthError,
     ClientNotStarted,
     IAMAuthError,
+    NovaActError,
     StartFailed,
     StopFailed,
     ValidationFailed,
@@ -74,6 +74,7 @@ from nova_act.util.logging import (
     setup_logging,
 )
 
+DEFAULT_ENDPOINT_NAME = "alpha-sunshine"
 DEFAULT_SCREEN_WIDTH = 1600
 DEFAULT_SCREEN_HEIGHT = 900
 
@@ -82,6 +83,7 @@ _TRACE_LOGGER = make_trace_logger()
 
 
 ManagedActuatorType = Type[DefaultNovaLocalBrowserActuator | ExtensionActuator]
+
 
 
 class NovaAct:
@@ -221,7 +223,6 @@ class NovaAct:
         self._backend = self._determine_backend()
         self._backend_info = get_urls_for_backend(self._backend)
 
-
         self._starting_page = starting_page or "https://www.google.com"
 
         if preview is not None:
@@ -263,7 +264,7 @@ class NovaAct:
                 # We want to make a copy so the original is unmodified.
                 _LOGGER.info(f"Copying {user_data_dir} to temp dir")
                 self._session_user_data_dir = rsync_to_temp_dir(user_data_dir)
-                _LOGGER.info(f"Copied {user_data_dir} to {self._session_user_data_dir=}")
+                _LOGGER.info(f"Copied {user_data_dir} to {self._session_user_data_dir}")
                 self._session_user_data_dir_is_temp = True
             else:
                 # We want to just use the original.
@@ -284,7 +285,7 @@ class NovaAct:
             validate_timeout(go_to_url_timeout)
         self.go_to_url_timeout = go_to_url_timeout
 
-        self._nova_act_api_key = nova_act_api_key or os.environ.get("NOVA_ACT_API_KEY")
+        self._nova_act_api_key = nova_act_api_key or os.environ.get("NOVA_ACT_API_KEY") or ""
 
         self._validate_auth()
 
@@ -313,6 +314,8 @@ class NovaAct:
 
         self._stop_hooks = stop_hooks
         self._log_stop_hooks_registration()
+        user_browser_args = os.environ.get("NOVA_ACT_BROWSER_ARGS", "").split()
+
 
         playwright_options = PlaywrightInstanceOptions(
             maybe_playwright=playwright_instance,
@@ -331,6 +334,7 @@ class NovaAct:
             use_default_chrome_browser=use_default_chrome_browser,
             cdp_headers=cdp_headers,
             proxy=proxy,
+            user_browser_args=user_browser_args,
         )
 
         self._actuator: BrowserActuatorBase
@@ -365,14 +369,17 @@ class NovaAct:
             self._actuator = actuator
 
 
+        self._routes = for_backend(
+            backend=self._backend,
+            api_key=self._nova_act_api_key,
+            boto_session=self._boto_session,
+        )
+
         self._dispatcher = ActDispatcher(
-            nova_act_api_key=self._nova_act_api_key,
-            backend_info=self._backend_info,
             actuator=self._actuator,
-            tty=self._tty,
+            routes=self._routes,
             event_handler=self._event_handler,
             controller=self._controller,
-            boto_session=self._boto_session,
         )
 
     def _log_stop_hooks_registration(self) -> None:
@@ -664,7 +671,7 @@ class NovaAct:
         max_steps: int | None = None,
         schema: Dict[str, Any] | None = None,
         endpoint_name: str | None = None,
-        model_temperature: int | None = None,
+        model_temperature: float | None = None,
         model_top_k: int | None = None,
         model_seed: int | None = None,
         observation_delay_ms: int | None = None,
@@ -727,22 +734,20 @@ class NovaAct:
         self._event_handler.set_act(act)
         self._event_handler.send_event(type=EventType.LOG, log_level=LogType.INFO, data=f'act("{prompt}")')
 
-        error = None
-        result = None
+
+        error: NovaActError | None = None
+        result: ActResult | None = None
 
         try:
-            response = self.dispatcher.dispatch(act)
-            if isinstance(response, ActError):
-                raise response
+            result = self.dispatcher.dispatch(act)
 
-            result = response
             if schema:
                 result = populate_json_schema_response(result, schema)
         except (ActError, AuthError) as e:
             error = e
             raise e
         except Exception as e:
-            error = ActError(metadata=act.metadata, message=str(e))
+            error = ActError(metadata=act.metadata, message=f"{type(e).__name__}: {e}")
             raise error from e
         finally:
             send_act_telemetry(self._backend_info.api_uri, self._nova_act_api_key, act, result, error)
@@ -757,3 +762,4 @@ class NovaAct:
                 )
 
         return result
+

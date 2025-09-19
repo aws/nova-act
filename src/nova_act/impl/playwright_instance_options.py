@@ -36,6 +36,7 @@ class PlaywrightInstanceOptions:
     go_to_url_timeout: int | None = None
     cdp_headers: dict[str, str] | None = None
     proxy: dict[str, str] | None = None
+    user_browser_args: list[str] | None = None
 
     def __post_init__(self) -> None:
         self.owns_playwright = self.maybe_playwright is None

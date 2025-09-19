@@ -23,6 +23,8 @@ dev = [
   "setuptools",
   "twine",
   "wheel",
+  "mypy",
+  "boto3-stubs",
 ]
 
 [tool.setuptools.dynamic]
@@ -31,3 +33,7 @@ dependencies = {file = "requirements.txt"}
 
 [tool.setuptools.package-data]
 nova_act = ["artifacts/**/*", "artifacts/*"]
+
+[tool.mypy]
+strict = true
+warn_unused_ignores = false

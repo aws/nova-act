@@ -53,12 +53,13 @@ def setup_logging(module_name: str) -> logging.Logger:
     logger = logging.getLogger(module_name)
 
     # Add a handler only if it hasn't been already set up.
-    if not logger.hasHandlers():
+    if not logger.hasHandlers() and not logging.root.handlers:
         handler = logging.StreamHandler()
         formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         logger.setLevel(get_log_level())
+        logger.propagate = False
 
     return logger
 

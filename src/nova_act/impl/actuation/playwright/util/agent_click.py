@@ -22,6 +22,7 @@ from nova_act.impl.actuation.playwright.util.bbox_parser import bounding_box_to_
 from nova_act.impl.actuation.playwright.util.dispatch_dom_events import dispatch_event_sequence
 from nova_act.impl.actuation.playwright.util.element_helpers import (
     check_if_native_dropdown,
+    find_file_input_element,
     get_element_at_point,
     locate_element,
 )
@@ -116,8 +117,13 @@ def handle_special_elements(page: Page, x: float, y: float) -> None:
     if element_info is None:
         return
 
-    # Check for color input, file input, or range input.
-    # If any of the input above, raise AgentRedirectError
+    # Check for file upload context first (more comprehensive)
+    if find_file_input_element(page, x, y):
+        raise AgentRedirectError(
+            "This file input cannot be clicked. Use agentType(<value>, <same bbox>), with this format: /path/to/file"
+        )
+
+    # Check for other special input types
     if element_info["tagName"].lower() == "input":
         input_type = element_info.get("attributes", {}).get("type", "").lower()
 
@@ -125,16 +131,10 @@ def handle_special_elements(page: Page, x: float, y: float) -> None:
             raise AgentRedirectError(
                 "This color input cannot be clicked. Use agentType(<value>, <same bbox>), with this format: #RRGGBB"
             )
-
-        elif input_type == "file":
-            raise AgentRedirectError(
-                "This file input cannot be clicked. Use agentType(<value>, <same bbox>), with this format: /path/to/file"  # noqa: E501
-            )
-
         elif input_type == "range":
-            # Get min and max values from the range input
             range_min = element_info.get("attributes", {}).get("min", "0")
             range_max = element_info.get("attributes", {}).get("max", "100")
             raise AgentRedirectError(
-                f"This range input cannot be clicked. Use agentType(<value>, <same bbox>), with a value from {range_min} to {range_max}."  # noqa: E501
+                f"This range input cannot be clicked. "
+                f"Use agentType(<value>, <same bbox>), with a value from {range_min} to {range_max}."
             )

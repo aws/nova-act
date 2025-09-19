@@ -65,7 +65,9 @@ class EmptyRequest(TypedDict):
     """An empty request."""
 
 
-class _StepInfo(TypedDict):
+class StepInfo(TypedDict):
+    """Information on a /step request/response."""
+
     request: StepObjectInput | EmptyRequest
     response: StepObjectOutput | None
 
@@ -163,7 +165,7 @@ def _write_html_file(session_logs_directory: str, file_name_prefix: str, html_co
         return ""
 
 
-def _extract_step_info(act: Act) -> list[_StepInfo]:
+def _extract_step_info(act: Act) -> list[StepInfo]:
     """
     Extract request/response data from act steps.
 
@@ -175,9 +177,24 @@ def _extract_step_info(act: Act) -> list[_StepInfo]:
     """
     step_info = []
     for step in act.steps:
-        step_data = _StepInfo(
-            request=step.rawMessage.get("input", {}),
-            response=step.rawMessage.get("output"),
+        request: StepObjectInput | EmptyRequest = {}
+        if step.model_input:
+            request = StepObjectInput(
+                screenshot=step.model_input.image,
+                prompt=step.model_input.prompt,
+                metadata={"activeURL": step.model_input.active_url},
+            )
+        step_data = StepInfo(
+            request=request,
+            response=(
+                StepObjectOutput(
+                    program=step.model_output.program_ast,
+                    rawProgramBody=step.model_output.awl_raw_program,
+                    requestId=step.model_output.request_id,
+                )
+                if step.model_output
+                else None
+            ),
         )
         step_info.append(step_data)
     return step_info
@@ -216,9 +233,8 @@ def _extract_step_traces(act: Act) -> list[ExternalTraceDict]:
     """
     step_traces = []
     for step in act.steps:
-        step_output = step.rawMessage.get("output", {})
-        if "trace" in step_output:
-            step_trace = step_output.get("trace", {}).get("external", {})
+        if step.trace is not None:
+            step_trace = step.trace.get("external", {})
             step_traces.append(cast(ExternalTraceDict, step_trace))
     return step_traces
 

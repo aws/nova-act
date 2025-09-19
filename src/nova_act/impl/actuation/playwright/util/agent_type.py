@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
+
 from playwright.sync_api import Page
 
 from nova_act.impl.actuation.interface.types.element_dict import ElementDict
@@ -20,6 +22,7 @@ from nova_act.impl.actuation.playwright.util.dispatch_dom_events import dispatch
 from nova_act.impl.actuation.playwright.util.element_helpers import (
     blur,
     check_if_native_dropdown,
+    find_file_input_element,
     get_element_at_point,
     is_element_focused,
     locate_element,
@@ -57,6 +60,13 @@ def agent_type(
 ) -> None:
     bbox_dict = parse_bbox_string(bounding_box)
     point = bounding_box_to_point(bbox_dict)
+
+    # Handle unorthodox file input first, before fixating on an element
+    file_input_element = find_file_input_element(page, point["x"], point["y"])
+    if file_input_element:
+        handle_file_input(page, value, x=point["x"], y=point["y"], file_input_element=file_input_element)
+        return
+
     element_info = get_element_at_point(page, point["x"], point["y"])
     if not element_info:
         raise ValueError("No element found at the given point")
@@ -68,7 +78,7 @@ def agent_type(
             handle_color_input(page, element_info, value)
             return
         elif input_type == "file":
-            handle_file_input(page, element_info, value)
+            handle_file_input(page, value, element_info=element_info)
             return
         elif input_type == "range":
             handle_range_input(page, element_info, value)
@@ -120,40 +130,66 @@ def handle_color_input(page: Page, element_info: ElementDict, color_value: str) 
 
     Args:
         page: Playwright page object
-        x: X coordinate of the color input
-        y: Y coordinate of the color input
+        element_info: focused element
         color_value: Hex color value (e.g., "#ff6b6b" or "ff6b6b")
     """
-    if not color_value.startswith("#"):
-        color_value = "#" + color_value
+    color_value = color_value.lstrip("#")
+    if not (len(color_value) in (3, 6) and all(c in "0123456789abcdefABCDEF" for c in color_value)):
+        raise ValueError(f"Invalid color value: {color_value}")
+    color_value = "#" + color_value
 
     # Use JavaScript to set the color value directly
     try:
         element = locate_element(element_info, page)
         element.evaluate(f"(element) => element.value='{color_value}'")
     except Exception as e:
-        _LOGGER.debug(f"Color input element not found: {e}")
+        _LOGGER.warning(f"Color input element not found: {e}")
 
 
-def handle_file_input(page: Page, element_info: ElementDict, file_path: str) -> None:
+def handle_file_input(
+    page: Page,
+    file_path: str,
+    *,
+    x: float | None = None,
+    y: float | None = None,
+    element_info: ElementDict | None = None,
+    file_input_element: str | None = None,
+) -> None:
     """
     Handle file input elements.
 
     Args:
         page: Playwright page object
+        file_path: Path to the file to upload (can be absolute or relative)
+        element_info: focused element
         x: X coordinate of the file input
         y: Y coordinate of the file input
-        file_path: Path to the file to upload (can be absolute or relative)
+        file_input_element: element pre-examined to be file input
     """
 
-    # Get the file input element
+    if not os.path.isfile(file_path):
+        raise ValueError(f"Not a regular file: {file_path}")
 
+    # Get the file input element
     try:
-        element = locate_element(element_info, page)
-        # Use Playwright's set_input_files method
-        element.set_input_files(file_path)
+        if file_input_element:
+            # Case 1: We have a selector (from file upload context detection)
+            try:
+                page.locator(file_input_element).first.set_input_files(file_path)
+            except Exception:
+                # If that fails, click to create dynamic file input and retry
+                if x is not None and y is not None:
+                    page.mouse.click(x, y)
+                    page.wait_for_timeout(100)
+                page.locator(file_input_element).first.set_input_files(file_path)
+        elif element_info:
+            # Case 2: We have element info (direct file input)
+            element = locate_element(element_info, page)
+            element.set_input_files(file_path)
+        else:
+            raise ValueError("Must provide either file_input_element or element_info")
     except Exception as e:
-        _LOGGER.debug(f"Error handling file input: {e}")
+        _LOGGER.warning(f"Error handling file input: {e}")
 
 
 def handle_range_input(page: Page, element_info: ElementDict, range_value: str) -> None:
@@ -166,6 +202,10 @@ def handle_range_input(page: Page, element_info: ElementDict, range_value: str) 
         y: Y coordinate of the range input
         range_value: Numeric value for the range slider
     """
+    try:
+        float(range_value)
+    except ValueError:
+        raise ValueError(f"Invalid range value: {range_value}")
 
     # Get the range input element
     try:
@@ -179,4 +219,4 @@ def handle_range_input(page: Page, element_info: ElementDict, range_value: str) 
         }}"""
         )
     except Exception:
-        _LOGGER.debug("Range input element not found")
+        _LOGGER.warning("Range input element not found")

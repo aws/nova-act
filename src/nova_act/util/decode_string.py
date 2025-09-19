@@ -11,4 +11,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-VERSION = "2.1.36.0"  # pragma: no cover
+import codecs
+
+
+def decode_string(value: str) -> str:
+    """Helper to decode unicode strings"""
+    if "\\" in value:
+        # Check for unicode escape sequences like \uXXXX
+        if "\\u" in value or any(seq in value for seq in ["\\n", "\\t", "\\r", "\\\\", '\\"', "\\'"]):
+            try:
+                return codecs.decode(value, "unicode_escape")
+            except UnicodeDecodeError:
+                return value
+    return value

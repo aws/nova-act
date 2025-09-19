@@ -75,6 +75,10 @@ class PlaywrightInstanceManager:
         self._context: BrowserContext | None = None
         self._launched_default_chrome_popen: subprocess.Popen[bytes] | None = None
         self._session_logs_directory: str | None = None
+        if options.user_browser_args is None:
+            self._user_browser_args = []
+        else:
+            self._user_browser_args = options.user_browser_args
 
     @property
     def started(self) -> bool:
@@ -172,6 +176,7 @@ class PlaywrightInstanceManager:
                         f"--window-size={self.screen_width},{self.screen_height}",
                         "--no-first-run",
                         *(["--headless=new"] if self._headless else []),
+                        "--remote-allow-origins=https://chrome-devtools-frontend.appspot.com",
                     ],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
@@ -222,8 +227,6 @@ class PlaywrightInstanceManager:
                             "https://playwright.dev/python/docs/browsers"
                         )
 
-                user_browser_args = os.environ.get("NOVA_ACT_BROWSER_ARGS", "").split()
-
                 launch_args = [
                     f"--window-size={self.screen_width},{self.screen_height}",
                     "--disable-blink-features=AutomationControlled",  # Suppress navigator.webdriver flag
@@ -231,7 +234,7 @@ class PlaywrightInstanceManager:
                     *([] if not self._profile_directory else [f"--profile-directory={self._profile_directory}"]),
                     "--silent-debugger-extension-api",
                     "--remote-allow-origins=https://chrome-devtools-frontend.appspot.com",
-                    *user_browser_args,
+                    *self._user_browser_args,
                 ]
 
                 context_options = {
@@ -255,7 +258,7 @@ class PlaywrightInstanceManager:
                 else:
                     # Detect user agent by launching a headless browser, and add suffix.
                     browser = self._playwright.chromium.launch(
-                        headless=True, args=["--headless=new", *user_browser_args]
+                        headless=True, args=["--headless=new", *self._user_browser_args]
                     )
                     page = browser.new_page()
                     original_user_agent = page.evaluate(Expressions.GET_USER_AGENT.value)

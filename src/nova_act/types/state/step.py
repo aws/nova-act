@@ -11,11 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import time
-from dataclasses import dataclass
-from datetime import datetime as dt
+from __future__ import annotations
 
-from nova_act.types.api.step import StepObject
+import json
+from dataclasses import dataclass
+from datetime import datetime
+
+from nova_act.types.api.step import Statement
+from nova_act.types.api.trace import TraceDict
 
 
 @dataclass(frozen=True)
@@ -29,44 +32,37 @@ class ModelInput:
 class ModelOutput:
     awl_raw_program: str
     request_id: str
+    program_ast: list[Statement]
+
+    @classmethod
+    def from_plan_response(cls, plan_response: str, request_id: str = "") -> ModelOutput:
+        """Instantiate from a plan response."""
+
+        try:
+            plan_response_json = json.loads(plan_response)
+        except json.JSONDecodeError:
+            raise ValueError("actuationPlanResponse is not JSON-serializable.")
+
+        if "rawProgramBody" not in plan_response_json:
+            raise ValueError("actuationPlanResponse is missing rawProgramBody.")
+
+        awl_raw_program = plan_response_json["rawProgramBody"]
+
+        try:
+            program_ast: list[Statement] = plan_response_json["program"]["body"][0]["body"]["body"]
+        except (IndexError, KeyError, TypeError):
+            raise ValueError("actuationPlanResponse is missing program body.")
+
+        return cls(awl_raw_program=awl_raw_program, request_id=request_id, program_ast=program_ast)
 
 
 @dataclass(frozen=True)
 class Step:
     model_input: ModelInput
     model_output: ModelOutput
-    observed_time: dt
-    rawMessage: StepObject
+    observed_time: datetime
     server_time_s: float | None
-
-    @classmethod
-    def from_message(cls, message: StepObject) -> "Step":
-        # Extract input data
-        input_data = message.get("input", {})
-        model_input = ModelInput(
-            image=input_data.get("screenshot", ""),
-            prompt=input_data.get("prompt", ""),
-            active_url=input_data.get("metadata", {}).get("activeURL", ""),
-        )
-
-        # Extract output data
-        output_data = message.get("output", {})
-        model_output = ModelOutput(
-            awl_raw_program=output_data.get("rawProgramBody", ""), request_id=output_data.get("requestId", "")
-        )
-
-        # Extract timing data
-        observed_time = dt.fromtimestamp(time.time())
-        server_time_value = message.get("server_time_s")
-        server_time_s = float(server_time_value) if server_time_value is not None else None
-
-        return cls(
-            model_input=model_input,
-            model_output=model_output,
-            observed_time=observed_time,
-            rawMessage=message,
-            server_time_s=server_time_s,
-        )
+    trace: TraceDict | None = None
 
     # Input validation
     def __post_init__(self) -> None:

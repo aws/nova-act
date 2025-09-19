@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing_extensions import Literal, NotRequired, TypedDict
+from typing_extensions import NotRequired, TypedDict
 
 from nova_act.types.api.trace import TraceDict
 
@@ -62,8 +62,8 @@ class AgentRunCreate(TypedDict):
     task: str | None
 
 
-class StepRequest(TypedDict):
-    """Request to the /step endpoint."""
+class StepPlanRequest(TypedDict):
+    """Plan Request to the /step endpoint."""
 
     agentRunId: str
     idToBboxMap: dict[int, Bbox]
@@ -127,20 +127,10 @@ class PlanResponse(TypedDict):
 class StepObjectOutput(TypedDict):
     """Output structure for StepObject."""
 
-    program: Program
+    program: list[Statement]
     rawProgramBody: str
     trace: NotRequired[TraceDict]
     requestId: NotRequired[str]
-
-
-class ProgramErrorResponse(TypedDict):
-    error: NotRequired[str]
-    type: Literal["NovaActService", "NovaActClient"]
-    subErrorCode: NotRequired[str]
-    requestId: NotRequired[str]
-    exception: NotRequired[Exception]
-    code: NotRequired[str | int]
-    message: NotRequired[str]
 
 
 class StepObjectInputMetadata(TypedDict):
@@ -156,22 +146,3 @@ class StepObjectInput(TypedDict):
     prompt: str
     metadata: StepObjectInputMetadata
     agentRunCreate: NotRequired[AgentRunCreate]
-
-
-class StepObject(TypedDict):
-    """Information on a /step request/response."""
-
-    input: StepObjectInput
-    output: StepObjectOutput
-    server_time_s: NotRequired[float]
-
-
-class ParsedStepResponse(TypedDict):
-    """Parsed response from the /step endpoint.
-
-    """
-
-    error: NotRequired[ProgramErrorResponse]
-    program_statements: NotRequired[list[Statement]]
-    raw_program_body: NotRequired[str]
-    step_object: NotRequired[StepObject]

@@ -4,7 +4,7 @@ A Python SDK for Amazon Nova Act.
 
 Nova Act is an early research preview of an SDK + model for building agents designed to reliably take actions in web browsers. Building with the SDK enables developers to break down complex workflows into smaller, reliable, commands, add more detail where needed, call APIs, and intersperse direct browser manipulation. Developers can interleave Python code, whether it be tests, breakpoints, asserts, or threadpooling for parallelization. Read more about the announcement: https://labs.amazon.science/blog/nova-act.
 
->We are now working with select customers to productionize their agents, with capabilities including [AWS IAM authentication](https://aws.amazon.com/iam/), [Amazon S3](https://aws.amazon.com/s3/) secure storage, and integration with the [Amazon Bedrock AgentCore Browser](https://aws.amazon.com/bedrock/agentcore). Learn more in our [blog post](https://labs.amazon.science/blog/prototype-to-production) and join our [waitlist](https://amazonexteu.qualtrics.com/jfe/form/SV_9siTXCFdKHpdwCa).
+> We are now working with select customers to productionize their agents, with capabilities including [AWS IAM authentication](https://aws.amazon.com/iam/), [Amazon S3](https://aws.amazon.com/s3/) secure storage, and integration with the [Amazon Bedrock AgentCore Browser](https://aws.amazon.com/bedrock/agentcore). Learn more in our [blog post](https://labs.amazon.science/blog/prototype-to-production) and join our [waitlist](https://amazonexteu.qualtrics.com/jfe/form/SV_9siTXCFdKHpdwCa).
 
 
 ## Disclosures
@@ -19,7 +19,8 @@ Amazon Nova Act is an experimental SDK. When using Nova Act, please keep in mind
 
 ## Table of contents
 * [Pre-requisites](#pre-requisites)
-* [Nova Act Authentication and Installation](#set-up)
+* [Nova Act IDE Extension](#quick-set-up-with-ide-extension)
+* [Nova Act Authentication and Installation](#authentication)
 * [Quick Start](#quick-start)
 * [How to prompt Nova Act](#how-to-prompt-act)
 * [Extract information from a web page](#extracting-information-from-a-web-page)
@@ -50,6 +51,10 @@ Amazon Nova Act is an experimental SDK. When using Nova Act, please keep in mind
 > **Note:** Nova Act supports English.
 
 ## Set Up
+
+### Quick Set Up with IDE Extension
+
+Accelerate your development process with the [Nova Act extension](https://github.com/aws/nova-act-extension). The extension automates the setup of your Nova Act development environment and brings the entire agent development experience directly into your IDE, enabling chat-to-script generation, browser session debugging, and step-by-step testing capabilities. For installation instructions and detailed documentation, visit the [extension repository](https://github.com/aws/nova-act-extension) or [website](https://nova.amazon.com/act).
 
 ### Authentication
 
@@ -242,6 +247,21 @@ with NovaAct(starting_page="https://nova.amazon.com/act") as nova:
         else:
             print("You are not logged in")
 ```
+
+### Handling ActErrors
+
+Once the `NovaAct` client is started, it might encounter errors during the `act()` execution. All of these error types are included in the [`nova_act.types.act_errors` module](./src/nova_act/types/act_errors.py), and are organized as follows:
+1. `ActAgentError`: Indicates requested prompt failed to complete; users may retry with a different request.
+   * Examples include: `ActAgentFailed` (the agent raised an error because the task was not possible), `ActExceededMaxStepsError` (`act()` failed to complete within the configured maximum number of steps), or `ActTimeoutError` (`act()` failed to complete within the configured timeout).
+1. `ActExecutionError`: Indicates a local error encountered while executing valid output from the agent
+   * Examples include: `ActActuationError` (client encountered an exception while actuating the Browser), or `ActCanceledError` (the user canceled execution).
+1. `ActClientError`: Indicates a request to the NovaAct Service was invalid; users may retry with a different request.
+   * Examples include: `ActInvalidModelGenerationError` (model generated output that could not be interpreted), `ActGuardrailsError` (the request was blocked by our RAI guardrails), or `ActRateLimitExceededError` (request was throttled; rate should be reduced).
+1. `ActServerError`: Indicates the NovaAct Service encountered an error processing the request.
+   * Examples include: `ActInternalServerError` (internal error processing request), `ActBadResponseError` (the service returned a response with unrecognized shape), or `ActServiceUnavailableError` (the service could not be reached.)
+
+Users may catch `ActAgentError`s and `ActClientError`s and retry with the appropriate request; for `ActExecutionError`s and `ActServerError`s, please submit an issue to the team to look into, including (1) your SDK version, (2) your platform + operating system, (3) the full error trace, and (4) steps to reproduce.
+
 
 ### Running multiple sessions in parallel
 
@@ -569,6 +589,8 @@ Note that if you are running Nova Act on a remote host, you may need to set up p
 The Nova Act SDK can be used together with the [Amazon Bedrock AgentCore Browser Tool](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/browser-tool.html) for production-ready browser automation at scale. The AgentCore Browser Tool provides a fully managed cloud-based browser automation solution that addresses limitations around real-time data access, while the Nova Act SDK gives you the flexibility to build sophisticated agent workflows.
 
 See [this blog post](https://aws.amazon.com/blogs/machine-learning/introducing-amazon-bedrock-agentcore-browser-tool/) for integration instructions.
+
+> **Note**: When the Nova Act SDK and Bedrock AgentCore Browser run on different operating systems (e.g., SDK on MacOS and AgentCore Browser on Linux), keyboard commands may not translate correctly between systems. This impacts certain SDK functions like `agent_type()`, which uses keyboard shortcuts (such as `ControlOrMeta+A` for "select all") that are OS-dependent. This behavior is an expected consequence of the cross-OS integration architecture and should be considered when developing automations that use keyboard input methods.
 
 ## Known limitations
 Nova Act is a research preview intended for prototyping and exploration. It’s the first step in our vision for building the key capabilities for useful agents at scale. You can expect to encounter many limitations at this stage — please provide feedback to [nova-act@amazon.com](mailto:nova-act@amazon.com?subject=Nova%20Act%20Bug%20Report) to help us make it better.

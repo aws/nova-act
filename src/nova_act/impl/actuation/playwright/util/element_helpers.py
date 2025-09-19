@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import time
+
 from playwright.sync_api import Locator, Page
 
 from nova_act.impl.actuation.interface.types.element_dict import ElementDict
@@ -101,6 +103,61 @@ def check_if_native_dropdown(page: Page, x: float, y: float) -> bool:
     return False
 
 
+def find_file_input_element(page: Page, x: float, y: float) -> str | None:
+    """Find file input selector if clicking triggers a file upload. Returns selector or None."""
+    result: str | None = page.evaluate(
+        """
+        ([x, y]) => {
+            const elem = document.elementFromPoint(x, y);
+            if (!elem) return null;
+
+            // Direct file input
+            if (elem.tagName === 'INPUT' && elem.type === 'file') {
+                return elem.id ? `#${elem.id}` : 'input[type="file"]';
+            }
+
+            // Check container for file input
+            let container = elem.closest('.form-group, div[class*="upload"], div[class*="file"], label');
+            if (!container) {
+                // Only check form-wide for elements that are likely file upload triggers
+                const isFileUploadElement = elem.tagName === 'LABEL' ||
+                    (elem.textContent && /\b(upload|attach|browse|choose.*file)\b/i.test(elem.textContent));
+                if (isFileUploadElement) {
+                    container = elem.closest('form');
+                }
+            }
+            if (container) {
+                const fileInput = container.querySelector('input[type="file"]');
+                if (fileInput) {
+                    return fileInput.id ? `#${fileInput.id}` : 'input[type="file"]';
+                }
+            }
+
+            // Check for upload keywords + any file input on page
+            const uploadKeywords = ['upload', 'attach', 'browse', 'choose', 'select file', 'add file', 'drag an image'];
+            const text = (elem.textContent || '').toLowerCase();
+            const className = typeof elem.className === 'string' ? elem.className.toLowerCase() : '';
+            const id = (elem.id || '').toLowerCase();
+
+            const hasUploadKeyword = uploadKeywords.some(keyword =>
+                text.includes(keyword) || className.includes(keyword) || id.includes(keyword)
+            );
+
+            if (hasUploadKeyword) {
+                const fileInput = document.querySelector('input[type="file"]');
+                if (fileInput) {
+                    return fileInput.id ? `#${fileInput.id}` : 'input[type="file"]';
+                }
+            }
+
+            return null;
+        }
+        """,
+        [x, y],
+    )
+    return result
+
+
 def is_element_focused(page: Page, x: float, y: float) -> bool:
     """
     Check if the element at the given coordinates is currently focused.
@@ -113,6 +170,11 @@ def is_element_focused(page: Page, x: float, y: float) -> bool:
     Returns:
         True if the element is focused, False otherwise
     """
+    if is_pdf_page(page):
+        # Element focus does not work on pdfs so use a small sleep then assume success.
+        time.sleep(0.1)
+        return True
+
     result: bool = page.evaluate(
         """
         ([x, y]) => {
@@ -123,3 +185,8 @@ def is_element_focused(page: Page, x: float, y: float) -> bool:
         [x, y],
     )
     return result
+
+
+def is_pdf_page(page: Page) -> bool:
+    # Not rigorous but a simple way to identify a pdf.
+    return page.url.lower().endswith(".pdf")
