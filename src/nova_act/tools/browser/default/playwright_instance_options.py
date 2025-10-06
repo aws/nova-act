@@ -21,7 +21,7 @@ _DEFAULT_GO_TO_URL_TIMEOUT = 60
 @dataclass
 class PlaywrightInstanceOptions:
     maybe_playwright: Playwright | None
-    starting_page: str
+    starting_page: str | None
     chrome_channel: str
     headless: bool
     user_data_dir: str
@@ -36,6 +36,7 @@ class PlaywrightInstanceOptions:
     go_to_url_timeout: int | None = None
     cdp_headers: dict[str, str] | None = None
     proxy: dict[str, str] | None = None
+    cdp_use_existing_page: bool = False
     user_browser_args: list[str] | None = None
 
     def __post_init__(self) -> None:

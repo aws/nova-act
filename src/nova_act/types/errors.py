@@ -154,3 +154,7 @@ class PageNotFoundError(ValidationFailed):
     pass
 
 
+class InterpreterError(NovaActError):
+    """Indicates an error encountered while interpreting model output."""
+
+

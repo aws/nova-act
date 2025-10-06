@@ -41,7 +41,7 @@ class ModelOutput:
         try:
             plan_response_json = json.loads(plan_response)
         except json.JSONDecodeError:
-            raise ValueError("actuationPlanResponse is not JSON-serializable.")
+            raise ValueError("actuationPlanResponse is not JSON-Type.")
 
         if "rawProgramBody" not in plan_response_json:
             raise ValueError("actuationPlanResponse is missing rawProgramBody.")

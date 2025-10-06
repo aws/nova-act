@@ -15,8 +15,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from nova_act.impl.actuation.interface.browser import BrowserObservation
 from nova_act.impl.backend import BackendInfo
+from nova_act.tools.browser.interface.browser import BrowserObservation
 from nova_act.types.state.act import Act
 from nova_act.types.state.step import Step
 from nova_act.util.logging import make_trace_logger

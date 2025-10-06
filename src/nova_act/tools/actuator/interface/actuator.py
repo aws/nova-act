@@ -17,12 +17,19 @@ from typing import Any, Callable, Sequence
 from deprecated import deprecated
 from strands import tool
 from strands.tools.decorator import DecoratedFunctionTool
+from strands.types.tools import ToolSpec
+
+from nova_act.types.json_type import JSONType
 
 
 @deprecated(version="2.0.200", reason="the `@action` decorator is no longer required.")
-def action(method: Callable[..., Any]) -> Callable[..., Any]:
+def action(method: Callable[..., Any]) -> Callable[..., Any]:  # type: ignore[explicit-any]
     """Annotate a method as an Action."""
     return tool(method)
+
+
+ActionType = DecoratedFunctionTool[..., JSONType]  # type: ignore[explicit-any]
+"""An Action the NovaAct client can carry out upon model request."""
 
 
 class ActuatorBase(ABC):
@@ -48,26 +55,26 @@ class ActuatorBase(ABC):
     domain: str | None = None
     """An optional description of the actuation domain."""
 
-    def start(self, **kwargs: Any) -> None:
+    def start(self, **kwargs: Any) -> None:  # type: ignore[explicit-any]
         """Prepare for actuation."""
 
-    def stop(self, **kwargs: Any) -> None:
+    def stop(self, **kwargs: Any) -> None:  # type: ignore[explicit-any]
         """Clean up when done."""
 
     @property
     @abstractmethod
-    def started(self, **kwargs: Any) -> bool:
+    def started(self, **kwargs: Any) -> bool:  # type: ignore[explicit-any]
         """
         Tells whether the actuator instance was started or not.
         """
 
     @abstractmethod
-    def list_actions(self) -> Sequence[DecoratedFunctionTool[..., Any]]:
+    def list_actions(self) -> Sequence[ActionType]:
         """List the valid Actions this Actuator can take."""
 
-    def asdict(self) -> dict[str, Any]:
+    def asdict(self) -> dict[str, str | list[ToolSpec]]:
         """Return a dictionary representation of this class."""
         return {
-            "domain": self.domain,
+            "domain": self.domain or "",
             "actions": [action.tool_spec for action in self.list_actions()],
         }

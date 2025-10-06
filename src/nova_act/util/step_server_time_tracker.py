@@ -11,8 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
+
 import json
-from typing import Any, Dict, Optional
 
 from playwright.sync_api import BrowserContext
 
@@ -43,12 +44,12 @@ class StepServerTimeTracker:
 
         self.context = browser_context
         self.endpoint_pattern = endpoint_pattern
-        self._step_durations: Dict[str, float] = {}
+        self._step_durations: dict[str, float] = {}
         self._setup_tracking()
         self._initialized = True
 
     def _setup_tracking(self) -> None:
-        def handle_response(response: Any) -> None:
+        def handle_response(response) -> None:  # type: ignore[no-untyped-def]
             if self.endpoint_pattern in response.url and response.request.post_data:
                 try:
                     body = json.loads(response.request.post_data)
@@ -63,12 +64,12 @@ class StepServerTimeTracker:
 
         self.context.on("response", handle_response)
 
-    def get_step_duration_s(self, *, act_id: str) -> Optional[float]:
+    def get_step_duration_s(self, *, act_id: str) -> float | None:
         key = f"{act_id}"
         return self._step_durations.get(key)
 
     @classmethod
-    def get_instance(cls) -> Optional["StepServerTimeTracker"]:
+    def get_instance(cls) -> StepServerTimeTracker | None:
         if cls._instance is not None:
             return cls._instance
         return None

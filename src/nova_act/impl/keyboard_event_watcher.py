@@ -13,7 +13,8 @@
 # limitations under the License.
 import threading
 import time
-from typing import Any, Literal
+from types import TracebackType
+from typing import Literal, Type
 
 from nova_act.util.logging import setup_logging
 from nova_act.util.terminal_manager import TerminalInputManager
@@ -74,7 +75,9 @@ class KeyboardEventWatcher:
 
         return self
 
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> Literal[False]:
+    def __exit__(
+        self, exc_type: Type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+    ) -> Literal[False]:
         """Clean up the watcher thread and reset terminal when exiting the context."""
         if self.terminal_manager:
             self.terminal_manager.__exit__(exc_type, exc_val, exc_tb)

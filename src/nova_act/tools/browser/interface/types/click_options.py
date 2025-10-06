@@ -11,11 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing_extensions import TypedDict
+import warnings
 
-from nova_act.impl.actuation.playwright.dom_actuation.create_dom_events import DomEvents
+from nova_act.tools.browser.interface.types import click_types
+
+ClickOptions = click_types.ClickOptions
 
 
-class DispatchEvents(TypedDict):
-    type: str
-    init: DomEvents | dict[str, bool]
+__all__ = [
+    "ClickOptions",
+]
+
+warnings.warn(f"{__name__} is deprecated; use {click_types.__name__}")

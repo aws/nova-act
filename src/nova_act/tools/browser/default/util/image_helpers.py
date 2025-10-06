@@ -21,7 +21,7 @@ import requests
 from PIL import Image, ImageChops
 from playwright.sync_api import Page
 
-from nova_act.impl.actuation.interface.types.dimensions_dict import DimensionsDict
+from nova_act.tools.browser.interface.types.dimensions_dict import DimensionsDict
 
 
 def get_source_image_from_data_url(screenshot_data_url: str) -> Image.Image:

@@ -22,7 +22,6 @@ from botocore.awsrequest import AWSRequest
 from requests import Response
 from typing_extensions import TypedDict, cast
 
-from nova_act.impl.actuation.interface.browser import BrowserObservation
 from nova_act.impl.backend import BackendInfo
 from nova_act.impl.routes.base import (
     DEFAULT_REQUEST_CONNECT_TIMEOUT,
@@ -30,6 +29,7 @@ from nova_act.impl.routes.base import (
     Routes,
 )
 from nova_act.impl.routes.util import assert_json_response, construct_step_plan_request
+from nova_act.tools.browser.interface.browser import BrowserObservation
 from nova_act.types.act_errors import (
     ActBadRequestError,
     ActBadResponseError,

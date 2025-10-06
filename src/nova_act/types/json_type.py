@@ -11,15 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import warnings
+from typing import TypeAlias, Union
 
-from nova_act.impl.actuation.interface.types import click_types
-
-ClickOptions = click_types.ClickOptions
-
-
-__all__ = [
-    "ClickOptions",
-]
-
-warnings.warn(f"{__name__} is deprecated; use {click_types.__name__}")
+JSONType: TypeAlias = Union[dict[str, "JSONType"], list["JSONType"], str, int, float, bool, None]

@@ -16,15 +16,12 @@ from __future__ import annotations
 from abc import abstractmethod
 
 from strands import tool
-from strands.tools.decorator import DecoratedFunctionTool
-from typing_extensions import Any, Self, Union, final
+from typing_extensions import Self, final
 
-from nova_act.impl.actuation.interface.actuator import ActuatorBase
-from nova_act.impl.actuation.interface.types.click_types import ClickOptions, ClickType
+from nova_act.tools.actuator.interface.actuator import ActionType, ActuatorBase
+from nova_act.tools.browser.interface.types.click_types import ClickOptions, ClickType
 from nova_act.types.api.step import Observation
-
-# Ref: https://github.com/python/typing/issues/182
-JSONSerializable = Union[str, int, float, bool, None, dict[str, Any], list[Any]]
+from nova_act.types.json_type import JSONType
 
 
 class BrowserObservation(Observation):
@@ -58,7 +55,7 @@ class BrowserActionProvider:
         self.actuator = actuator
 
     @final
-    def provide(self) -> list[DecoratedFunctionTool[..., JSONSerializable]]:
+    def provide(self) -> list[ActionType]:
         """Provide Actions for a BrowserActuatorBase."""
         return [
             self.agent_click,
@@ -75,13 +72,13 @@ class BrowserActionProvider:
     @tool(name="agentClick")
     def agent_click(
         self: Self, box: str, click_type: ClickType | None = None, click_options: ClickOptions | None = None
-    ) -> JSONSerializable:
+    ) -> JSONType:
         """Clicks the center of the specified box."""
         return self.actuator.agent_click(box, click_type, click_options)
 
     @final
     @tool(name="agentScroll")
-    def agent_scroll(self: Self, direction: str, box: str, value: float | None = None) -> JSONSerializable:
+    def agent_scroll(self: Self, direction: str, box: str, value: float | None = None) -> JSONType:
         """Scrolls the element in the specified box in the specified direction.
 
         Valid directions are up, down, left, and right.
@@ -90,7 +87,7 @@ class BrowserActionProvider:
 
     @final
     @tool(name="agentType")
-    def agent_type(self: Self, value: str, box: str, pressEnter: bool = False) -> JSONSerializable:
+    def agent_type(self: Self, value: str, box: str, pressEnter: bool = False) -> JSONType:
         """Types the specified value into the element at the center of the
         specified box.
 
@@ -100,13 +97,13 @@ class BrowserActionProvider:
 
     @final
     @tool(name="goToUrl")
-    def go_to_url(self: Self, url: str) -> JSONSerializable:
+    def go_to_url(self: Self, url: str) -> JSONType:
         """Navigates to the specifed URL."""
         return self.actuator.go_to_url(url)
 
     @final
     @tool(name="return")
-    def _return(self: Self, value: str | None) -> JSONSerializable:
+    def _return(self: Self, value: str | None) -> JSONType:
         """Complete execution of the task and return to the user.
 
         Return can either be bare (no value) or a string literal.
@@ -115,19 +112,19 @@ class BrowserActionProvider:
 
     @final
     @tool(name="think")
-    def think(self: Self, value: str) -> JSONSerializable:
+    def think(self: Self, value: str) -> JSONType:
         """Has no effect on the environment. Should be used for reasoning about the next action."""
         return self.actuator.think(value)
 
     @final
-    @tool(name="throw new AgentError")
-    def throw_agent_error(self: Self, value: str) -> JSONSerializable:
+    @tool(name="throw")
+    def throw_agent_error(self: Self, value: str) -> JSONType:
         """Used when the task requested by the user is not possible."""
         return self.actuator.throw_agent_error(value)
 
     @final
     @tool(name="wait")
-    def wait(self: Self, seconds: float) -> JSONSerializable:
+    def wait(self: Self, seconds: float) -> JSONType:
         """Pauses execution for the specified number of seconds."""
         return self.actuator.wait(seconds)
 
@@ -139,7 +136,7 @@ class BrowserActuatorBase(ActuatorBase):
     _action_provider: BrowserActionProvider | None = None
 
     @final
-    def list_actions(self) -> list[DecoratedFunctionTool[..., Any]]:
+    def list_actions(self) -> list[ActionType]:
         """List the valid Actions this Actuator can take."""
         if self._action_provider is None:
             self._action_provider = BrowserActionProvider(self)
@@ -151,18 +148,18 @@ class BrowserActuatorBase(ActuatorBase):
         box: str,
         click_type: ClickType | None = None,
         click_options: ClickOptions | None = None,
-    ) -> JSONSerializable:
+    ) -> JSONType:
         """Clicks the center of the specified box."""
 
     @abstractmethod
-    def agent_scroll(self, direction: str, box: str, value: float | None = None) -> JSONSerializable:
+    def agent_scroll(self, direction: str, box: str, value: float | None = None) -> JSONType:
         """Scrolls the element in the specified box in the specified direction.
 
         Valid directions are up, down, left, and right.
         """
 
     @abstractmethod
-    def agent_type(self, value: str, box: str, pressEnter: bool = False) -> JSONSerializable:
+    def agent_type(self, value: str, box: str, pressEnter: bool = False) -> JSONType:
         """Types the specified value into the element at the center of the
         specified box.
 
@@ -170,29 +167,29 @@ class BrowserActuatorBase(ActuatorBase):
         """
 
     @abstractmethod
-    def go_to_url(self, url: str) -> JSONSerializable:
+    def go_to_url(self, url: str) -> JSONType:
         """Navigates to the specified URL."""
 
     @abstractmethod
-    def _return(self, value: str | None) -> JSONSerializable:
+    def _return(self, value: str | None) -> JSONType:
         """Complete execution of the task and return to the user.
 
         Return can either be bare (no value) or a string literal."""
 
     @abstractmethod
-    def think(self, value: str) -> JSONSerializable:
+    def think(self, value: str) -> JSONType:
         """Has no effect on the environment. Should be used for reasoning about the next action."""
 
     @abstractmethod
-    def throw_agent_error(self, value: str) -> JSONSerializable:
+    def throw_agent_error(self, value: str) -> JSONType:
         """Used when the task requested by the user is not possible."""
 
     @abstractmethod
-    def wait(self, seconds: float) -> JSONSerializable:
+    def wait(self, seconds: float) -> JSONType:
         """Pauses execution for the specified number of seconds."""
 
     @abstractmethod
-    def wait_for_page_to_settle(self) -> JSONSerializable:
+    def wait_for_page_to_settle(self) -> JSONType:
         """Ensure the browser page is ready for the next Action."""
 
     @abstractmethod

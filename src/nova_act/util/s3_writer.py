@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
-from typing import Any, Dict, Optional
 
 from boto3.session import Session
 from botocore.exceptions import ClientError
+from mypy_boto3_s3.service_resource import Bucket
 
 from nova_act import NovaAct
 from nova_act.types.hooks import StopHook
@@ -45,7 +45,7 @@ class S3Writer(StopHook):
         boto_session: Session,
         s3_bucket_name: str,
         s3_prefix: str = "",
-        metadata: Optional[Dict[str, str]] = None,
+        metadata: dict[str, str] | None = None,
     ):
         """Initialize the S3Writer.
 
@@ -147,7 +147,7 @@ class S3Writer(StopHook):
                     e,
                 )
 
-    def set_metadata(self, metadata: Dict[str, str]) -> None:
+    def set_metadata(self, metadata: dict[str, str]) -> None:
         """Set or update metadata to be applied to all S3 objects uploaded by this writer.
 
         Parameters
@@ -223,7 +223,7 @@ class S3Writer(StopHook):
         else:
             return f"{session_id}/{relative_path}"
 
-    def _upload_file_to_s3(self, bucket: Any, local_path: str, s3_key: str) -> None:
+    def _upload_file_to_s3(self, bucket: Bucket, local_path: str, s3_key: str) -> None:
         """Upload a file to S3 with error handling.
 
         Parameters
@@ -274,7 +274,7 @@ class S3Writer(StopHook):
             error_msg = f"Error uploading {local_path}: {error_code} - {error_message}. Original error: {e}"
             print(error_msg)
 
-    def _prepare_extra_s3_args(self) -> Optional[Dict[str, Dict[str, str]]]:
+    def _prepare_extra_s3_args(self) -> dict[str, dict[str, str]] | None:
         """Prepare extra arguments for S3 upload including metadata.
 
         Returns

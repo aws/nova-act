@@ -11,29 +11,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from nova_act.impl.actuation.playwright.dom_actuation.create_dom_events import (
-    create_focus_event_init,
+from nova_act.tools.browser.default.dom_actuation.create_dom_events import (
     create_mouse_event_init,
     create_pointer_event_init,
 )
-from nova_act.impl.actuation.playwright.dom_actuation.dispatch_events_dict import DispatchEvents
+from nova_act.tools.browser.default.dom_actuation.dispatch_events_dict import DispatchEvents
 
 
-def get_after_click_events(point: dict[str, float]) -> list[DispatchEvents]:
-    """Get events for after a click."""
+def get_after_type_events(point: dict[str, float]) -> list[DispatchEvents]:
+    """Get events for after typing."""
     return [
-        {"type": "pointermove", "init": create_pointer_event_init(point, -1, 0)},
-        {"type": "mousemove", "init": create_mouse_event_init(point, 0, 0)},
         {"type": "pointerout", "init": create_pointer_event_init(point, -1, 0)},
         {
             "type": "pointerleave",
             "init": create_pointer_event_init(point, -1, 0, False, False, False),
         },
-        {"type": "mouseout", "init": create_mouse_event_init(point, 0, 0)},
+        {"type": "mouseout", "init": create_mouse_event_init(point)},
         {
             "type": "mouseleave",
-            "init": create_mouse_event_init(point, 0, 0, False, False, False),
+            "init": create_mouse_event_init(point, -1, 0, False, False, False),
         },
-        {"type": "blur", "init": create_focus_event_init(False, False, True)},
-        {"type": "focusout", "init": create_focus_event_init(True, False, True)},
     ]

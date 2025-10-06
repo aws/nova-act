@@ -23,7 +23,7 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Page, sync_playwright
 
 from nova_act.impl.common import should_install_chromium_dependencies
-from nova_act.impl.playwright_instance_options import PlaywrightInstanceOptions
+from nova_act.tools.browser.default.playwright_instance_options import PlaywrightInstanceOptions
 from nova_act.types.errors import (
     ClientNotStarted,
     InvalidPlaywrightState,
@@ -63,6 +63,7 @@ class PlaywrightInstanceManager:
         self._use_default_chrome_browser = options.use_default_chrome_browser
         self._cdp_headers = options.cdp_headers
         self._proxy = options.proxy
+        self._cdp_use_existing_page = options.cdp_use_existing_page
 
         if self._cdp_endpoint_url is not None or self._use_default_chrome_browser:
             if self._record_video:
@@ -87,13 +88,17 @@ class PlaywrightInstanceManager:
 
     def _init_browser_context(self, context: BrowserContext, trusted_page: Page) -> Page:
         """Go to the starting page and exit."""
+        if self._cdp_use_existing_page:
+            return trusted_page
+        elif self._starting_page is None:
+            raise ValueError("starting_page cannot be None unless connecting to existing CDP context.")
 
         first_page = context.new_page()
         first_page.goto(self._starting_page)
         trusted_page.close()
         return first_page
 
-    def _launch_browser(self, context_options: Any) -> BrowserContext:
+    def _launch_browser(self, context_options: Any) -> BrowserContext:  # type: ignore[explicit-any]
         """Launches a Playwright Chromium based browser with Chromium as fallback."""
         if self._playwright is None:
             raise ValueError("Playwright instance is not initialized")
@@ -210,8 +215,11 @@ class PlaywrightInstanceManager:
                 context = browser.contexts[0]
                 if self.user_agent:
                     context.set_extra_http_headers({"User-Agent": self.user_agent})
-                trusted_page = context.new_page()
 
+                if self._cdp_use_existing_page:
+                    trusted_page = context.pages[-1]
+                else:
+                    trusted_page = context.new_page()
 
             else:
                 if not os.environ.get("NOVA_ACT_SKIP_PLAYWRIGHT_INSTALL"):

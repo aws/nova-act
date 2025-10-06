@@ -13,11 +13,11 @@
 # limitations under the License.
 from playwright.sync_api import Page
 
-from nova_act.impl.actuation.interface.types.dimensions_dict import DimensionsDict
-from nova_act.impl.actuation.playwright.dom_actuation.scroll_events import get_after_scroll_events
-from nova_act.impl.actuation.playwright.util.bbox_parser import bounding_box_to_point, parse_bbox_string
-from nova_act.impl.actuation.playwright.util.dispatch_dom_events import dispatch_event_sequence
-from nova_act.impl.actuation.playwright.util.element_helpers import get_element_at_point, is_pdf_page, locate_element
+from nova_act.tools.browser.default.dom_actuation.scroll_events import get_after_scroll_events
+from nova_act.tools.browser.default.util.bbox_parser import bounding_box_to_point, parse_bbox_string
+from nova_act.tools.browser.default.util.dispatch_dom_events import dispatch_event_sequence
+from nova_act.tools.browser.default.util.element_helpers import get_element_at_point, is_pdf_page, locate_element
+from nova_act.tools.browser.interface.types.dimensions_dict import DimensionsDict
 from nova_act.util.common_js_expressions import Expressions
 from nova_act.util.logging import setup_logging
 

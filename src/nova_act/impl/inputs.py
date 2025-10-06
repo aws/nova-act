@@ -261,7 +261,8 @@ def _validate_chrome_user_data_dir_ok_for_cdp(user_data_dir: str) -> None:
 
 
 def validate_base_parameters(
-    starting_page: str,
+    starting_page: str | None,
+    use_existing_page: bool,
     backend_uri: str,
     user_data_dir: str | None,
     profile_directory: str | None,
@@ -274,8 +275,11 @@ def validate_base_parameters(
     use_default_chrome_browser: bool,
     proxy: dict[str, str] | None = None,
 ) -> None:
-    validate_url(starting_page, "starting_page")
-    validate_url_ssl_certificate(ignore_https_errors, starting_page)
+    if not use_existing_page:
+        if starting_page is None:
+            raise ValidationFailed("starting_page is required when not connecting to existing CDP session.")
+        validate_url(starting_page, "starting_page")
+        validate_url_ssl_certificate(ignore_https_errors, starting_page)
     validate_url(backend_uri, "backend_uri")
 
     if use_default_chrome_browser:
@@ -318,11 +322,10 @@ def validate_base_parameters(
 
 
 def validate_length(
-    starting_page: str,
+    starting_page: str | None,
     profile_directory: str | None,
     user_data_dir: str,
     nova_act_api_key: str,
-    endpoint_name: str | None,
     cdp_endpoint_url: str | None,
     user_agent: str | None,
     logs_directory: str | None,
@@ -332,7 +335,6 @@ def validate_length(
         "starting_page": starting_page,
         "profile_directory": profile_directory,
         "user_data_dir": user_data_dir,
-        "endpoint_name": endpoint_name,
         "cdp_endpoint_url": cdp_endpoint_url,
         "user_agent": user_agent,
         "logs_directory": logs_directory,

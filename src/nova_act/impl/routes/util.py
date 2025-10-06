@@ -16,7 +16,7 @@ import json
 from requests import Response
 from typing_extensions import Any
 
-from nova_act.impl.actuation.interface.browser import BrowserObservation
+from nova_act.tools.browser.interface.browser import BrowserObservation
 from nova_act.types.act_errors import ActBadRequestError, ActBadResponseError, ActInternalServerError
 from nova_act.types.api.step import AgentRunCreate, StepPlanRequest
 from nova_act.types.state.act import Act
@@ -101,7 +101,6 @@ def construct_step_plan_request(
             "id": act.id,
             "plannerFunctionArgs": {"task": act.prompt},
             "plannerFunctionName": "act",
-            "planningModelServerHost": act.endpoint_name,
             "task": act.prompt,
         }
 

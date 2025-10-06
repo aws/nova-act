@@ -17,11 +17,11 @@ from datetime import datetime, timezone
 from playwright.sync_api import Page
 from typing_extensions import TypedDict
 
-from nova_act.impl.actuation.playwright.util.image_helpers import (
+from nova_act.tools.browser.default.util.image_helpers import (
     compare_images,
     take_screenshot_as_data_url,
 )
-from nova_act.impl.actuation.playwright.util.take_observation import save_data_url_to_file
+from nova_act.tools.browser.default.util.take_observation import save_data_url_to_file
 from nova_act.util.logging import setup_logging
 
 _LOGGER = setup_logging(__name__)

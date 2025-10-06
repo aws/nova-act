@@ -37,20 +37,94 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <style>
         body {{
             font-family: Arial, sans-serif;
-            margin: 20px;
-            background-color: #f5f5f5;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            max-height: 100vh;
+            width: 100vw;
+            box-sizing: border-box;
+            margin: 0;
+            font-size: 14px;
+            background: rgb(252, 252, 253);
         }}
-        h1, h3 {{
+        h1, h2, h3, h4 {{
             color: #333;
+            margin: 0;
+            padding: 8px 0;
+        }}
+        pre {{
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 14px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            margin: 0;
+            display: block;
+        }}
+        .action-viewer-title-container {{
+            border: 1px solid #ddd;
+            padding: 16px 32px 4px;
+            background: white;
+        }}
+        .run-info-container {{
+            flex-grow: 1;
+            overflow: scroll;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }}
+        .run-step-container {{
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 8px 16px;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }}
+        .id-container {{
+            display: flex;
+            font-size: 14px;
+            gap: 16px;
+            margin-top: 8px;
+        }}
+        .run-step-body {{
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }}
+        @media (max-width: 767px) {{
+            .id-container {{
+                display: flex;
+                font-size: 14px;
+                flex-direction: column;
+                gap: 0;
+                margin-top: 8px;
+            }}
+            .run-step-body {{
+                grid-template-columns: repeat(1, 1fr);
+                display: grid;
+                gap: 16px;
+            }}
         }}
     </style>
 </head>
 <body>
-    <h1>Action Viewer</h1>
-    <h3>Session ID: {session_id}</h3>
-    <h3>Act ID: {act_id}</h3>
-    <h3>Prompt: {prompt}</h3>
-    {run_info}
+    <div class="action-viewer-title-container">
+        <h2>Amazon Nova Act Action Viewer</h2>
+        <h4>Prompt</h4>
+        <pre>{prompt}</pre>
+        <div class="id-container">
+            <div style="padding: 8px 0;"><b>Session ID:</b> {session_id}</div>
+            <div style="padding: 8px 0;"><b>Act ID:</b> {act_id}</div>
+        </div>
+    </div>
+    <div class="run-info-container">
+        {run_info}
+    </div>
 </body>
 </html>"""
 
@@ -109,36 +183,35 @@ def format_run_info(
 
     server_time_info = ""
     if server_time_s is not None:
-        server_time_info = (
-            f'<p style="font-size: 14px; color: #666;"><strong>Server Time:</strong> {server_time_s:.3f}s</p>'
-        )
+        server_time_info = f"""
+            <div>
+                <div style="margin-bottom: 4px;font-weight: bold;">Server time:</div>
+                <div>{server_time_s:.3f}s</div>
+            </div>"""
 
     return f"""
-        <div style="border: 1px solid #ddd; border-radius: 8px; padding: 15px;
-            margin-bottom: 15px; margin-top:15px; background-color: #f9f9f9;">
-            <h4 style="margin:0; color: #333;">Step {steps}</h4>
+       <div class="run-step-container">
+            <h3 style="margin: 0;color: #333;padding: 0;">Step {steps}</h3>
 
-            <p style="font-size: 14px; display: flex; align-items: center;">
-            <strong style="margin-right: 5px;">Current URL:</strong>
-
-            <a href="{url}" target="_blank" style="color: #007bff;
-                text-decoration: none; max-width: 800px; overflow: hidden;
-                white-space: nowrap; text-overflow: ellipsis; font-size: 14px;">
-                {url}
-                </a>
-            </p>
-
-            <p style="font-size: 14px; color: #666;"><strong>Timestamp:</strong> {time}
-            </p>
-            {server_time_info}
-            <img src="{image}"
-                style="max-width: 800px; height: auto; width: 100%;
-                border: 1px solid #ccc; padding: 5px;
-                margin-bottom: 10px; border-radius: 5px; background-color: #fff;">
-
-            <pre style="background: #f4f4f4; padding: 10px; border-radius: 5px;
-                overflow-x: auto; font-size: 14px; white-space: pre-wrap; word-wrap: break-word;
-                margin: 0; display: block; border: 1px solid #ddd;">{escaped_response}</pre>
+            <div class="run-step-body">
+                <img src="{image}"
+                    style="border-radius: 5px;
+                    object-fit: contain;
+                    background-color: lightblue;
+                    width: 100%;">
+                <pre style="height: fit-content;">{escaped_response}</pre>
+                <div>
+                    <div style="margin-bottom: 4px;font-weight: bold;">Timestamp</div>
+                    <div>{time}</div>
+                </div>
+                <div style="text-overflow: ellipsis;white-space: nowrap;overflow: hidden;">
+                    <div style="margin-bottom: 4px;font-weight: bold;">Active URL</div>
+                    <a href="{url}" target="_blank" style="color: #007bff; text-decoration: none;">
+                        {url}
+                    </a>
+                </div>
+                {server_time_info}
+            </div>
         </div>
     """
 
@@ -301,9 +374,16 @@ class RunInfoCompiler:
                 server_time_s=step.server_time_s,
             )
         if result is not None:
-            result_div = f"""<pre style="background: #f4f4f4; padding: 10px; border-radius: 5px;
-                overflow-x: auto; font-size: 14px; white-space: pre-wrap; word-wrap: break-word;
-                margin: 0; display: block; border: 1px solid #ddd;">{result}</pre>"""
+            result_div = f"""
+                <div style="background: #f4f4f4;padding: 16px;
+                    border-radius: 5px;
+                    margin: 0 16px 16px 16px;
+                    border: 1px solid #ddd;
+                    gap: 8px;display: flex;
+                    flex-direction: column;">
+                    <div style="font-weight: bold;">Nova Act Result</div>
+                    <pre>{result}</pre>
+                </div>"""
             run_info += result_div
 
         # Compile Workflow View

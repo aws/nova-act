@@ -17,16 +17,11 @@ import os
 import shutil
 import tempfile
 import uuid
-from typing import Any, Dict, Literal, Type, cast
+from typing import Literal, Mapping, Type, cast
 
 from boto3.session import Session
 from playwright.sync_api import Page, Playwright
 
-from nova_act.impl.actuation.interface.browser import BrowserActuatorBase
-from nova_act.impl.actuation.interface.playwright_pages import PlaywrightPageManagerBase
-from nova_act.impl.actuation.playwright.default_nova_local_browser_actuator import (
-    DefaultNovaLocalBrowserActuator,
-)
 from nova_act.impl.backend import Backend, get_urls_for_backend
 from nova_act.impl.common import rsync_to_temp_dir
 from nova_act.impl.controller import NovaStateController
@@ -40,9 +35,14 @@ from nova_act.impl.inputs import (
     validate_timeout,
     validate_url,
 )
-from nova_act.impl.playwright_instance_options import PlaywrightInstanceOptions
 from nova_act.impl.run_info_compiler import RunInfoCompiler
 from nova_act.impl.telemetry import send_act_telemetry, send_environment_telemetry
+from nova_act.tools.browser.default.default_nova_local_browser_actuator import (
+    DefaultNovaLocalBrowserActuator,
+)
+from nova_act.tools.browser.default.playwright_instance_options import PlaywrightInstanceOptions
+from nova_act.tools.browser.interface.browser import BrowserActuatorBase
+from nova_act.tools.browser.interface.playwright_pages import PlaywrightPageManagerBase
 
 
 from nova_act.impl.routes.factory import for_backend
@@ -60,6 +60,7 @@ from nova_act.types.errors import (
 from nova_act.types.events import EventType, LogType
 from nova_act.types.features import PreviewFeatures
 from nova_act.types.hooks import StopHook
+from nova_act.types.json_type import JSONType
 from nova_act.types.state.act import Act
 from nova_act.util.event_handler import EventHandler
 from nova_act.util.jsonschema import (
@@ -74,7 +75,6 @@ from nova_act.util.logging import (
     setup_logging,
 )
 
-DEFAULT_ENDPOINT_NAME = "alpha-sunshine"
 DEFAULT_SCREEN_WIDTH = 1600
 DEFAULT_SCREEN_HEIGHT = 900
 
@@ -122,15 +122,15 @@ class NovaAct:
 
     def __init__(
         self,
-        starting_page: str,
+        starting_page: str | None = None,
         *,
         boto_session: Session | None = None,
         cdp_endpoint_url: str | None = None,
         cdp_headers: dict[str, str] | None = None,
+        cdp_use_existing_page: bool = False,
         chrome_channel: str | None = None,
         clone_user_data_dir: bool = True,
         actuator: ManagedActuatorType | BrowserActuatorBase = DefaultNovaLocalBrowserActuator,
-        endpoint_name: str | None = None,
         go_to_url_timeout: int | None = None,
         headless: bool = False,
         ignore_https_errors: bool = False,
@@ -154,7 +154,7 @@ class NovaAct:
         Parameters
         ----------
         starting_page : str
-            Starting web page for the browser window
+            Starting web page for the browser window. Can be omitted if re-using an existing CDP page.
         user_data_dir: str, optional
             Path to Chrome data storage (cookies, cache, etc.).
             If not specified, will use a temp dir.
@@ -185,12 +185,15 @@ class NovaAct:
             API key for interacting with NovaAct. Will override the NOVA_ACT_API_KEY environment variable
         playwright_instance: Playwright
             Add an existing Playwright instance for use
-        endpoint_name: str
-            The name of the inference endpoint to call for act() planning
         tty: bool
             Whether output logs should be formatted for a terminal (true) or file (false)
         cdp_endpoint_url: str, optional
-            A CDP endpoint to connect to
+            A Chrome DevTools Protocol (CDP) endpoint to connect to
+        cdp_headers: dict[str, str], optional
+            Additional HTTP headers to be sent when connecting to a CDP endpoint
+        cdp_use_existing_page: bool
+             If True, Nova Act will re-use an existing page from the CDP context rather
+             than opening a new one
         user_agent: str, optional
             Optionally override the user agent used by playwright.
         logs_directory: str, optional
@@ -205,8 +208,6 @@ class NovaAct:
             A list of stop hooks that are called when this object is stopped.
         use_default_chrome_browser: bool
             Use the locally installed Chrome browser. Only works on MacOS.
-        cdp_headers: dict[str, str], optional
-            Additional HTTP headers to be sent when connecting to a CDP endpoint
         preview: PreviewFeatures
             Optional preview features for opt-in.
         boto_session : Session, optional
@@ -223,7 +224,8 @@ class NovaAct:
         self._backend = self._determine_backend()
         self._backend_info = get_urls_for_backend(self._backend)
 
-        self._starting_page = starting_page or "https://www.google.com"
+        self._starting_page = starting_page
+
 
         if preview is not None:
             _LOGGER.warning(
@@ -245,6 +247,7 @@ class NovaAct:
 
         validate_base_parameters(
             starting_page=self._starting_page,
+            use_existing_page=bool(cdp_endpoint_url and cdp_use_existing_page),
             backend_uri=self._backend_info.api_uri,
             profile_directory=profile_directory,
             user_data_dir=user_data_dir,
@@ -289,7 +292,6 @@ class NovaAct:
 
         self._validate_auth()
 
-        self.endpoint_name = endpoint_name
 
         if self._nova_act_api_key:
             validate_length(
@@ -297,7 +299,6 @@ class NovaAct:
                 profile_directory=profile_directory,
                 user_data_dir=self._session_user_data_dir,
                 nova_act_api_key=self._nova_act_api_key,
-                endpoint_name=self.endpoint_name,
                 cdp_endpoint_url=cdp_endpoint_url,
                 user_agent=user_agent,
                 logs_directory=logs_directory,
@@ -309,12 +310,11 @@ class NovaAct:
         self.screen_width = screen_width
         self.screen_height = screen_height
 
-        self._session_id: str | None = None
-
-
         self._stop_hooks = stop_hooks
         self._log_stop_hooks_registration()
         user_browser_args = os.environ.get("NOVA_ACT_BROWSER_ARGS", "").split()
+
+        self._session_id: str | None = None
 
 
         playwright_options = PlaywrightInstanceOptions(
@@ -334,8 +334,10 @@ class NovaAct:
             use_default_chrome_browser=use_default_chrome_browser,
             cdp_headers=cdp_headers,
             proxy=proxy,
+            cdp_use_existing_page=cdp_use_existing_page,
             user_browser_args=user_browser_args,
         )
+        self._cdp_endpoint_url = cdp_endpoint_url
 
         self._actuator: BrowserActuatorBase
         self._dispatcher: ActDispatcher
@@ -368,12 +370,12 @@ class NovaAct:
             )
             self._actuator = actuator
 
-
         self._routes = for_backend(
             backend=self._backend,
             api_key=self._nova_act_api_key,
             boto_session=self._boto_session,
         )
+
 
         self._dispatcher = ActDispatcher(
             actuator=self._actuator,
@@ -381,6 +383,7 @@ class NovaAct:
             event_handler=self._event_handler,
             controller=self._controller,
         )
+
 
     def _log_stop_hooks_registration(self) -> None:
         """Log registered stop hooks for debugging purposes."""
@@ -567,8 +570,10 @@ class NovaAct:
 
         Raises:
             ValueError: If logs directory is not set
-            ClientNotStarted: If client is not started
         """
+        if not self._session_logs_directory:
+            raise ValueError("Session logs directory is not set.")
+
         return self._session_logs_directory
 
     def start(self) -> None:
@@ -587,7 +592,10 @@ class NovaAct:
             actuator_type = "playwright" if isinstance(self._actuator, DefaultNovaLocalBrowserActuator) else "custom"
 
             send_environment_telemetry(
-                self._backend_info.api_uri, self._nova_act_api_key, self._session_id, actuator_type
+                endpoint=self._backend_info.api_uri,
+                nova_act_api_key=self._nova_act_api_key,
+                session_id=self._session_id,
+                actuator_type=actuator_type,
             )
 
             self._actuator.start(starting_page=self._starting_page, session_logs_directory=self._session_logs_directory)
@@ -596,11 +604,12 @@ class NovaAct:
             self._run_info_compiler = RunInfoCompiler(self._session_logs_directory)
             session_logs_str = f" logs dir {self._session_logs_directory}" if self._session_logs_directory else ""
 
-            _TRACE_LOGGER.info(f"\nstart session {self._session_id} on {self._starting_page}{session_logs_str}\n")
+            loggable_url = self._starting_page or self._cdp_endpoint_url
+            _TRACE_LOGGER.info(f"\nstart session {self._session_id} on {loggable_url}{session_logs_str}\n")
             self._event_handler.send_event(
                 type=EventType.LOG,
                 log_level=LogType.INFO,
-                data=f"start session {self._session_id} on {self._starting_page}{session_logs_str}",
+                data=f"start session {self._session_id} on {loggable_url}{session_logs_str}",
             )
 
         except Exception as e:
@@ -669,8 +678,7 @@ class NovaAct:
         *,
         timeout: int | None = None,
         max_steps: int | None = None,
-        schema: Dict[str, Any] | None = None,
-        endpoint_name: str | None = None,
+        schema: Mapping[str, JSONType] | None = None,
         model_temperature: float | None = None,
         model_top_k: int | None = None,
         model_seed: int | None = None,
@@ -689,8 +697,6 @@ class NovaAct:
             Use this to make sure the agent doesn't get stuck forever trying different paths. Default is 30.
         schema: Dict[str, Any] | None
             An optional jsonschema, which the output should to adhere to
-        endpoint_name: str
-            The name of the inference endpoint to call for act() planning
         observation_delay_ms: int | None
             Additional delay in milliseconds before taking an observation of the page
 
@@ -710,9 +716,6 @@ class NovaAct:
         validate_prompt(prompt)
         validate_step_limit(max_steps)
 
-        if endpoint_name is None:
-            endpoint_name = self.endpoint_name
-
         if schema:
             validate_jsonschema_schema(schema)
             prompt = add_schema_to_prompt(prompt, schema)
@@ -721,7 +724,6 @@ class NovaAct:
         act = Act(
             prompt,
             session_id=str(self._session_id),
-            endpoint_name=endpoint_name,
             timeout=timeout or float("inf"),
             max_steps=max_steps,
             model_temperature=model_temperature,
@@ -750,7 +752,13 @@ class NovaAct:
             error = ActError(metadata=act.metadata, message=f"{type(e).__name__}: {e}")
             raise error from e
         finally:
-            send_act_telemetry(self._backend_info.api_uri, self._nova_act_api_key, act, result, error)
+            send_act_telemetry(
+                endpoint=self._backend_info.api_uri,
+                nova_act_api_key=self._nova_act_api_key,
+                act=act,
+                success=result,
+                error=error,
+            )
 
             if self._run_info_compiler:
                 file_path = self._run_info_compiler.compile(act, result)

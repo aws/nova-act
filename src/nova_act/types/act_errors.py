@@ -110,6 +110,9 @@ class ActActuationError(ActExecutionError):
     """Indicates the client failed to actuate a given command from the agent."""
 
 
+@set_default_message("Failed to invoke a tool.")
+class ActToolError(ActExecutionError):
+    """Indicates a failure running a tool."""
 
 
 class ActAPIError(ActError):

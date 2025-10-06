@@ -13,28 +13,29 @@
 # limitations under the License.
 
 import json
-from typing import Any, Dict
+from typing import Mapping
 
 import jsonschema
 
 from nova_act.types.act_result import ActResult
+from nova_act.types.json_type import JSONType
 
 BOOL_SCHEMA = {"type": "boolean"}
 
 
-def validate_jsonschema_schema(schema: Dict[str, Any]) -> None:
+def validate_jsonschema_schema(schema: Mapping[str, JSONType]) -> None:
     try:
         jsonschema.Draft7Validator.check_schema(schema)
     except jsonschema.SchemaError as e:
         raise jsonschema.SchemaError("Schema provided isn't a valid jsonschema") from e
 
 
-def add_schema_to_prompt(prompt: str, schema: Dict[str, Any]) -> str:
+def add_schema_to_prompt(prompt: str, schema: Mapping[str, JSONType]) -> str:
     schema_str: str = json.dumps(schema)
     return f"{prompt}, format output with jsonschema: {schema_str}"
 
 
-def populate_json_schema_response(result: ActResult, schema: Dict[str, Any]) -> ActResult:
+def populate_json_schema_response(result: ActResult, schema: Mapping[str, JSONType]) -> ActResult:
     if not result.response:
         return ActResult(
             response=result.response,

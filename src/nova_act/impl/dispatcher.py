@@ -18,19 +18,18 @@ import json
 import time
 from typing import Callable
 
-
-
-from nova_act.impl.actuation.interface.actuator import ActuatorBase
-from nova_act.impl.actuation.interface.browser import (
+from nova_act.impl.controller import ControlState, NovaStateController
+from nova_act.impl.interpreter import NovaActInterpreter
+from nova_act.impl.program import format_return_value
+from nova_act.impl.routes.base import Routes
+from nova_act.tools.actuator.interface.actuator import ActuatorBase
+from nova_act.tools.browser.interface.browser import (
     BrowserActuatorBase,
     BrowserObservation,
 )
-from nova_act.impl.actuation.interface.types.agent_redirect_error import (
+from nova_act.tools.browser.interface.types.agent_redirect_error import (
     AgentRedirectError,
 )
-from nova_act.impl.actuation.interpreter import InterpreterError, NovaActInterpreter
-from nova_act.impl.controller import ControlState, NovaStateController
-from nova_act.impl.routes.base import Routes
 
 
 from nova_act.types.act_errors import (
@@ -44,7 +43,7 @@ from nova_act.types.act_errors import (
     ActTimeoutError,
 )
 from nova_act.types.act_result import ActResult
-from nova_act.types.errors import ClientNotStarted, ValidationFailed
+from nova_act.types.errors import ClientNotStarted, InterpreterError, ValidationFailed
 from nova_act.types.events import EventType, LogType
 from nova_act.types.state.act import Act
 from nova_act.util.decode_string import decode_string
@@ -57,8 +56,6 @@ from nova_act.util.logging import (
 _TRACE_LOGGER = make_trace_logger()
 
 DEFAULT_ENDPOINT_NAME = "alpha-sunshine"
-
-
 
 
 def _log_program(program: str) -> None:
@@ -101,11 +98,10 @@ class ActDispatcher:
             raise ValidationFailed("actuator must be an instance of BrowserActuatorBase")
         self._actuator = actuator
         self._routes = routes
-        self._interpreter = NovaActInterpreter(
-            actuator=self._actuator,
-            event_handler=event_handler,
-        )
+        self._interpreter = NovaActInterpreter()
 
+        self._tools = actuator.list_actions()
+        self._tool_map = {tool.tool_name: tool for tool in self._tools}
 
         self._canceled = False
         self._event_handler = event_handler
@@ -126,9 +122,6 @@ class ActDispatcher:
 
         if self._routes is None or self._interpreter is None:
             raise ClientNotStarted("Run start() to start the client before accessing the Playwright Page.")
-
-        if not isinstance(self._actuator, BrowserActuatorBase):
-            raise ValidationFailed("actuator must be an instance of BrowserActuatorBase")
 
 
         error_executing_previous_step = None
@@ -185,12 +178,19 @@ class ActDispatcher:
                 error_executing_previous_step = None
 
                 try:
-                    interpreted_ast = self._interpreter.interpret_ast(step_object.model_output.program_ast)
+                    program = self._interpreter.interpret_ast(step_object.model_output.program_ast)
+                    program.compile(self._tool_map)
+                    program_result = program.run(self._event_handler)
 
+                    if throw_result := program_result.has_throw():
+                        message = format_return_value(throw_result.return_value)
+                        raise ActAgentFailed(message=message)
+                    elif exception_result := program_result.has_exception():
+                        assert exception_result.error is not None
+                        raise exception_result.error
 
                 except AgentRedirectError as e:
                     # Client wants to redirect the agent to try a different action
-                    is_act_done = False
                     error_executing_previous_step = e
                     _log_program("AgentRedirect: " + e.error_and_correction)
                 except ValueError as e:
@@ -210,12 +210,10 @@ class ActDispatcher:
                         raw_response=step_object.model_output.awl_raw_program,
                     )
                 else:
-                    is_act_done = interpreted_ast["is_act_done"]
-
-                if is_act_done:
-                    result = interpreted_ast["result"]
-                    act.complete(str(result) if result is not None else None)
-                    break
+                    if return_result := program_result.has_return():
+                        result = return_result.return_value
+                        act.complete(str(result) if result is not None else None)
+                        break
 
             if not act.is_complete:
                 raise ActExceededMaxStepsError(f"Exceeded max steps {act.max_steps} without return.")
@@ -240,5 +238,3 @@ class ActDispatcher:
 
     def cancel_prompt(self, act: Act | None = None) -> None:
         self._canceled = True
-
-

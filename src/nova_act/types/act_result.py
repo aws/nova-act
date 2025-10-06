@@ -12,12 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import dataclasses
-from typing import Any, Dict, List, TypeAlias, Union
 
 from nova_act.types.act_metadata import ActMetadata
-
-JSONType: TypeAlias = Union[Dict[str, Any], List[Any], str, int, float, bool]
-
+from nova_act.types.json_type import JSONType
 
 """
 Successful outcome of act()

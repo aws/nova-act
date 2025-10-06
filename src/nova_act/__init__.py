@@ -16,14 +16,13 @@ import pdb
 import sys
 import threading
 
-from nova_act.impl.actuation.interface.browser import BrowserActuatorBase, JSONSerializable
-from nova_act.impl.actuation.interface.playwright_pages import PlaywrightPageManagerBase
-from nova_act.impl.actuation.playwright.default_nova_local_browser_actuator import (
-    DefaultNovaLocalBrowserActuator,
-)
 from nova_act.impl.common import rsync_from_default_user_data
 from nova_act.impl.extension import ExtensionActuator
+
 from nova_act.nova_act import NovaAct
+from nova_act.tools.browser.default.default_nova_local_browser_actuator import DefaultNovaLocalBrowserActuator
+from nova_act.tools.browser.interface.browser import BrowserActuatorBase
+from nova_act.tools.browser.interface.playwright_pages import PlaywrightPageManagerBase
 from nova_act.types.act_errors import (
     ActActuationError,
     ActAgentError,
@@ -47,6 +46,7 @@ from nova_act.types.act_errors import (
 from nova_act.types.act_metadata import ActMetadata
 from nova_act.types.act_result import ActResult
 from nova_act.types.errors import NovaActError, StartFailed, StopFailed, ValidationFailed
+from nova_act.types.json_type import JSONType
 from nova_act.util.jsonschema import BOOL_SCHEMA
 from nova_act.util.logging import setup_logging
 
@@ -79,7 +79,7 @@ __all__ = [
     "BrowserActuatorBase",
     "ExtensionActuator",
     "DefaultNovaLocalBrowserActuator",
-    "JSONSerializable",
+    "JSONType",
     "rsync_from_default_user_data"
 ]
 

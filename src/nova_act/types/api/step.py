@@ -58,7 +58,6 @@ class AgentRunCreate(TypedDict):
     id: str
     plannerFunctionArgs: PlannerFunctionArgs
     plannerFunctionName: str
-    planningModelServerHost: str | None
     task: str | None
 
 

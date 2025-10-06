@@ -13,4 +13,6 @@ pytz
 strands-agents>=0.1.9
 strands-agents-tools
 Deprecated
-websockets
+boto3
+boto3-stubs
+mypy-boto3-s3

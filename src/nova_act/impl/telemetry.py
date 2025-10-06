@@ -27,9 +27,14 @@ _LOGGER = setup_logging(__name__)
 
 
 def send_act_telemetry(
-    endpoint: str, nova_act_api_key: str | None, act: Act, success: ActResult | None, error: NovaActError | None
+    endpoint: str,
+    nova_act_api_key: str | None,
+    act: Act,
+    success: ActResult | None,
+    error: NovaActError | None,
 ) -> None:
     """Send telemetry for the given act."""
+
     if not nova_act_api_key:
         return
 
@@ -85,6 +90,7 @@ def send_environment_telemetry(
     actuator_type: Literal["custom", "playwright"],
 ) -> None:
     """Send environment telemetry"""
+
     if not nova_act_api_key:
         return
 

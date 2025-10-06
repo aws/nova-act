@@ -15,17 +15,17 @@ import json
 
 from playwright.sync_api import Page
 
-from nova_act.impl.actuation.interface.types.agent_redirect_error import AgentRedirectError
-from nova_act.impl.actuation.interface.types.click_types import ClickOptions, ClickType
-from nova_act.impl.actuation.playwright.dom_actuation.click_events import get_after_click_events
-from nova_act.impl.actuation.playwright.util.bbox_parser import bounding_box_to_point, parse_bbox_string
-from nova_act.impl.actuation.playwright.util.dispatch_dom_events import dispatch_event_sequence
-from nova_act.impl.actuation.playwright.util.element_helpers import (
+from nova_act.tools.browser.default.dom_actuation.click_events import get_after_click_events
+from nova_act.tools.browser.default.util.bbox_parser import bounding_box_to_point, parse_bbox_string
+from nova_act.tools.browser.default.util.dispatch_dom_events import dispatch_event_sequence
+from nova_act.tools.browser.default.util.element_helpers import (
     check_if_native_dropdown,
     find_file_input_element,
     get_element_at_point,
     locate_element,
 )
+from nova_act.tools.browser.interface.types.agent_redirect_error import AgentRedirectError
+from nova_act.tools.browser.interface.types.click_types import ClickOptions, ClickType
 
 NATIVE_DROPDOWN_REDIRECT_MESSAGE = (
     "This dropdown cannot be clicked. Use agentType(<value>, <same bbox>), with one of these values: "

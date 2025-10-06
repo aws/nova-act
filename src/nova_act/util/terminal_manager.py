@@ -13,7 +13,8 @@
 # limitations under the License.
 import os
 import sys
-from typing import Any
+from types import TracebackType
+from typing import Type
 
 DEFAULT_TERMINAL_COLS = 80
 
@@ -61,7 +62,9 @@ class TerminalInputManager:
 
         return self
 
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    def __exit__(
+        self, exc_type: Type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+    ) -> None:
         if not self.is_interactive:
             return
 

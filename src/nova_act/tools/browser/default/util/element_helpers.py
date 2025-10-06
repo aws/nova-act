@@ -15,7 +15,7 @@ import time
 
 from playwright.sync_api import Locator, Page
 
-from nova_act.impl.actuation.interface.types.element_dict import ElementDict
+from nova_act.tools.browser.interface.types.element_dict import ElementDict
 from nova_act.util.logging import setup_logging
 
 _LOGGER = setup_logging(__name__)

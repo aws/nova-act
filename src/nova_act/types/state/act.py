@@ -37,7 +37,6 @@ class Act:
     # Required constructor params (immutable)
     prompt: str = field(on_setattr=frozen)
     session_id: str = field(on_setattr=frozen)
-    endpoint_name: str | None = field(on_setattr=frozen)
     timeout: float = field(on_setattr=frozen)
 
     # Optional constructor params (immutable)

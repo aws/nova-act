@@ -15,11 +15,10 @@ import os
 
 from playwright.sync_api import Page
 
-from nova_act.impl.actuation.interface.types.element_dict import ElementDict
-from nova_act.impl.actuation.playwright.dom_actuation.type_events import get_after_type_events
-from nova_act.impl.actuation.playwright.util.bbox_parser import bounding_box_to_point, parse_bbox_string
-from nova_act.impl.actuation.playwright.util.dispatch_dom_events import dispatch_event_sequence
-from nova_act.impl.actuation.playwright.util.element_helpers import (
+from nova_act.tools.browser.default.dom_actuation.type_events import get_after_type_events
+from nova_act.tools.browser.default.util.bbox_parser import bounding_box_to_point, parse_bbox_string
+from nova_act.tools.browser.default.util.dispatch_dom_events import dispatch_event_sequence
+from nova_act.tools.browser.default.util.element_helpers import (
     blur,
     check_if_native_dropdown,
     find_file_input_element,
@@ -27,6 +26,7 @@ from nova_act.impl.actuation.playwright.util.element_helpers import (
     is_element_focused,
     locate_element,
 )
+from nova_act.tools.browser.interface.types.element_dict import ElementDict
 from nova_act.util.logging import setup_logging
 
 _LOGGER = setup_logging(__name__)
@@ -99,8 +99,12 @@ def agent_type(
         # If element is not in focus, don't continue the actuation
         return
 
-    # clear the input using only playwright keyboard
-    page.keyboard.press("ControlOrMeta+A")
+    # Clear the input on Linux/Windows
+    page.keyboard.press("Control+A")
+    page.keyboard.press("Backspace")
+
+    # Clear the input on MacOS
+    page.keyboard.press("Meta+A")
     page.keyboard.press("Backspace")
 
     if len(value) > 10:
