@@ -16,17 +16,18 @@ import os
 from playwright.sync_api import Page
 
 from nova_act.tools.browser.default.dom_actuation.type_events import get_after_type_events
-from nova_act.tools.browser.default.util.bbox_parser import bounding_box_to_point, parse_bbox_string
+from nova_act.tools.browser.default.util.bbox_parser import bounding_box_to_point
 from nova_act.tools.browser.default.util.dispatch_dom_events import dispatch_event_sequence
 from nova_act.tools.browser.default.util.element_helpers import (
     blur,
     check_if_native_dropdown,
-    find_file_input_element,
     get_element_at_point,
     is_element_focused,
     locate_element,
 )
+from nova_act.tools.browser.default.util.file_upload_helpers import click_and_maybe_return_file_chooser
 from nova_act.tools.browser.interface.types.element_dict import ElementDict
+from nova_act.types.api.step import BboxTLBR
 from nova_act.util.logging import setup_logging
 
 _LOGGER = setup_logging(__name__)
@@ -53,19 +54,25 @@ def ensure_element_focus(page: Page, x: float, y: float, retries: int = 2) -> No
 
 
 def agent_type(
-    bounding_box: str,
+    bbox: BboxTLBR,
     value: str,
     page: Page,
+    modifier_key: str,
     additional_options: str | None = None,
 ) -> None:
-    bbox_dict = parse_bbox_string(bounding_box)
-    point = bounding_box_to_point(bbox_dict)
+    point = bounding_box_to_point(bbox)
 
-    # Handle unorthodox file input first, before fixating on an element
-    file_input_element = find_file_input_element(page, point["x"], point["y"])
-    if file_input_element:
-        handle_file_input(page, value, x=point["x"], y=point["y"], file_input_element=file_input_element)
-        return
+    if os.path.isfile(value):
+        # If trying to upload, check if there's a file chooser and if so, upload
+        chooser = click_and_maybe_return_file_chooser(
+            page,
+            x=point["x"],
+            y=point["y"],
+            timeout_ms=1500,
+        )
+        if chooser is not None:
+            chooser.set_files(value)
+            return
 
     element_info = get_element_at_point(page, point["x"], point["y"])
     if not element_info:
@@ -99,12 +106,7 @@ def agent_type(
         # If element is not in focus, don't continue the actuation
         return
 
-    # Clear the input on Linux/Windows
-    page.keyboard.press("Control+A")
-    page.keyboard.press("Backspace")
-
-    # Clear the input on MacOS
-    page.keyboard.press("Meta+A")
+    page.keyboard.press(f"{modifier_key}+A")
     page.keyboard.press("Backspace")
 
     if len(value) > 10:

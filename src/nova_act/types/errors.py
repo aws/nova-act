@@ -13,9 +13,6 @@
 # limitations under the License.
 from abc import ABC
 
-from nova_act.impl.backend import BackendInfo, is_helios_backend_info
-from nova_act.util.logging import create_warning_box
-
 
 class NovaActError(Exception, ABC):
     """Superclass for all NovaAct client exceptions."""
@@ -54,40 +51,8 @@ Known Usage Errors
 class AuthError(NovaActError):
     """Indicates there's error with user auth"""
 
-    def __init__(self, backend_info: BackendInfo, *, message: str = "Authentication failed.", request_id: str = ""):
-        warning = self._get_warning_message(backend_info=backend_info, message=message, request_id=request_id)
-        super().__init__(warning)
-
-    def _get_warning_message(self, backend_info: BackendInfo, message: str, request_id: str) -> str:
-        warning = self._get_api_key_warning_message(backend_info=backend_info, message=message, request_id=request_id)
-        if is_helios_backend_info(backend_info):
-            warning = self._get_iam_auth_warning_message(message)
-        return warning
-
-    def _get_iam_auth_warning_message(self, message: str) -> str:
-        warning = create_warning_box(
-            [
-                message,
-                "",
-                "Please ensure you have received confirmation that your IAM role is allowlisted "
-                "and that its policy has the required permissions. ",
-                "To join the waitlist, please go here: https://amazonexteu.qualtrics.com/jfe/form/SV_9siTXCFdKHpdwCa",
-            ]
-        )
-        return warning
-
-    def _get_api_key_warning_message(self, backend_info: BackendInfo, message: str, request_id: str) -> str:
-        warning = create_warning_box(
-            [message, "", f"Please ensure you are using a key from: {backend_info.keygen_uri}"]
-        )
-
-        if request_id:
-            warning += (
-                "\nIf you are sure the above requirements are satisfied and you are still facing AuthError, "
-                f"please submit an issue with this request ID: {request_id}"
-            )
-
-        return warning
+    def __init__(self, message: str):
+        super().__init__(message)
 
 
 class IAMAuthError(NovaActError):

@@ -70,16 +70,54 @@ def get_element_at_point(page: Page, x: float, y: float) -> ElementDict:
     element_info: ElementDict = page.evaluate(
         """
         ([x, y]) => {
-            const elem = document.elementFromPoint(x, y);
+            function deepElementFromPoint(root, x, y) {
+                let elem = root.elementFromPoint(x, y);
+                if (!elem) return null;
+
+                // Don't dive into shadow DOM if we found a select element
+                if (elem.tagName && elem.tagName.toLowerCase() === "select") {
+                    return elem;
+                }
+
+                // Dive into shadow DOM
+                if (elem.shadowRoot) {
+                    const shadowHit = deepElementFromPoint(elem.shadowRoot, x, y);
+                    if (shadowHit) return shadowHit;
+                }
+
+                // Dive into iframes
+                if (elem.tagName === "IFRAME") {
+                    try {
+                        const rect = elem.getBoundingClientRect();
+                        const frameDoc = elem.contentDocument;
+                        if (frameDoc) {
+                            const innerHit = deepElementFromPoint(frameDoc, x - rect.left, y - rect.top);
+                            if (innerHit) return innerHit;
+                        }
+                    } catch (err) {
+                        // Cross-origin iframe, can't access
+                    }
+                }
+
+                return elem;
+            }
+
+            const elem = deepElementFromPoint(document, x, y);
             if (!elem) return null;
+
+            const attributes = {};
+            if (elem.attributes) {
+                for (const attr of elem.attributes) {
+                    attributes[attr.name] = attr.value;
+                }
+            }
+
             return {
                 tagName: elem.tagName,
                 id: elem.id,
                 className: elem.className,
                 textContent: elem.textContent,
-                attributes: Object.fromEntries(
-                    [...elem.attributes].map(attr => [attr.name, attr.value])
-                )
+                attributes: attributes
             };
         }
         """,
@@ -97,60 +135,70 @@ def check_if_native_dropdown(page: Page, x: float, y: float) -> bool:
     if element_info is None:
         raise ValueError("No element found at point")
 
+    # Check if the element itself is a select
     if element_info["tagName"].lower() == "select":
         return True
 
-    return False
-
-
-def find_file_input_element(page: Page, x: float, y: float) -> str | None:
-    """Find file input selector if clicking triggers a file upload. Returns selector or None."""
-    result: str | None = page.evaluate(
+    # Also check if we need to traverse up to find a parent select (for shadow DOM/iframe cases)
+    result: bool = page.evaluate(
         """
         ([x, y]) => {
-            const elem = document.elementFromPoint(x, y);
-            if (!elem) return null;
+            function deepElementFromPoint(root, x, y) {
+                let elem = root.elementFromPoint(x, y);
+                if (!elem) return null;
 
-            // Direct file input
-            if (elem.tagName === 'INPUT' && elem.type === 'file') {
-                return elem.id ? `#${elem.id}` : 'input[type="file"]';
-            }
-
-            // Check container for file input
-            let container = elem.closest('.form-group, div[class*="upload"], div[class*="file"], label');
-            if (!container) {
-                // Only check form-wide for elements that are likely file upload triggers
-                const isFileUploadElement = elem.tagName === 'LABEL' ||
-                    (elem.textContent && /\b(upload|attach|browse|choose.*file)\b/i.test(elem.textContent));
-                if (isFileUploadElement) {
-                    container = elem.closest('form');
+                // Don't dive into shadow DOM if we found a select element
+                if (elem.tagName && elem.tagName.toLowerCase() === "select") {
+                    return elem;
                 }
-            }
-            if (container) {
-                const fileInput = container.querySelector('input[type="file"]');
-                if (fileInput) {
-                    return fileInput.id ? `#${fileInput.id}` : 'input[type="file"]';
+
+                // Dive into shadow DOM
+                if (elem.shadowRoot) {
+                    const shadowHit = deepElementFromPoint(elem.shadowRoot, x, y);
+                    if (shadowHit) return shadowHit;
                 }
-            }
 
-            // Check for upload keywords + any file input on page
-            const uploadKeywords = ['upload', 'attach', 'browse', 'choose', 'select file', 'add file', 'drag an image'];
-            const text = (elem.textContent || '').toLowerCase();
-            const className = typeof elem.className === 'string' ? elem.className.toLowerCase() : '';
-            const id = (elem.id || '').toLowerCase();
-
-            const hasUploadKeyword = uploadKeywords.some(keyword =>
-                text.includes(keyword) || className.includes(keyword) || id.includes(keyword)
-            );
-
-            if (hasUploadKeyword) {
-                const fileInput = document.querySelector('input[type="file"]');
-                if (fileInput) {
-                    return fileInput.id ? `#${fileInput.id}` : 'input[type="file"]';
+                // Dive into iframes
+                if (elem.tagName === "IFRAME") {
+                    try {
+                        const rect = elem.getBoundingClientRect();
+                        const frameDoc = elem.contentDocument;
+                        if (frameDoc) {
+                            const innerHit = deepElementFromPoint(frameDoc, x - rect.left, y - rect.top);
+                            if (innerHit) return innerHit;
+                        }
+                    } catch (err) {
+                        // Cross-origin iframe, can't access
+                    }
                 }
+
+                return elem;
             }
 
-            return null;
+            function shadowInclusiveParent(el) {
+                if (!el) return null;
+                if (el.parentElement) return el.parentElement;
+                const root = el.getRootNode();
+                if (root && root instanceof ShadowRoot) {
+                    return root.host || null;
+                }
+                return null;
+            }
+
+            function findNearestSelect(el) {
+                let current = el;
+                while (current) {
+                    if (current.tagName && current.tagName.toLowerCase() === "select") {
+                        return current;
+                    }
+                    current = shadowInclusiveParent(current);
+                }
+                return null;
+            }
+
+            const hitElement = deepElementFromPoint(document, x, y);
+            if (!hitElement) return false;
+            return !!findNearestSelect(hitElement);
         }
         """,
         [x, y],
@@ -160,7 +208,7 @@ def find_file_input_element(page: Page, x: float, y: float) -> str | None:
 
 def is_element_focused(page: Page, x: float, y: float) -> bool:
     """
-    Check if the element at the given coordinates is currently focused.
+    Check if the element or one of its children at the given coordinates is currently focused.
 
     Args:
         page: Playwright page object
@@ -179,7 +227,7 @@ def is_element_focused(page: Page, x: float, y: float) -> bool:
         """
         ([x, y]) => {
             const elem = document.elementFromPoint(x, y);
-            return elem === document.activeElement;
+            return elem.contains(document.activeElement);
         }
         """,
         [x, y],

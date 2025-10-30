@@ -16,13 +16,11 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
-import uuid
 from typing import Literal, Mapping, Type, cast
 
 from boto3.session import Session
 from playwright.sync_api import Page, Playwright
 
-from nova_act.impl.backend import Backend, get_urls_for_backend
 from nova_act.impl.common import rsync_to_temp_dir
 from nova_act.impl.controller import NovaStateController
 from nova_act.impl.dispatcher import ActDispatcher
@@ -37,6 +35,7 @@ from nova_act.impl.inputs import (
 )
 from nova_act.impl.run_info_compiler import RunInfoCompiler
 from nova_act.impl.telemetry import send_act_telemetry, send_environment_telemetry
+from nova_act.tools.actuator.interface.actuator import ActionType
 from nova_act.tools.browser.default.default_nova_local_browser_actuator import (
     DefaultNovaLocalBrowserActuator,
 )
@@ -45,13 +44,12 @@ from nova_act.tools.browser.interface.browser import BrowserActuatorBase
 from nova_act.tools.browser.interface.playwright_pages import PlaywrightPageManagerBase
 
 
-from nova_act.impl.routes.factory import for_backend
+from nova_act.impl.backends.factory import BackendFactory
 from nova_act.types.act_errors import ActError
 from nova_act.types.act_result import ActResult
 from nova_act.types.errors import (
     AuthError,
     ClientNotStarted,
-    IAMAuthError,
     NovaActError,
     StartFailed,
     StopFailed,
@@ -59,6 +57,7 @@ from nova_act.types.errors import (
 )
 from nova_act.types.events import EventType, LogType
 from nova_act.types.features import PreviewFeatures
+from nova_act.types.guardrail import GuardrailCallable
 from nova_act.types.hooks import StopHook
 from nova_act.types.json_type import JSONType
 from nova_act.types.state.act import Act
@@ -143,6 +142,7 @@ class NovaAct:
         record_video: bool = False,
         screen_width: int = DEFAULT_SCREEN_WIDTH,
         screen_height: int = DEFAULT_SCREEN_HEIGHT,
+        state_guardrail: GuardrailCallable | None = None,
         stop_hooks: list[StopHook] = [],
         tty: bool = True,
         use_default_chrome_browser: bool = False,
@@ -186,7 +186,10 @@ class NovaAct:
         playwright_instance: Playwright
             Add an existing Playwright instance for use
         tty: bool
-            Whether output logs should be formatted for a terminal (true) or file (false)
+            By default, NovaAct listens for ctrl+x signals from the terminal, allowing users to exit agent action
+            while keeping the browser session open (ctrl+c will kill the browser). The feature requires an
+            additional listener thread, so this variable allows users to disable the feature where a tty is not
+            available. Defaults to True. NOVA_ACT_DISABLE_TTY environment variable takes precedence over this value.
         cdp_endpoint_url: str, optional
             A Chrome DevTools Protocol (CDP) endpoint to connect to
         cdp_headers: dict[str, str], optional
@@ -204,6 +207,11 @@ class NovaAct:
             Max wait time on initial page load in seconds
         ignore_https_errors: bool
             Whether to ignore https errors for url to allow website with self-signed certificates
+        state_guardrail: GuardrailCallable, optional
+            A callback function that takes a GuardrailInputState and returns a GuardrailDecision.
+            Called after taking an observation but before invoking step on the backend.
+            If it returns GuardrailDecision.BLOCK, act() will raise ActGuardrailsError.
+            If it returns GuardrailDecision.PASS or is not set, execution continues normally.
         stop_hooks: list[StopHook]
             A list of stop hooks that are called when this object is stopped.
         use_default_chrome_browser: bool
@@ -218,12 +226,8 @@ class NovaAct:
             Proxy configuration for the browser. Should contain 'server', 'username', and 'password' keys.
         """
 
-        self._boto_session = boto_session
 
         self._run_info_compiler: RunInfoCompiler | None = None
-        self._backend = self._determine_backend()
-        self._backend_info = get_urls_for_backend(self._backend)
-
         self._starting_page = starting_page
 
 
@@ -245,10 +249,18 @@ class NovaAct:
         _chrome_channel = str(chrome_channel or os.environ.get("NOVA_ACT_CHROME_CHANNEL", "chrome"))
         _headless = headless or bool(os.environ.get("NOVA_ACT_HEADLESS"))
 
+        self._nova_act_api_key = nova_act_api_key or os.environ.get("NOVA_ACT_API_KEY")
+        self._boto_session = boto_session
+
+        self._backend = BackendFactory.create_backend(
+            api_key=self._nova_act_api_key,
+            boto_session=self._boto_session,
+        )
+
         validate_base_parameters(
             starting_page=self._starting_page,
             use_existing_page=bool(cdp_endpoint_url and cdp_use_existing_page),
-            backend_uri=self._backend_info.api_uri,
+            backend_url=self._backend.endpoints.api_url,
             profile_directory=profile_directory,
             user_data_dir=user_data_dir,
             screen_width=screen_width,
@@ -288,24 +300,24 @@ class NovaAct:
             validate_timeout(go_to_url_timeout)
         self.go_to_url_timeout = go_to_url_timeout
 
-        self._nova_act_api_key = nova_act_api_key or os.environ.get("NOVA_ACT_API_KEY") or ""
 
-        self._validate_auth()
+        validate_length(
+            starting_page=self._starting_page,
+            profile_directory=profile_directory,
+            user_data_dir=self._session_user_data_dir,
+            cdp_endpoint_url=cdp_endpoint_url,
+            user_agent=user_agent,
+            logs_directory=logs_directory,
+        )
 
-
-        if self._nova_act_api_key:
-            validate_length(
-                starting_page=self._starting_page,
-                profile_directory=profile_directory,
-                user_data_dir=self._session_user_data_dir,
-                nova_act_api_key=self._nova_act_api_key,
-                cdp_endpoint_url=cdp_endpoint_url,
-                user_agent=user_agent,
-                logs_directory=logs_directory,
-                backend=self._backend,
+        self._tty = tty and not os.environ.get("NOVA_ACT_DISABLE_TTY")
+        if self._tty and "PYTEST_CURRENT_TEST" in os.environ:
+            _LOGGER.warning(
+                "We noticed you are running NovaAct in a pytest runtime with `tty=True`! "
+                "For improved performance, we recommend `tty=False.` "
+                "If this is intended (e.g. you have terminal access and want to use ctrl+x "
+                "to cancel `act` calls), then you may ignore this warning."
             )
-
-        self._tty = tty
 
         self.screen_width = screen_width
         self.screen_height = screen_height
@@ -370,18 +382,13 @@ class NovaAct:
             )
             self._actuator = actuator
 
-        self._routes = for_backend(
-            backend=self._backend,
-            api_key=self._nova_act_api_key,
-            boto_session=self._boto_session,
-        )
-
 
         self._dispatcher = ActDispatcher(
             actuator=self._actuator,
-            routes=self._routes,
+            backend=self._backend,
             event_handler=self._event_handler,
             controller=self._controller,
+            state_guardrail=state_guardrail,
         )
 
 
@@ -392,57 +399,6 @@ class NovaAct:
             _LOGGER.info(f"Registered stop hooks: {', '.join(hook_names)}")
         else:
             _LOGGER.debug("No stop hooks registered")
-
-    def _determine_backend(self) -> Backend:
-        """Determines which Nova Act backend to use."""
-
-        if self._boto_session:
-            return Backend.HELIOS
-
-        return Backend.PROD
-
-    def _validate_auth(self) -> None:
-        """Validate that the NovaAct instance is using supported authentication methods."""
-        # Case 1: Both boto_session and API key provided (invalid)
-        if self._boto_session and self._nova_act_api_key:
-            raise IAMAuthError("Cannot set both API key and boto session!")
-
-        # Case 2: No authentication provided (invalid)
-        if not self._boto_session and not self._nova_act_api_key:
-            raise AuthError(backend_info=self._backend_info)  # at least API key must be set
-
-        # Case 3: Only boto_session provided (valid if credentials are valid)
-        if self._boto_session and not self._nova_act_api_key:
-            self._validate_boto_session(self._boto_session)
-            return
-
-        # Case 4: Only API key provided (valid)
-        if not self._boto_session and self._nova_act_api_key:
-            return
-
-    def _validate_boto_session(self, boto_session: Session) -> None:
-        """
-        Validate that the boto3 session has valid credentials associated with a real IAM identity.
-
-        Args:
-            boto_session: The boto3 session to validate
-
-        Raises:
-            IAMAuthError: If the boto3 session doesn't have valid credentials or the credentials
-                        are not associated with a real IAM identity
-        """
-        # Check if credentials exist
-        if not boto_session.get_credentials():
-            raise IAMAuthError("IAM credentials not found. Please ensure your boto3 session has valid credentials.")
-
-        # Verify credentials are associated with a real IAM identity
-        try:
-            sts_client = boto_session.client("sts")
-            sts_client.get_caller_identity()
-        except Exception as e:
-            raise IAMAuthError(
-                f"IAM validation failed: {str(e)}. Check your credentials with 'aws sts get-caller-identity'."
-            )
 
     def __del__(self) -> None:
         if hasattr(self, "_session_user_data_dir_is_temp") and self._session_user_data_dir_is_temp:
@@ -530,9 +486,6 @@ class NovaAct:
         assert self._dispatcher is not None
         return self._dispatcher
 
-    def _create_session_id(self) -> str:
-        return str(uuid.uuid4())
-
     def get_session_id(self) -> str:
         """Get the session ID for the current client.
 
@@ -584,7 +537,10 @@ class NovaAct:
 
 
         try:
-            self._session_id = self._create_session_id()
+            workflow_run = None
+            self._session_id = self._backend.create_session(workflow_run)
+
+
             set_logging_session(self._session_id)
             self._session_logs_directory = self._init_session_logs_directory(self._logs_directory, self._session_id)
 
@@ -592,7 +548,7 @@ class NovaAct:
             actuator_type = "playwright" if isinstance(self._actuator, DefaultNovaLocalBrowserActuator) else "custom"
 
             send_environment_telemetry(
-                endpoint=self._backend_info.api_uri,
+                endpoint=self._backend.endpoints.api_url,
                 nova_act_api_key=self._nova_act_api_key,
                 session_id=self._session_id,
                 actuator_type=actuator_type,
@@ -721,8 +677,15 @@ class NovaAct:
             prompt = add_schema_to_prompt(prompt, schema)
 
 
+        workflow_run = None
+        tools: list[ActionType] | None = None
+
+        assert self._session_id is not None, "Session ID should not be None when client is started"
+        act_id = self._backend.create_act(workflow_run, self._session_id, prompt, tools)
+
         act = Act(
-            prompt,
+            id=act_id,
+            prompt=prompt,
             session_id=str(self._session_id),
             timeout=timeout or float("inf"),
             max_steps=max_steps,
@@ -753,7 +716,7 @@ class NovaAct:
             raise error from e
         finally:
             send_act_telemetry(
-                endpoint=self._backend_info.api_uri,
+                endpoint=self._backend.endpoints.api_url,
                 nova_act_api_key=self._nova_act_api_key,
                 act=act,
                 success=result,
@@ -768,6 +731,7 @@ class NovaAct:
                     log_level=LogType.INFO,
                     data=f"** View your act run here: {file_path}",
                 )
+
 
         return result
 

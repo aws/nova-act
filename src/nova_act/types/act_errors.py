@@ -105,6 +105,8 @@ class ActCanceledError(ActExecutionError):
     """Indicates the client received a cancel signal and stopped."""
 
 
+
+
 @set_default_message("Encountered error actuating model actions.")
 class ActActuationError(ActExecutionError):
     """Indicates the client failed to actuate a given command from the agent."""
@@ -113,6 +115,11 @@ class ActActuationError(ActExecutionError):
 @set_default_message("Failed to invoke a tool.")
 class ActToolError(ActExecutionError):
     """Indicates a failure running a tool."""
+
+
+@set_default_message("Blocked by agent state guardrail")
+class ActStateGuardrailError(ActExecutionError):
+    """Indicates a client-provided agent state guardrail triggered."""
 
 
 class ActAPIError(ActError):

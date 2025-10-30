@@ -20,6 +20,7 @@ from typing_extensions import Self, final
 
 from nova_act.tools.actuator.interface.actuator import ActionType, ActuatorBase
 from nova_act.tools.browser.interface.types.click_types import ClickOptions, ClickType
+from nova_act.tools.browser.interface.types.scroll_types import ScrollDirection
 from nova_act.types.api.step import Observation
 from nova_act.types.json_type import JSONType
 
@@ -30,7 +31,7 @@ class BrowserObservation(Observation):
     Required fields:
         activeURL: str
         browserDimensions: BrowserDimensions
-        idToBboxMap: dict[int, Bbox]
+        idToBboxMap: dict[int, BboxTLWH]
         simplifiedDOM: str
         timestamp_ms: int
         userAgent: str
@@ -66,6 +67,8 @@ class BrowserActionProvider:
             self.think,
             self.throw_agent_error,
             self.wait,
+            self.wait_for_page_to_settle,
+            self.take_observation,
         ]
 
     @final
@@ -78,7 +81,7 @@ class BrowserActionProvider:
 
     @final
     @tool(name="agentScroll")
-    def agent_scroll(self: Self, direction: str, box: str, value: float | None = None) -> JSONType:
+    def agent_scroll(self: Self, direction: ScrollDirection, box: str, value: float | None = None) -> JSONType:
         """Scrolls the element in the specified box in the specified direction.
 
         Valid directions are up, down, left, and right.
@@ -128,6 +131,18 @@ class BrowserActionProvider:
         """Pauses execution for the specified number of seconds."""
         return self.actuator.wait(seconds)
 
+    @final
+    @tool(name="waitForPageToSettle")
+    def wait_for_page_to_settle(self: Self) -> JSONType:
+        """Ensure the browser page is ready for the next Action."""
+        return self.actuator.wait_for_page_to_settle()
+
+    @final
+    @tool(name="takeObservation")
+    def take_observation(self: Self) -> BrowserObservation:
+        """Take an observation of the existing browser state."""
+        return self.actuator.take_observation()
+
 
 class BrowserActuatorBase(ActuatorBase):
     """An Actuator for Browser use."""
@@ -152,7 +167,7 @@ class BrowserActuatorBase(ActuatorBase):
         """Clicks the center of the specified box."""
 
     @abstractmethod
-    def agent_scroll(self, direction: str, box: str, value: float | None = None) -> JSONType:
+    def agent_scroll(self, direction: ScrollDirection, box: str, value: float | None = None) -> JSONType:
         """Scrolls the element in the specified box in the specified direction.
 
         Valid directions are up, down, left, and right.

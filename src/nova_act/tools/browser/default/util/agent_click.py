@@ -16,24 +16,28 @@ import json
 from playwright.sync_api import Page
 
 from nova_act.tools.browser.default.dom_actuation.click_events import get_after_click_events
-from nova_act.tools.browser.default.util.bbox_parser import bounding_box_to_point, parse_bbox_string
+from nova_act.tools.browser.default.util.bbox_parser import bounding_box_to_point
 from nova_act.tools.browser.default.util.dispatch_dom_events import dispatch_event_sequence
 from nova_act.tools.browser.default.util.element_helpers import (
     check_if_native_dropdown,
-    find_file_input_element,
     get_element_at_point,
     locate_element,
 )
+from nova_act.tools.browser.default.util.file_upload_helpers import click_and_maybe_return_file_chooser
 from nova_act.tools.browser.interface.types.agent_redirect_error import AgentRedirectError
 from nova_act.tools.browser.interface.types.click_types import ClickOptions, ClickType
+from nova_act.types.api.step import BboxTLBR
 
 NATIVE_DROPDOWN_REDIRECT_MESSAGE = (
     "This dropdown cannot be clicked. Use agentType(<value>, <same bbox>), with one of these values: "
 )
+FILE_UPLOAD_REDIRECT_MESSAGE = (
+    "This file input cannot be clicked. Use agentType(<value>, <same bbox>), with this format: /path/to/file"
+)
 
 
 def agent_click(
-    bounding_box: str,
+    bbox: BboxTLBR,
     page: Page,
     click_type: ClickType = "left",
     click_options: ClickOptions | None = None,
@@ -42,15 +46,14 @@ def agent_click(
     Click at a point within a bounding box.
 
     Args:
-        bounding_box: String representation of the bounding box
+        bounding_box: A dict representation of a bounding box
         page: Playwright Page object
         click_type: Type of click to perform. Options are:
                     "left" - single left click (default)
                     "left-double" - double left click
                     "right" - right click
     """
-    bbox_dict = parse_bbox_string(bounding_box)
-    point = bounding_box_to_point(bbox_dict)
+    point = bounding_box_to_point(bbox)
 
     handle_special_elements(page, point["x"], point["y"])
 
@@ -62,7 +65,13 @@ def agent_click(
         raise AgentRedirectError(error_message)
 
     if click_type == "left":
-        page.mouse.click(point["x"], point["y"])
+        # Do left click via this helper which will also let us know if there's a file upload chooser after our click
+        # This is a work around to handle file uploads within cross-origin iframes,
+        # where we can't use javascript to find file input elements
+        chooser = click_and_maybe_return_file_chooser(page, x=point["x"], y=point["y"], timeout_ms=600)
+        if chooser is not None:
+            # The click has led to a file chooser. Redirect the agent
+            raise AgentRedirectError(FILE_UPLOAD_REDIRECT_MESSAGE)
     elif click_type == "left-double":
         page.mouse.dblclick(point["x"], point["y"])
     elif click_type == "right":
@@ -97,10 +106,66 @@ def get_dropdown_options(page: Page, x: float, y: float) -> list[dict[str, str]]
     options: list[dict[str, str]] | None = page.evaluate(
         """
         ([x, y]) => {
-            const elem = document.elementFromPoint(x, y);
-            if (!elem) return null;
-            if (!elem.options) return null;
-            return Array.from(elem.options).map(option => ({
+            function deepElementFromPoint(root, x, y) {
+                let elem = root.elementFromPoint(x, y);
+                if (!elem) return null;
+
+                // Don't dive into shadow DOM if we found a select element
+                if (elem.tagName && elem.tagName.toLowerCase() === "select") {
+                    return elem;
+                }
+
+                // Dive into shadow DOM
+                if (elem.shadowRoot) {
+                    const shadowHit = deepElementFromPoint(elem.shadowRoot, x, y);
+                    if (shadowHit) return shadowHit;
+                }
+
+                // Dive into iframes
+                if (elem.tagName === "IFRAME") {
+                    try {
+                        const rect = elem.getBoundingClientRect();
+                        const frameDoc = elem.contentDocument;
+                        if (frameDoc) {
+                            const innerHit = deepElementFromPoint(frameDoc, x - rect.left, y - rect.top);
+                            if (innerHit) return innerHit;
+                        }
+                    } catch (err) {
+                        // Cross-origin iframe, can't access
+                    }
+                }
+
+                return elem;
+            }
+
+            function shadowInclusiveParent(el) {
+                if (!el) return null;
+                if (el.parentElement) return el.parentElement;
+                const root = el.getRootNode();
+                if (root && root instanceof ShadowRoot) {
+                    return root.host || null;
+                }
+                return null;
+            }
+
+            function findNearestSelect(el) {
+                let current = el;
+                while (current) {
+                    if (current.tagName && current.tagName.toLowerCase() === "select") {
+                        return current;
+                    }
+                    current = shadowInclusiveParent(current);
+                }
+                return null;
+            }
+
+            const hitElement = deepElementFromPoint(document, x, y);
+            if (!hitElement) return null;
+
+            const selectElement = findNearestSelect(hitElement);
+            if (!selectElement || !selectElement.options) return null;
+
+            return Array.from(selectElement.options).map(option => ({
                 value: option.label,
                 label: option.label,
             }));
@@ -117,13 +182,7 @@ def handle_special_elements(page: Page, x: float, y: float) -> None:
     if element_info is None:
         return
 
-    # Check for file upload context first (more comprehensive)
-    if find_file_input_element(page, x, y):
-        raise AgentRedirectError(
-            "This file input cannot be clicked. Use agentType(<value>, <same bbox>), with this format: /path/to/file"
-        )
-
-    # Check for other special input types
+    # Check for special input types. Note that file uploads are handled by click_and_maybe_return_file_chooser
     if element_info["tagName"].lower() == "input":
         input_type = element_info.get("attributes", {}).get("type", "").lower()
 

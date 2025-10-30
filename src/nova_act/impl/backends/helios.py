@@ -22,13 +22,14 @@ from botocore.awsrequest import AWSRequest
 from requests import Response
 from typing_extensions import TypedDict, cast
 
-from nova_act.impl.backend import BackendInfo
-from nova_act.impl.routes.base import (
+from nova_act.impl.backends.base import AwlBackend, Endpoints
+from nova_act.impl.backends.common import (
     DEFAULT_REQUEST_CONNECT_TIMEOUT,
     DEFAULT_REQUEST_READ_TIMEOUT,
-    Routes,
+    assert_json_response,
+    construct_step_plan_request,
 )
-from nova_act.impl.routes.util import assert_json_response, construct_step_plan_request
+from nova_act.impl.program.base import CallResult
 from nova_act.tools.browser.interface.browser import BrowserObservation
 from nova_act.types.act_errors import (
     ActBadRequestError,
@@ -42,9 +43,13 @@ from nova_act.types.act_errors import (
 )
 from nova_act.types.api.step import PlanResponse, StepPlanRequest
 from nova_act.types.api.trace import TraceDict
-from nova_act.types.errors import AuthError, IAMAuthError
+from nova_act.types.errors import (
+    AuthError,
+    IAMAuthError,
+)
 from nova_act.types.state.act import Act
 from nova_act.types.state.step import ModelInput, ModelOutput, Step
+from nova_act.util.logging import create_warning_box
 
 
 class PlanInputDict(TypedDict):
@@ -76,15 +81,26 @@ class HeliosResponseDict(TypedDict):
     trace: TraceDict | None
 
 
-class HeliosRoutes(Routes):
+class HeliosBackend(AwlBackend[Endpoints]):
 
-    def __init__(self, backend_info: BackendInfo, boto_session: Session):
-        super().__init__(backend_info)
-        self.step_uri = f"{self.backend_info.api_uri}/nova-act/invoke"
+    def __init__(
+        self,
+        boto_session: Session,
+    ):
         self.boto_session = boto_session
+        super().__init__(
+        )
+        self.step_url = f"{self.endpoints.api_url}/nova-act/invoke"
 
-    def step(
-        self, act: Act, observation: BrowserObservation, error_executing_previous_step: Exception | None = None
+    def validate_auth(self) -> None:
+        self._validate_boto_session()
+
+    def awl_step(
+        self,
+        act: Act,
+        observation: BrowserObservation,
+        error_executing_previous_step: Exception | None = None,
+        call_results: list[CallResult] | None = None,
     ) -> Step:
         """Make a step request to Helios backend."""
         response = self._make_step_request(self._prepare_step_request(act, observation, error_executing_previous_step))
@@ -101,7 +117,7 @@ class HeliosRoutes(Routes):
             ):
                 raise ActBadResponseError(
                     status_code=status_code,
-                    message=f"Response from {self.step_uri} missing planOutput..planResponse.",
+                    message=f"Response from {self.step_url} missing planOutput..planResponse.",
                     raw_response=response.text,
                 )
             cast(HeliosResponseDict, json_response)
@@ -113,7 +129,7 @@ class HeliosRoutes(Routes):
             except Exception as e:
                 raise ActBadResponseError(
                     status_code=status_code,
-                    message=f"Bad response from {self.step_uri}: {e}",
+                    message=f"Bad response from {self.step_url}: {e}",
                     raw_response=response.text,
                 )
 
@@ -122,6 +138,7 @@ class HeliosRoutes(Routes):
                     image=observation["screenshotBase64"],
                     prompt=act.prompt,
                     active_url=observation["activeURL"],
+                    simplified_dom=observation["simplifiedDOM"],
                 ),
                 model_output=model_output,
                 observed_time=datetime.fromtimestamp(time.time(), tz=timezone.utc),
@@ -160,7 +177,7 @@ class HeliosRoutes(Routes):
                         raw_response=raw_response,
                     )
                 elif code == "UNAUTHORIZED_ERROR":
-                    raise AuthError(self.backend_info)
+                    raise AuthError(self.get_auth_warning_message())
                 elif code == "TOO_MANY_REQUESTS":
                     raise ActRequestThrottledError(
                         status_code=status_code,
@@ -176,14 +193,14 @@ class HeliosRoutes(Routes):
                 else:
                     raise ActBadResponseError(
                         status_code=status_code,
-                        message=f"Response from {self.step_uri} contains unknown error code: {code}.",
+                        message=f"Response from {self.step_url} contains unknown error code: {code}.",
                         raw_response=response.text,
                     )
 
             else:
                 raise ActBadResponseError(
                     status_code=status_code,
-                    message=f"Response from {self.step_uri} missing error code.",
+                    message=f"Response from {self.step_url} missing error code.",
                     raw_response=response.text,
                 )
 
@@ -206,13 +223,13 @@ class HeliosRoutes(Routes):
         headers = {"Content-Type": "application/json"}
         body = json.dumps(request)
         try:
-            headers = self._sign_request("POST", self.step_uri, headers, body)
+            headers = self._sign_request("POST", self.step_url, headers, body)
         except Exception as e:
-            raise AuthError(self.backend_info, message=f"Authentication error: {str(e)}")
+            raise AuthError(self.get_auth_warning_message(f"Authentication error: {str(e)}"))
 
         # Make request
         return requests.post(
-            self.step_uri,
+            self.step_url,
             headers=headers,
             data=body,
             timeout=(DEFAULT_REQUEST_CONNECT_TIMEOUT, DEFAULT_REQUEST_READ_TIMEOUT),
@@ -236,7 +253,7 @@ class HeliosRoutes(Routes):
         """
         credentials = self.boto_session.get_credentials()
         if not credentials:
-            raise IAMAuthError("AWS credentials not found")
+            raise AuthError(self.get_auth_warning_message("AWS credentials not found"))
 
         aws_request = AWSRequest(method=method, url=url, headers=headers.copy(), data=body)
 
@@ -244,3 +261,52 @@ class HeliosRoutes(Routes):
 
         signer.add_auth(aws_request)
         return dict(aws_request.headers)
+
+    def _validate_boto_session(self) -> None:
+        """
+        Validate that the boto3 session has valid credentials associated with a real IAM identity.
+
+        Args:
+            boto_session: The boto3 session to validate
+
+        Raises:
+            IAMAuthError: If the boto3 session doesn't have valid credentials or the credentials
+                        are not associated with a real IAM identity
+        """
+        # Check if credentials exist
+        try:
+            credentials = self.boto_session.get_credentials()
+            if not credentials:
+                raise IAMAuthError("IAM credentials not found. Please ensure your boto3 session has valid credentials.")
+        except Exception as e:
+            raise IAMAuthError(f"Failed to get credentials from boto session: {str(e)}")
+
+        # Verify credentials are associated with a real IAM identity
+        try:
+            sts_client = self.boto_session.client("sts")
+            sts_client.get_caller_identity()
+        except Exception as e:
+            raise IAMAuthError(
+                f"IAM validation failed: {str(e)}. Check your credentials with 'aws sts get-caller-identity'."
+            )
+
+    def get_auth_warning_message_for_backend(self, message: str) -> str:
+        return create_warning_box(
+            [
+                message,
+                "",
+                "Please ensure you have received confirmation that your IAM role is allowlisted "
+                "and that its policy has the required permissions. ",
+                "To join the waitlist, please go here: https://amazonexteu.qualtrics.com/jfe/form/SV_9siTXCFdKHpdwCa",
+            ]
+        )
+
+    @classmethod
+    def get_available_endpoints(cls) -> dict[str, Endpoints]:
+        return {
+            "helios": Endpoints(api_url="https://helios.nova.amazon.com"),
+        }
+
+    @classmethod
+    def get_default_endpoints(cls) -> Endpoints:
+        return cls.get_available_endpoints()["helios"]

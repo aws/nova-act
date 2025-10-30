@@ -11,11 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Union  # noqa: F401
+"""WorkflowRun DTO for passing workflow context data safely."""
 
-from typing_extensions import TypeAliasType
+from __future__ import annotations
 
-JSONType = TypeAliasType(
-    "JSONType",
-    "Union[dict[str, JSONType], list[JSONType], str, int, float, bool, None]",
-)
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class WorkflowRun:
+    """Immutable data transfer object for workflow context.
+
+    This DTO safely passes workflow context data between components without
+    creating tight coupling or state conflicts.
+    """
+
+    workflow_definition_name: str
+    workflow_run_id: str

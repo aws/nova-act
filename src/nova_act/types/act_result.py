@@ -32,8 +32,8 @@ class ActResult:
     matches_schema: bool | None = None
 
     def __repr__(self) -> str:
-        # Get all instance attributes except 'metadata'
-        fields = [field.name for field in dataclasses.fields(self) if field.name != "metadata"]
+        # Get all instance attributes except 'metadata' and 'steps_taken'
+        fields = [field.name for field in dataclasses.fields(self) if field.name not in ("metadata", "steps_taken")]
 
         # Build the custom fields string
         custom_fields = "\n    ".join(f"{field} = {getattr(self, field)}" for field in fields)
@@ -47,3 +47,4 @@ class ActResult:
 
         # If no custom fields, just show the metadata
         return f"{self.__class__.__name__}(\n" f"    metadata = {metadata_str}\n" f")"
+
