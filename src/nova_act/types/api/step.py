@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from dataclasses import dataclass
+
 from typing_extensions import NotRequired, TypedDict
 
 from nova_act.types.api.trace import TraceDict
@@ -27,7 +29,15 @@ class BrowserDimensions(TypedDict):
     scrollWidth: int
 
 
-class Bbox(TypedDict):
+@dataclass(frozen=True)
+class BboxTLBR:
+    top: float
+    left: float
+    bottom: float
+    right: float
+
+
+class BboxTLWH(TypedDict):
     width: float
     height: float
     x: float
@@ -39,7 +49,7 @@ class Observation(TypedDict):
 
     activeURL: str
     browserDimensions: BrowserDimensions
-    idToBboxMap: dict[int, Bbox]
+    idToBboxMap: dict[int, BboxTLWH]
     simplifiedDOM: str
     timestamp_ms: int
     userAgent: str
@@ -65,7 +75,7 @@ class StepPlanRequest(TypedDict):
     """Plan Request to the /step endpoint."""
 
     agentRunId: str
-    idToBboxMap: dict[int, Bbox]
+    idToBboxMap: dict[int, BboxTLWH]
     observation: Observation
     screenshotBase64: str
     tempReturnPlanResponse: bool

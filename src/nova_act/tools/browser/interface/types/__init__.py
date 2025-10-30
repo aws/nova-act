@@ -11,11 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Union  # noqa: F401
+"""Types for browser interface."""
 
-from typing_extensions import TypeAliasType
+from nova_act.tools.browser.interface.types.agent_redirect_error import AgentRedirectError
 
-JSONType = TypeAliasType(
-    "JSONType",
-    "Union[dict[str, JSONType], list[JSONType], str, int, float, bool, None]",
-)
+__all__ = ["AgentRedirectError"]

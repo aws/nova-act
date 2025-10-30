@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""Common utilities shared across backend implementations."""
+
 import json
 
 from requests import Response
@@ -20,6 +22,10 @@ from nova_act.tools.browser.interface.browser import BrowserObservation
 from nova_act.types.act_errors import ActBadRequestError, ActBadResponseError, ActInternalServerError
 from nova_act.types.api.step import AgentRunCreate, StepPlanRequest
 from nova_act.types.state.act import Act
+
+# Request timeout constants
+DEFAULT_REQUEST_CONNECT_TIMEOUT = 30  # 30s
+DEFAULT_REQUEST_READ_TIMEOUT = 5 * 60  # 5min
 
 
 def assert_json_response(  # type: ignore[explicit-any]

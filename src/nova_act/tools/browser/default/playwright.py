@@ -22,7 +22,7 @@ from playwright.sync_api import BrowserContext
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Page, sync_playwright
 
-from nova_act.impl.common import should_install_chromium_dependencies
+from nova_act.impl.common import quit_default_chrome_browser, should_install_chromium_dependencies
 from nova_act.tools.browser.default.playwright_instance_options import PlaywrightInstanceOptions
 from nova_act.types.errors import (
     ClientNotStarted,
@@ -81,6 +81,10 @@ class PlaywrightInstanceManager:
         else:
             self._user_browser_args = options.user_browser_args
 
+        # For local executions Playwright will resolve the the modifier key appropriately.
+        # Docs: https://playwright.dev/docs/api/class-keyboard#keyboard-press
+        self._modifier_key = "ControlOrMeta"
+
     @property
     def started(self) -> bool:
         """Check if the client is started."""
@@ -94,8 +98,8 @@ class PlaywrightInstanceManager:
             raise ValueError("starting_page cannot be None unless connecting to existing CDP context.")
 
         first_page = context.new_page()
-        first_page.goto(self._starting_page)
         trusted_page.close()
+        first_page.goto(self._starting_page)
         return first_page
 
     def _launch_browser(self, context_options: Any) -> BrowserContext:  # type: ignore[explicit-any]
@@ -150,23 +154,7 @@ class PlaywrightInstanceManager:
             if self._use_default_chrome_browser:
                 # Launch the default browser with a debug port and a freshly copied user data dir.
 
-                _LOGGER.info("Quitting Chrome if it's running...")
-                subprocess.run(["osascript", "-e", 'quit app "Google Chrome"'], check=True)
-
-                # Wait for it to exit.
-                exited = False
-                for _ in range(6):  # Wait up to 3 seconds.
-                    try:
-                        output = subprocess.check_output(["pgrep", "-x", "Google Chrome"])
-                        if output.strip():
-                            time.sleep(0.5)
-                            continue
-                    except subprocess.CalledProcessError:
-                        pass
-                    exited = True
-                    break
-
-                assert exited, "Could not quit Chrome"
+                quit_default_chrome_browser()
 
                 # Start Chrome with a debug port and the new user data dir.
                 _LOGGER.info(
@@ -213,6 +201,21 @@ class PlaywrightInstanceManager:
                 if not browser.contexts:
                     raise InvalidPlaywrightState("No contexts found in the browser")
                 context = browser.contexts[0]
+
+                cdp_session = browser.new_browser_cdp_session()
+                system_info = cdp_session.send("SystemInfo.getInfo")
+                cdp_session.detach()
+
+                # For CDP executions both the 'modelName' and 'modelVersion' values will be non-empty for only MacOS.
+                # Docs: https://chromedevtools.github.io/devtools-protocol/tot/SystemInfo/#method-getInfo
+                # Source: https://tiny.amazon.com/vhliqjec/sourchroorgchrochrosrcmain
+                model_name = system_info.get("modelName", "")
+                model_version = system_info.get("modelVersion", "")
+                if model_name and model_version:
+                    self._modifier_key = "Meta"
+                else:
+                    self._modifier_key = "Control"
+
                 if self.user_agent:
                     context.set_extra_http_headers({"User-Agent": self.user_agent})
 
@@ -365,3 +368,8 @@ class PlaywrightInstanceManager:
             raise ClientNotStarted("Playwright not attached, run start() to start")
 
         return self._context
+
+    @property
+    def modifier_key(self) -> str:
+        """Get the modifier key for the current platform"""
+        return self._modifier_key

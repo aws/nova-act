@@ -45,10 +45,6 @@ def get_log_level() -> int:
     return int(os.environ.get(_LOG_ENV_VAR, logging.INFO))
 
 
-def is_quiet() -> bool:
-    return get_log_level() > logging.INFO
-
-
 def setup_logging(module_name: str) -> logging.Logger:
     logger = logging.getLogger(module_name)
 
@@ -71,6 +67,13 @@ def make_trace_logger() -> logging.Logger:
     handler.setFormatter(formatter)
     logger.addHandler(handler)
     return logger
+
+
+def trace_log_lines(raw_lines: str) -> None:
+    """Trace log a multi-line statement to the terminal."""
+    lines = raw_lines.split("\n")
+    for line in lines:
+        make_trace_logger().info(f"{get_session_id_prefix()}{line}")
 
 
 class LoadScroller:

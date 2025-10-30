@@ -379,6 +379,22 @@ nova.page.keyboard.type(getpass())
 nova.act("sign in")
 ```
 
+### State Guardrails
+
+State guardrails allow you to control which URLs the agent can visit during execution. You can provide a callback function that inspects the browser state after each observation and decides whether to allow or block continued execution. If blocked, `act()` will raise `ActStateGuardrailError`. This is useful for preventing the agent from navigating to unauthorized domains or sensitive pages.
+
+```python
+from nova_act import NovaAct, GuardrailDecision, GuardrailInputState
+
+def url_guardrail(state: GuardrailInputState) -> GuardrailDecision:
+    if "blocked-domain.com" in state.browser_url:
+        return GuardrailDecision.BLOCK
+    return GuardrailDecision.PASS
+
+with NovaAct(starting_page="https://example.com", state_guardrail=url_guardrail) as nova:
+    nova.act("Navigate to the homepage")  # Will be blocked if it tries to visit blocked-domain.com
+```
+
 ### Captchas
 
 NovaAct will not solve captchas. It is up to the user to do that. If your script encounters captchas in certain places, you can do the following:
@@ -616,7 +632,6 @@ The constructor accepts the following:
 * `starting_page (str)`: The URL of the starting page; supports both web URLs (`https://`) and local file URLs (`file://`) (required argument)
   * Note: file URLs require passing `ignore_https_errors=True` to the constructor
 * `headless (bool)`: Whether to launch the browser in headless mode (defaults to `False`)
-* `quiet (bool)`: Whether to suppress logs to terminal (defaults to `False`)
 * `user_data_dir (str)`: Path to a [user data directory](https://chromium.googlesource.com/chromium/src/+/master/docs/user_data_dir.md#introduction), which stores browser session data like cookies and local storage (defaults to `None`).
 * `nova_act_api_key (str)`: The API key you generated for authentication; required if the `NOVA_ACT_API_KEY` environment variable is not set. If passed, takes precedence over the environment variable.
 * `logs_directory (str)`: The directory where NovaAct will output its logs, run info, and videos (if `record_video` is set to `True`).

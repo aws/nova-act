@@ -11,22 +11,31 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
+Sunshine Backend Implementation for Nova Act SDK.
+
+This module contains backend implementations for Sunshine environments:
+- SunshineBackend: Handles API key authentication for Sunshine environments
+- CloudAuthBackend: Handles internal authentication, extends SunshineBackend
+"""
+
 import json
 import time
-from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
+from typing import Dict
 
 import requests
 from requests import Response
-from typing_extensions import Any, Callable, NotRequired, TypedDict
+from typing_extensions import NotRequired, TypedDict
 
-from nova_act.impl.backend import BackendInfo
-from nova_act.impl.routes.base import (
+from nova_act.impl.backends.base import ApiKeyEndpoints, AwlBackend
+from nova_act.impl.backends.common import (
     DEFAULT_REQUEST_CONNECT_TIMEOUT,
     DEFAULT_REQUEST_READ_TIMEOUT,
-    Routes,
+    assert_json_response,
+    construct_step_plan_request,
 )
-from nova_act.impl.routes.util import assert_json_response, construct_step_plan_request
+from nova_act.impl.program.base import CallResult
 from nova_act.tools.browser.interface.browser import BrowserObservation
 from nova_act.types.act_errors import (
     ActBadRequestError,
@@ -44,6 +53,7 @@ from nova_act.types.api.step import StepPlanRequest
 from nova_act.types.errors import AuthError
 from nova_act.types.state.act import Act
 from nova_act.types.state.step import ModelInput, ModelOutput, Step
+from nova_act.util.logging import create_warning_box
 
 
 class StepRequest(TypedDict):
@@ -54,16 +64,42 @@ class StepRequest(TypedDict):
     actuationPlanRequest: str
 
 
-class SunshineRoutes(Routes):
-    """Routes for NGS backends."""
+class SunshineBackend(AwlBackend[ApiKeyEndpoints]):
+    """Backend for Sunshine environments with API key authentication."""
 
-    def __init__(self, backend_info: BackendInfo, api_key: str):
-        super().__init__(backend_info)
-        self.step_uri = self.backend_info.api_uri + "/step"
+    def get_auth_warning_message_for_backend(self, message: str) -> str:
+        return create_warning_box([message, "", f"Please ensure you are using a key from: {self.endpoints.keygen_url}"])
+
+    @classmethod
+    def get_available_endpoints(cls) -> Dict[str, ApiKeyEndpoints]:
+        return {
+            "prod": ApiKeyEndpoints(api_url="https://nova.amazon.com/agent", keygen_url="https://nova.amazon.com/act"),
+        }
+
+    @classmethod
+    def get_default_endpoints(cls) -> ApiKeyEndpoints:
+        return cls.get_available_endpoints()["prod"]
+
+    def __init__(
+        self,
+        api_key: str,
+    ):
         self.api_key = api_key
+        super().__init__(
+        )
 
-    def step(
-        self, act: Act, observation: BrowserObservation, error_executing_previous_step: Exception | None = None
+        self.step_uri = self.endpoints.api_url + "/step"
+
+    def validate_auth(self) -> None:
+        if len(self.api_key) != self.endpoints.valid_api_key_length:
+            raise AuthError(self.get_auth_warning_message("Invalid API key length"))
+
+    def awl_step(
+        self,
+        act: Act,
+        observation: BrowserObservation,
+        error_executing_previous_step: Exception | None = None,
+        call_results: list[CallResult] | None = None,
     ) -> Step:
         """Make a step request to Sunshine backend."""
         response = self._make_step_request(self._prepare_step_request(act, observation, error_executing_previous_step))
@@ -100,6 +136,7 @@ class SunshineRoutes(Routes):
                     image=observation["screenshotBase64"],
                     prompt=act.prompt,
                     active_url=observation["activeURL"],
+                    simplified_dom=observation["simplifiedDOM"],
                 ),
                 model_output=model_output,
                 observed_time=datetime.fromtimestamp(time.time(), tz=timezone.utc),
@@ -147,10 +184,7 @@ class SunshineRoutes(Routes):
                 elif reason in ["SESSION_SIZE_REACHED_MAX_ALLOWED_THRESHOLD"]:
                     raise ActExceededMaxStepsError(message=f"Exceeded max steps {act.max_steps} without return.")
                 elif reason in ["INVALID_API_KEY_PROVIDED", "INVALID_AWS_CREDENTIALS"]:
-                    raise AuthError(
-                        backend_info=self.backend_info,
-                        request_id=request_id or "",
-                    )
+                    raise AuthError(self.get_auth_warning_message(request_id=request_id or ""))
                 else:
                     # Unknown reason
                     raise ActBadRequestError(
@@ -160,10 +194,7 @@ class SunshineRoutes(Routes):
                         raw_response=response.text,  # this will contain `fields`
                     )
         elif status_code == 403:
-            raise AuthError(
-                backend_info=self.backend_info,
-                request_id=request_id or "",
-            )
+            raise AuthError(self.get_auth_warning_message(request_id=request_id or ""))
         elif status_code == 404:
             raise ActBadRequestError(
                 request_id=json_response.get("RequestId", request_id),
@@ -237,5 +268,3 @@ class SunshineRoutes(Routes):
             json=request,
             timeout=(DEFAULT_REQUEST_CONNECT_TIMEOUT, DEFAULT_REQUEST_READ_TIMEOUT),
         )
-
-

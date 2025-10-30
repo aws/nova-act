@@ -17,9 +17,7 @@ import uuid
 from typing import Any
 from urllib.parse import urlparse
 
-from nova_act.impl.backend import Backend, get_urls_for_backend
 from nova_act.types.errors import (
-    AuthError,
     InvalidChromeChannel,
     InvalidInputLength,
     InvalidMaxSteps,
@@ -60,10 +58,6 @@ SUPPORTED_CHANNELS = {
 }
 
 
-def _get_key_length_by_backend(backend: Backend) -> int:
-    return 36
-
-
 def validate_url(url: str, state: str) -> None:
     """Validate the url value.
 
@@ -78,6 +72,10 @@ def validate_url(url: str, state: str) -> None:
     """
     if not isinstance(url, str):
         raise InvalidURL(f"{state} URL provided is not a string.")
+
+    if url == "about:blank":
+        # allow about:blank navigation
+        return
 
     result = urlparse(url)
     if result.scheme != "file" and not all([result.scheme, result.netloc]):
@@ -263,7 +261,7 @@ def _validate_chrome_user_data_dir_ok_for_cdp(user_data_dir: str) -> None:
 def validate_base_parameters(
     starting_page: str | None,
     use_existing_page: bool,
-    backend_uri: str,
+    backend_url: str,
     user_data_dir: str | None,
     profile_directory: str | None,
     logs_directory: str | None,
@@ -280,7 +278,8 @@ def validate_base_parameters(
             raise ValidationFailed("starting_page is required when not connecting to existing CDP session.")
         validate_url(starting_page, "starting_page")
         validate_url_ssl_certificate(ignore_https_errors, starting_page)
-    validate_url(backend_uri, "backend_uri")
+
+    validate_url(backend_url, "backend_url")
 
     if use_default_chrome_browser:
         if sys.platform != "darwin":
@@ -325,26 +324,12 @@ def validate_length(
     starting_page: str | None,
     profile_directory: str | None,
     user_data_dir: str,
-    nova_act_api_key: str,
     cdp_endpoint_url: str | None,
     user_agent: str | None,
     logs_directory: str | None,
-    backend: Backend,
 ) -> None:
-    fields = {
-        "starting_page": starting_page,
-        "profile_directory": profile_directory,
-        "user_data_dir": user_data_dir,
-        "cdp_endpoint_url": cdp_endpoint_url,
-        "user_agent": user_agent,
-        "logs_directory": logs_directory,
-    }
-
-    for field_name, value in fields.items():
+    for field_name, value in locals().items():
         if value is not None and len(value) >= MAX_PARAM_LENGTH:
             raise InvalidInputLength(f"{field_name} exceeds max length of {MAX_PARAM_LENGTH}")
-
-    if nova_act_api_key is not None and len(nova_act_api_key) != _get_key_length_by_backend(backend):
-        raise AuthError(backend_info=get_urls_for_backend(backend), message="Invalid API key length")
 
 

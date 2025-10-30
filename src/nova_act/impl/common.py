@@ -14,6 +14,7 @@
 import os
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from platform import freedesktop_os_release, system
 
@@ -71,6 +72,9 @@ def rsync_from_default_user_data(dest_dir: str, extra_args: list[str] = ['--excl
     """rsync from system default user_data_dir (MacOs only)"""
     assert system() == "Darwin", "This function is only supported on macOS"
 
+    # Make sure default chrome is not running.
+    quit_default_chrome_browser()
+
     # empty string at end to create path with trailing slash
     # This ensures rsync copies the contents rather than the folder
     src_dir = os.path.join(str(Path.home()), "Library", "Application Support", "Google", "Chrome", "")
@@ -81,5 +85,28 @@ def rsync_from_default_user_data(dest_dir: str, extra_args: list[str] = ['--excl
         raise ValidationFailed(f"Cannot copy Chrome directory into itself or its subdirectory: {dest_dir}")
     os.makedirs(dest_dir, exist_ok=True)
     rsync_cmd = ["rsync", "-a", "--delete", *extra_args, src_dir, dest_dir]
+    _LOGGER.info(f"rsync from Chrome default user data to {dest_dir}...")
     subprocess.run(rsync_cmd, check=True)
     return dest_dir
+
+
+def quit_default_chrome_browser() -> None:
+    assert system() == "Darwin", "This function is only supported on macOS"
+
+    _LOGGER.info("Quitting Chrome if it's running...")
+    subprocess.run(["osascript", "-e", 'quit app "Google Chrome"'], check=True)
+
+    # Wait for it to exit.
+    exited = False
+    for _ in range(6):  # Wait up to 3 seconds.
+        try:
+            output = subprocess.check_output(["pgrep", "-x", "Google Chrome"])
+            if output.strip():
+                time.sleep(0.5)
+                continue
+        except subprocess.CalledProcessError:
+            pass
+        exited = True
+        break
+
+    assert exited, "Could not quit Chrome"

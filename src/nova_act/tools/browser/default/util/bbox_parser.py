@@ -13,10 +13,11 @@
 # limitations under the License.
 from typing import Dict
 
+from nova_act.types.api.step import BboxTLBR
 from nova_act.types.errors import InterpreterError
 
 
-def parse_bbox_string(bbox_string: str) -> Dict[str, float]:
+def parse_bbox_string(bbox_string: str) -> BboxTLBR:
     """Convert a bounding box string to a dictionary representation.
 
     Args:
@@ -25,10 +26,6 @@ def parse_bbox_string(bbox_string: str) -> Dict[str, float]:
     Returns:
         A dictionary with keys 'top', 'bottom', 'left', 'right' representing the bounding rectangle
     """
-    # Validate input format
-    if not isinstance(bbox_string, str):
-        raise InterpreterError(f"Expected string, got {type(bbox_string)}: {bbox_string}")
-
     bbox_string = bbox_string.strip()
     if not bbox_string.startswith("<box>") or not bbox_string.endswith("</box>"):
         raise InterpreterError(
@@ -50,15 +47,12 @@ def parse_bbox_string(bbox_string: str) -> Dict[str, float]:
     except ValueError as e:
         raise InterpreterError(f"Invalid coordinate values in bounding box: {bbox_string}. Error: {e}")
 
-    top, left, bottom, right = coords
-
-    # Return the bounding rectangle as a dictionary with top, bottom, left, right
-    return {"left": left, "top": top, "right": right, "bottom": bottom}
+    return BboxTLBR(*coords)
 
 
-def bounding_box_to_point(box: Dict[str, float]) -> Dict[str, float]:
+def bounding_box_to_point(bbox: BboxTLBR) -> Dict[str, float]:
     # Calculate the center point of the bounding box
-    center_x = (box["left"] + box["right"]) / 2
-    center_y = (box["top"] + box["bottom"]) / 2
+    center_x = (bbox.left + bbox.right) / 2
+    center_y = (bbox.top + bbox.bottom) / 2
 
     return {"x": center_x, "y": center_y}

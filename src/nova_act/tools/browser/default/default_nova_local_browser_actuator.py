@@ -22,6 +22,7 @@ from nova_act.tools.browser.default.playwright_instance_options import Playwrigh
 from nova_act.tools.browser.default.util.agent_click import agent_click
 from nova_act.tools.browser.default.util.agent_scroll import agent_scroll
 from nova_act.tools.browser.default.util.agent_type import agent_type
+from nova_act.tools.browser.default.util.bbox_parser import parse_bbox_string
 from nova_act.tools.browser.default.util.go_to_url import go_to_url
 from nova_act.tools.browser.default.util.take_observation import take_observation
 from nova_act.tools.browser.default.util.wait import WAIT_FOR_PAGE_TO_SETTLE_CONFIG, wait_for_page_to_settle
@@ -31,7 +32,8 @@ from nova_act.tools.browser.interface.browser import (
 )
 from nova_act.tools.browser.interface.playwright_pages import PlaywrightPageManagerBase
 from nova_act.tools.browser.interface.types.click_types import ClickOptions
-from nova_act.types.api.step import Bbox
+from nova_act.tools.browser.interface.types.scroll_types import ScrollDirection
+from nova_act.types.api.step import BboxTLWH
 from nova_act.types.json_type import JSONType
 from nova_act.util.common_js_expressions import Expressions
 
@@ -74,15 +76,17 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
         click_options: ClickOptions | None = None,
     ) -> JSONType:
         """Clicks the center of the specified box."""
-        agent_click(box, self._playwright_manager.main_page, click_type or "left", click_options)
+        bbox = parse_bbox_string(box)
+        agent_click(bbox, self._playwright_manager.main_page, click_type or "left", click_options)
         return None
 
-    def agent_scroll(self, direction: str, box: str, value: float | None = None) -> JSONType:
+    def agent_scroll(self, direction: ScrollDirection, box: str, value: float | None = None) -> JSONType:
         """Scrolls the element in the specified box in the specified direction.
 
         Valid directions are up, down, left, and right.
         """
-        agent_scroll(self._playwright_manager.main_page, direction, box, value)
+        bbox = parse_bbox_string(box)
+        agent_scroll(self._playwright_manager.main_page, direction, bbox, value)
         return None
 
     def agent_type(self, value: str, box: str, pressEnter: bool = False) -> JSONType:
@@ -91,7 +95,14 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
 
         If desired, the agent can press enter after typing the string.
         """
-        agent_type(box, value, self._playwright_manager.main_page, "pressEnter" if pressEnter else None)
+        bbox = parse_bbox_string(box)
+        agent_type(
+            bbox,
+            value,
+            self._playwright_manager.main_page,
+            self._playwright_manager.modifier_key,
+            "pressEnter" if pressEnter else None,
+        )
         return None
 
     def go_to_url(self, url: str) -> JSONType:
@@ -149,7 +160,7 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
         assert dimensions is not None
         assert user_agent is not None
 
-        id_to_bbox_map: dict[int, Bbox] = {}
+        id_to_bbox_map: dict[int, BboxTLWH] = {}
         simplified_dom = ""
 
         screenshot_data_url = take_observation(self._playwright_manager.main_page, dimensions)

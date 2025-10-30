@@ -17,7 +17,6 @@ import json
 
 from playwright.sync_api import BrowserContext
 
-from nova_act.impl.backend import URLS_BY_BACKEND, Backend
 from nova_act.util.logging import setup_logging
 
 _LOGGER = setup_logging(__name__)

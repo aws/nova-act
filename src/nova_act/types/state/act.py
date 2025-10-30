@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import time
-import uuid
 
 # using dataclasses for end states
 from typing import Dict
@@ -21,9 +20,10 @@ from typing import Dict
 from attrs import define, field
 from attrs.setters import frozen
 
+from nova_act.tools.actuator.interface.actuator import ActionType
 from nova_act.types.act_metadata import ActMetadata
 from nova_act.types.act_result import ActResult
-from nova_act.types.state.step import Step
+from nova_act.types.state.step import StepWithProgram
 
 DEFAULT_ACT_MAX_STEPS = 30
 
@@ -35,6 +35,7 @@ def _convert_max_steps(x: int | None) -> int:
 @define
 class Act:
     # Required constructor params (immutable)
+    id: str = field(on_setattr=frozen)
     prompt: str = field(on_setattr=frozen)
     session_id: str = field(on_setattr=frozen)
     timeout: float = field(on_setattr=frozen)
@@ -50,13 +51,12 @@ class Act:
     model_seed: int | None = field(default=None, on_setattr=frozen)
     observation_delay_ms: int | None = field(default=None, on_setattr=frozen)
 
-    # generate act_id and start_time on construction; make immutable
-    id: str = field(factory=lambda: str(uuid.uuid4()), on_setattr=frozen, init=False)
+    # generate start_time on construction; make immutable
     start_time: float = field(factory=lambda: time.time(), on_setattr=frozen, init=False)
 
     # rest of fields are mutable
     end_time: float | None = field(factory=lambda: None, init=False)
-    _steps: list[Step] = field(factory=list, init=False)
+    _steps: list[StepWithProgram] = field(factory=list, init=False)
     _result: ActResult | None = field(factory=lambda: None, init=False)
 
     acknowledged: bool = field(factory=lambda: False, init=False)
@@ -64,7 +64,7 @@ class Act:
     did_timeout: bool = field(factory=lambda: False, init=False)
 
     @property
-    def steps(self) -> list[Step]:
+    def steps(self) -> list[StepWithProgram]:
         return self._steps.copy()  # Return a copy to prevent direct modification
 
     @property
@@ -87,12 +87,17 @@ class Act:
     def result(self) -> ActResult | None:
         return self._result
 
-    def add_step(self, step: Step) -> None:
+    def add_step(self, step: StepWithProgram) -> None:
         if self.is_complete:
             raise ValueError("Cannot add steps to a completed Act")
         self._steps.append(step)
 
     def complete(self, response: str | None) -> None:
         self.end_time = time.time()
-        self._result = ActResult(response=response, metadata=self.metadata)
+        # fmt: off
+        self._result = ActResult(
+            response=response,
+            metadata=self.metadata,
+        )
+        # fmt: on
         self.is_complete = True

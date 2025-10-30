@@ -14,9 +14,10 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from datetime import datetime
 
+from nova_act.impl.program.base import Program
 from nova_act.types.api.step import Statement
 from nova_act.types.api.trace import TraceDict
 
@@ -26,6 +27,7 @@ class ModelInput:
     image: str
     prompt: str
     active_url: str
+    simplified_dom: str
 
 
 @dataclass(frozen=True)
@@ -71,3 +73,15 @@ class Step:
             raise ValueError("Screenshot is required")
         if not self.model_output.awl_raw_program:
             raise ValueError("Program body is required")
+
+    def with_program(self, program: Program) -> StepWithProgram:
+        """Create a new instance with an interpreted Program."""
+        return StepWithProgram(
+            program=program,
+            **{field.name: getattr(self, field.name) for field in fields(self)},
+        )
+
+
+@dataclass(frozen=True, kw_only=True)
+class StepWithProgram(Step):
+    program: Program

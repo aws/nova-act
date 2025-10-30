@@ -33,6 +33,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; img-src 'self' data:">
     <title>NovaAct Agent Run</title>
     <style>
         body {{
@@ -144,6 +145,7 @@ class StepInfo(TypedDict):
 
     request: StepObjectInput | EmptyRequest
     response: StepObjectOutput | None
+    screenshotWithBbox: str | None
 
 
 def _add_bbox_to_image(image: str, response: str) -> str:
@@ -178,8 +180,9 @@ def format_run_info(
 ) -> str:
     image = _add_bbox_to_image(image, response)
 
-    # HTML escape the response to prevent HTML interpretation of <box> tags
+    # HTML escape the url and response to prevent HTML interpretation of <box> tags and to protect against xss
     escaped_response = html.escape(response)
+    escaped_url = html.escape(url)
 
     server_time_info = ""
     if server_time_s is not None:
@@ -206,8 +209,8 @@ def format_run_info(
                 </div>
                 <div style="text-overflow: ellipsis;white-space: nowrap;overflow: hidden;">
                     <div style="margin-bottom: 4px;font-weight: bold;">Active URL</div>
-                    <a href="{url}" target="_blank" style="color: #007bff; text-decoration: none;">
-                        {url}
+                    <a href="{escaped_url}" target="_blank" style="color: #007bff; text-decoration: none;">
+                        {escaped_url}
                     </a>
                 </div>
                 {server_time_info}
@@ -251,11 +254,15 @@ def _extract_step_info(act: Act) -> list[StepInfo]:
     step_info = []
     for step in act.steps:
         request: StepObjectInput | EmptyRequest = {}
+        screenshot_with_bbox = None
         if step.model_input:
             request = StepObjectInput(
                 screenshot=step.model_input.image,
                 prompt=step.model_input.prompt,
                 metadata={"activeURL": step.model_input.active_url},
+            )
+            screenshot_with_bbox = _add_bbox_to_image(
+                step.model_input.image, step.model_output.awl_raw_program if step.model_output else ""
             )
         step_data = StepInfo(
             request=request,
@@ -268,6 +275,7 @@ def _extract_step_info(act: Act) -> list[StepInfo]:
                 if step.model_output
                 else None
             ),
+            screenshotWithBbox=screenshot_with_bbox,
         )
         step_info.append(step_data)
     return step_info
@@ -374,6 +382,9 @@ class RunInfoCompiler:
                 server_time_s=step.server_time_s,
             )
         if result is not None:
+            # Escape any HTML which might be in serialized ActResult string to avoid risk
+            # of xss vulnerabilities in model response
+            escaped_result_str = html.escape(str(result))
             result_div = f"""
                 <div style="background: #f4f4f4;padding: 16px;
                     border-radius: 5px;
@@ -382,7 +393,7 @@ class RunInfoCompiler:
                     gap: 8px;display: flex;
                     flex-direction: column;">
                     <div style="font-weight: bold;">Nova Act Result</div>
-                    <pre>{result}</pre>
+                    <pre>{escaped_result_str}</pre>
                 </div>"""
             run_info += result_div
 
@@ -391,7 +402,7 @@ class RunInfoCompiler:
             run_info=run_info,
             session_id=act.session_id,
             act_id=act.id,
-            prompt=act.prompt,
+            prompt=html.escape(act.prompt),
         )
         return html_content
 

@@ -11,11 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Union  # noqa: F401
+from dataclasses import dataclass
+from typing import Literal
 
-from typing_extensions import TypeAliasType
 
-JSONType = TypeAliasType(
-    "JSONType",
-    "Union[dict[str, JSONType], list[JSONType], str, int, float, bool, None]",
-)
+@dataclass
+class ScrollPosition:
+    x: float
+    y: float
+
+
+ScrollDirection = Literal["up", "down", "left", "right"]

@@ -12,14 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Sequence, TypeAlias
 
 from deprecated import deprecated
 from strands import tool
 from strands.tools.decorator import DecoratedFunctionTool
 from strands.types.tools import ToolSpec
-
-from nova_act.types.json_type import JSONType
 
 
 @deprecated(version="2.0.200", reason="the `@action` decorator is no longer required.")
@@ -28,7 +26,7 @@ def action(method: Callable[..., Any]) -> Callable[..., Any]:  # type: ignore[ex
     return tool(method)
 
 
-ActionType = DecoratedFunctionTool[..., JSONType]  # type: ignore[explicit-any]
+ActionType: TypeAlias = DecoratedFunctionTool[..., Any]  # type: ignore[explicit-any]
 """An Action the NovaAct client can carry out upon model request."""
 
 

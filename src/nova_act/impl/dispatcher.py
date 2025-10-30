@@ -14,55 +14,43 @@
 from __future__ import annotations
 
 import functools
-import json
 import time
 from typing import Callable
 
+from nova_act.impl.backends.factory import NovaActBackend
 from nova_act.impl.controller import ControlState, NovaStateController
-from nova_act.impl.interpreter import NovaActInterpreter
-from nova_act.impl.program import format_return_value
-from nova_act.impl.routes.base import Routes
+from nova_act.impl.program.base import Call, Program
+from nova_act.impl.program.runner import ProgramRunner, format_return_value
 from nova_act.tools.actuator.interface.actuator import ActuatorBase
 from nova_act.tools.browser.interface.browser import (
     BrowserActuatorBase,
-    BrowserObservation,
 )
 from nova_act.tools.browser.interface.types.agent_redirect_error import (
     AgentRedirectError,
 )
-
-
 from nova_act.types.act_errors import (
     ActAgentFailed,
-    ActBadResponseError,
     ActCanceledError,
     ActError,
     ActExceededMaxStepsError,
     ActExecutionError,
-    ActInvalidModelGenerationError,
     ActTimeoutError,
 )
 from nova_act.types.act_result import ActResult
-from nova_act.types.errors import ClientNotStarted, InterpreterError, ValidationFailed
+from nova_act.types.errors import ClientNotStarted, ValidationFailed
 from nova_act.types.events import EventType, LogType
+from nova_act.types.guardrail import GuardrailCallable
 from nova_act.types.state.act import Act
-from nova_act.util.decode_string import decode_string
 from nova_act.util.event_handler import EventHandler
 from nova_act.util.logging import (
     get_session_id_prefix,
     make_trace_logger,
+    trace_log_lines,
 )
 
 _TRACE_LOGGER = make_trace_logger()
 
 DEFAULT_ENDPOINT_NAME = "alpha-sunshine"
-
-
-def _log_program(program: str) -> None:
-    """Log a program to the terminal."""
-    lines = program.split("\n")
-    for line in lines:
-        _TRACE_LOGGER.info(f"{get_session_id_prefix()}{line}")
 
 
 def _handle_act_fail(f: Callable[[ActDispatcher, Act], ActResult]) -> Callable[[ActDispatcher, Act], ActResult]:
@@ -90,22 +78,22 @@ class ActDispatcher:
     def __init__(
         self,
         actuator: ActuatorBase | None,
-        routes: Routes,
+        backend: NovaActBackend,
         controller: NovaStateController,
         event_handler: EventHandler,
+        state_guardrail: GuardrailCallable | None = None,
     ):
         if not isinstance(actuator, BrowserActuatorBase):
             raise ValidationFailed("actuator must be an instance of BrowserActuatorBase")
         self._actuator = actuator
-        self._routes = routes
-        self._interpreter = NovaActInterpreter()
-
+        self._backend = backend
         self._tools = actuator.list_actions()
         self._tool_map = {tool.tool_name: tool for tool in self._tools}
 
         self._canceled = False
         self._event_handler = event_handler
         self._controller = controller
+        self._program_runner = ProgramRunner(self._event_handler, state_guardrail)
 
     def _cancel_act(self, act: Act) -> None:
         _TRACE_LOGGER.info(f"\n{get_session_id_prefix()}Terminating agent workflow")
@@ -120,103 +108,73 @@ class ActDispatcher:
     def dispatch(self, act: Act) -> ActResult:
         """Dispatch an Act with given Backend and Actuator."""
 
-        if self._routes is None or self._interpreter is None:
+        if self._backend is None:
             raise ClientNotStarted("Run start() to start the client before accessing the Playwright Page.")
 
 
-        error_executing_previous_step = None
+        step_object = None
+        step_idx = 0
+
+        # Create and run initial Program
+        initial_calls: list[Call] = []
+        if act.observation_delay_ms:
+            initial_calls += [Call(name="wait", kwargs={"seconds": act.observation_delay_ms / 1000})]
+        initial_calls += [Call(name="waitForPageToSettle", kwargs={}), Call(name="takeObservation", kwargs={})]
+        program = Program(calls=initial_calls)
+        executable = program.compile(self._tool_map)
+        program_result = self._program_runner.run(executable)
+
+        # Make sure initial Program run succeeded
+        if exception_result := program_result.has_exception():
+            assert exception_result.error is not None  # TODO: improve typing of CallResult
+            raise exception_result.error
 
         with self._controller as control:
             end_time = time.time() + act.timeout
-            for i in range(1, act.max_steps + 1):
+
+            while True:
+                # Check time out / max steps
                 if time.time() > end_time:
                     act.did_timeout = True
                     raise ActTimeoutError()
 
-                if control.state == ControlState.CANCELLED:
-                    self._cancel_act(act)
+                if step_idx >= act.max_steps:
+                    raise ActExceededMaxStepsError(f"Exceeded max steps {act.max_steps} without return.")
 
-                if act.observation_delay_ms:
-                    _TRACE_LOGGER.info(f"{get_session_id_prefix()}Observation delay: {act.observation_delay_ms}ms")
-                    self._event_handler.send_event(
-                        type=EventType.ACTION,
-                        action="wait",
-                        data=f"Observation delay: {act.observation_delay_ms}ms",
-                    )
-                    self._actuator.wait(act.observation_delay_ms / 1000)
+                # Get a Program from the model
+                step_object = self._backend.step(act, program_result.call_results, self._tool_map)
+                act.add_step(step_object)
+                program = step_object.program
 
-                self._actuator.wait_for_page_to_settle()
-
-                observation: BrowserObservation = self._actuator.take_observation()
-                self._event_handler.send_event(type=EventType.ACTION, action="observation", data=observation)
-                paused = False
-
+                # Handle pause/cancel conditions
                 while control.state == ControlState.PAUSED:
-                    paused = True
                     time.sleep(0.1)
 
                 if control.state == ControlState.CANCELLED:
                     self._cancel_act(act)
 
-                # Take another observation if we were paused
-                if paused:
-                    observation = self._actuator.take_observation()
-                    self._event_handler.send_event(type=EventType.ACTION, action="observation", data=observation)
-
-                _TRACE_LOGGER.info(f"{get_session_id_prefix()}...")
-                step_object = self._routes.step(act, observation, error_executing_previous_step)
-                raw_program_body = step_object.model_output.awl_raw_program
-                if isinstance(raw_program_body, str):
-                    lines = raw_program_body.split("\\n")
-                    decoded_lines = []
-                    for line in lines:
-                        decoded_lines.append(decode_string(line))
-                    raw_program_body = "\n".join(decoded_lines)
-                _log_program(raw_program_body)
-                act.add_step(step_object)
-
-                error_executing_previous_step = None
-
+                # Compile and run the program
                 try:
-                    program = self._interpreter.interpret_ast(step_object.model_output.program_ast)
-                    program.compile(self._tool_map)
-                    program_result = program.run(self._event_handler)
+                    executable = program.compile(self._tool_map)
+                    program_result = self._program_runner.run(executable)
 
                     if throw_result := program_result.has_throw():
                         message = format_return_value(throw_result.return_value)
                         raise ActAgentFailed(message=message)
                     elif exception_result := program_result.has_exception():
-                        assert exception_result.error is not None
+                        assert exception_result.error is not None  # TODO: improve typing of CallResult
                         raise exception_result.error
 
                 except AgentRedirectError as e:
                     # Client wants to redirect the agent to try a different action
-                    error_executing_previous_step = e
-                    _log_program("AgentRedirect: " + e.error_and_correction)
-                except ValueError as e:
-                    # Interpreter received invalid Statements from server
-                    raise ActBadResponseError(
-                        request_id=step_object.model_output.request_id,
-                        status_code=200,
-                        message=str(e),
-                        raw_response=json.dumps(step_object.model_output.program_ast),
-                    )
-                except InterpreterError as e:
-                    # Interpreter received invalid action type or arguments from model
-                    raise ActInvalidModelGenerationError(
-                        request_id=step_object.model_output.request_id,
-                        status_code=200,
-                        message=str(e),
-                        raw_response=step_object.model_output.awl_raw_program,
-                    )
-                else:
-                    if return_result := program_result.has_return():
-                        result = return_result.return_value
-                        act.complete(str(result) if result is not None else None)
-                        break
+                    trace_log_lines("AgentRedirect: " + e.error_and_correction)
 
-            if not act.is_complete:
-                raise ActExceededMaxStepsError(f"Exceeded max steps {act.max_steps} without return.")
+                if return_result := program_result.has_return():
+                    result = return_result.return_value
+                    act.complete(str(result) if result is not None else None)
+                    break
+
+                step_idx += 1
 
         if act.result is None:
             raise ActExecutionError("Act completed without a result.")
