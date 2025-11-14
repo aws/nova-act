@@ -49,6 +49,12 @@ def prepare_kwargs_for_actuation_calls(tool_name: str, args: List[JSONType]) -> 
                     kwargs["click_type"] = args[1]
             return kwargs
 
+        case "agentHover":
+            if len(args) != 1:
+                raise ValueError(f"Invalid number of arguments for '{tool_name}': expected 1, got {len(args)}")
+            kwargs = {"box": args[0]}
+            return kwargs
+
         case "agentScroll":
             if len(args) != 2:
                 raise ValueError(f"Invalid number of arguments for '{tool_name}': expected 2, got {len(args)}")

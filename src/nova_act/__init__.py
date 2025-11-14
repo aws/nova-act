@@ -14,7 +14,7 @@
 import builtins
 import pdb
 import sys
-import threading
+
 
 from nova_act.impl.common import rsync_from_default_user_data
 from nova_act.impl.extension import ExtensionActuator
@@ -45,11 +45,12 @@ from nova_act.types.act_errors import (
     ActTimeoutError,
 )
 from nova_act.types.act_metadata import ActMetadata
-from nova_act.types.act_result import ActResult
+from nova_act.types.act_result import ActGetResult, ActResult
 from nova_act.types.errors import NovaActError, StartFailed, StopFailed, ValidationFailed
+from nova_act.types.features import SecurityOptions
 from nova_act.types.guardrail import GuardrailDecision, GuardrailInputState
 from nova_act.types.json_type import JSONType
-from nova_act.util.jsonschema import BOOL_SCHEMA
+from nova_act.util.jsonschema import BOOL_SCHEMA, STRING_SCHEMA
 from nova_act.util.logging import setup_logging
 
 __all__ = [
@@ -73,12 +74,15 @@ __all__ = [
     "ActTimeoutError",
     "ActMetadata",
     "ActResult",
+    "ActGetResult",
     "ActStateGuardrailError",
     "NovaActError",
+    "SecurityOptions",
     "StartFailed",
     "StopFailed",
     "ValidationFailed",
     "BOOL_SCHEMA",
+    "STRING_SCHEMA",
     "BrowserActuatorBase",
     "ExtensionActuator",
     "DefaultNovaLocalBrowserActuator",

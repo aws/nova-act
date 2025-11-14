@@ -24,7 +24,7 @@ python -m nova_act.samples.apartments_zumper \
 import fire  # type: ignore
 from pydantic import BaseModel
 
-from nova_act import NovaAct
+from nova_act import ActInvalidModelGenerationError, NovaAct
 
 
 class Apartment(BaseModel):
@@ -61,11 +61,12 @@ def main(
         )
 
         for _ in range(5):  # Scroll down a max of 5 times.
-            result = nova.act(
-                "Return the currently visible list of apartments", schema=ApartmentList.model_json_schema()
-            )
-            if not result.matches_schema:
-                print(f"Invalid JSON {result=}")
+            try:
+                result = nova.act_get(
+                    "Return the currently visible list of apartments", schema=ApartmentList.model_json_schema()
+                )
+            except ActInvalidModelGenerationError as exc:
+                print(exc.message)
                 break
             apartment_list = ApartmentList.model_validate(result.parsed_response)
             all_apartments.extend(apartment_list.apartments)

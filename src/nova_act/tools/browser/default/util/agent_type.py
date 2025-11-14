@@ -24,11 +24,13 @@ from nova_act.tools.browser.default.util.element_helpers import (
     get_element_at_point,
     is_element_focused,
     locate_element,
+    viewport_dimensions,
 )
 from nova_act.tools.browser.default.util.file_upload_helpers import click_and_maybe_return_file_chooser
 from nova_act.tools.browser.interface.types.element_dict import ElementDict
 from nova_act.types.api.step import BboxTLBR
 from nova_act.util.logging import setup_logging
+from nova_act.util.path_validator import validate_file_upload_path
 
 _LOGGER = setup_logging(__name__)
 
@@ -50,7 +52,7 @@ def ensure_element_focus(page: Page, x: float, y: float, retries: int = 2) -> No
         if is_element_focused(page, x, y):
             return
 
-    raise ValueError(f"Failed to focus element at coordinates ({x}, {y}) after {retries} attempts")
+    raise RuntimeError(f"Failed to focus element at coordinates ({x}, {y}) after {retries} attempts")
 
 
 def agent_type(
@@ -59,7 +61,9 @@ def agent_type(
     page: Page,
     modifier_key: str,
     additional_options: str | None = None,
+    allowed_file_upload_paths: list[str] = [],
 ) -> None:
+    bbox.validate_in_viewport(**viewport_dimensions(page))
     point = bounding_box_to_point(bbox)
 
     if os.path.isfile(value):
@@ -71,12 +75,15 @@ def agent_type(
             timeout_ms=1500,
         )
         if chooser is not None:
+            # Validate file upload path against allowlist
+            validate_file_upload_path(value, allowed_file_upload_paths)
+
             chooser.set_files(value)
             return
 
     element_info = get_element_at_point(page, point["x"], point["y"])
     if not element_info:
-        raise ValueError("No element found at the given point")
+        return
 
     # Check for special input types first
     if element_info["tagName"].lower() == "input":
@@ -85,7 +92,9 @@ def agent_type(
             handle_color_input(page, element_info, value)
             return
         elif input_type == "file":
-            handle_file_input(page, value, element_info=element_info)
+            handle_file_input(
+                page, value, element_info=element_info, allowed_file_upload_paths=allowed_file_upload_paths
+            )
             return
         elif input_type == "range":
             handle_range_input(page, element_info, value)
@@ -102,7 +111,7 @@ def agent_type(
     try:
         ensure_element_focus(page, point["x"], point["y"])
     except Exception as e:
-        _LOGGER.debug(f"Element not focused: {e}")
+        _LOGGER.warning(f"Element not focused: {e}")
         # If element is not in focus, don't continue the actuation
         return
 
@@ -160,6 +169,7 @@ def handle_file_input(
     y: float | None = None,
     element_info: ElementDict | None = None,
     file_input_element: str | None = None,
+    allowed_file_upload_paths: list[str] = [],
 ) -> None:
     """
     Handle file input elements.
@@ -171,10 +181,13 @@ def handle_file_input(
         x: X coordinate of the file input
         y: Y coordinate of the file input
         file_input_element: element pre-examined to be file input
+        allowed_file_upload_paths: List of allowed path patterns for file uploads
     """
+    # Validate file upload path against allowlist
+    validate_file_upload_path(file_path, allowed_file_upload_paths)
 
     if not os.path.isfile(file_path):
-        raise ValueError(f"Not a regular file: {file_path}")
+        raise ValueError(f"Not a regular file or path does not exist: '{file_path}'")
 
     # Get the file input element
     try:
@@ -193,7 +206,7 @@ def handle_file_input(
             element = locate_element(element_info, page)
             element.set_input_files(file_path)
         else:
-            raise ValueError("Must provide either file_input_element or element_info")
+            raise RuntimeError("Must provide either file_input_element or element_info")
     except Exception as e:
         _LOGGER.warning(f"Error handling file input: {e}")
 

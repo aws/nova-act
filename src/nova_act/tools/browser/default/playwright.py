@@ -64,6 +64,7 @@ class PlaywrightInstanceManager:
         self._cdp_headers = options.cdp_headers
         self._proxy = options.proxy
         self._cdp_use_existing_page = options.cdp_use_existing_page
+        self.security_options = options.security_options
 
         if self._cdp_endpoint_url is not None or self._use_default_chrome_browser:
             if self._record_video:

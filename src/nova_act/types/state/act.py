@@ -22,7 +22,7 @@ from attrs.setters import frozen
 
 from nova_act.tools.actuator.interface.actuator import ActionType
 from nova_act.types.act_metadata import ActMetadata
-from nova_act.types.act_result import ActResult
+from nova_act.types.act_result import ActGetResult
 from nova_act.types.state.step import StepWithProgram
 
 DEFAULT_ACT_MAX_STEPS = 30
@@ -57,7 +57,7 @@ class Act:
     # rest of fields are mutable
     end_time: float | None = field(factory=lambda: None, init=False)
     _steps: list[StepWithProgram] = field(factory=list, init=False)
-    _result: ActResult | None = field(factory=lambda: None, init=False)
+    _result: ActGetResult | None = field(factory=lambda: None, init=False)
 
     acknowledged: bool = field(factory=lambda: False, init=False)
     is_complete: bool = field(factory=lambda: False, init=False)
@@ -84,7 +84,7 @@ class Act:
         return [round(step.server_time_s, 3) for step in self._steps if step.server_time_s is not None]
 
     @property
-    def result(self) -> ActResult | None:
+    def result(self) -> ActGetResult | None:
         return self._result
 
     def add_step(self, step: StepWithProgram) -> None:
@@ -95,7 +95,7 @@ class Act:
     def complete(self, response: str | None) -> None:
         self.end_time = time.time()
         # fmt: off
-        self._result = ActResult(
+        self._result = ActGetResult(
             response=response,
             metadata=self.metadata,
         )

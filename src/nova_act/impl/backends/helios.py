@@ -126,6 +126,11 @@ class HeliosBackend(AwlBackend[Endpoints]):
                 model_output = ModelOutput.from_plan_response(
                     json.dumps(json_response["planOutput"]["planResponse"]),
                 )
+            except LookupError:
+                raise ActInvalidModelGenerationError(
+                    metadata=act.metadata,
+                    raw_response=response.text,
+                )
             except Exception as e:
                 raise ActBadResponseError(
                     status_code=status_code,
@@ -160,8 +165,8 @@ class HeliosBackend(AwlBackend[Endpoints]):
                     )
                 elif code == "MODEL_ERROR":
                     raise ActInvalidModelGenerationError(
-                        status_code=status_code,
                         message=message,
+                        metadata=act.metadata,
                         raw_response=raw_response,
                     )
                 elif code == "INTERNAL_ERROR":

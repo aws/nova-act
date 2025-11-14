@@ -66,4 +66,4 @@ def save_data_url_to_file(data_url: str, file_path: str) -> None:
             f.write(image_data)
         print(f"Image saved to {file_path}")
     else:
-        raise ValueError("Invalid data URL format")
+        raise RuntimeError("Invalid data URL format")

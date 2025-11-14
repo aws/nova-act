@@ -14,7 +14,6 @@
 from typing import Dict
 
 from nova_act.types.api.step import BboxTLBR
-from nova_act.types.errors import InterpreterError
 
 
 def parse_bbox_string(bbox_string: str) -> BboxTLBR:
@@ -28,24 +27,24 @@ def parse_bbox_string(bbox_string: str) -> BboxTLBR:
     """
     bbox_string = bbox_string.strip()
     if not bbox_string.startswith("<box>") or not bbox_string.endswith("</box>"):
-        raise InterpreterError(
+        raise ValueError(
             f"Invalid bounding box format. Expected '<box>top,left,bottom,right</box>', got: {bbox_string}"
         )
 
     # Extract the coordinates
     coords_str = bbox_string.replace("<box>", "").replace("</box>", "").strip()
     if not coords_str:
-        raise InterpreterError(f"Empty coordinates in bounding box: {bbox_string}")
+        raise ValueError(f"Empty coordinates in bounding box: {bbox_string}")
 
     # Parse coordinates
     try:
         coord_parts = coords_str.split(",")
         if len(coord_parts) != 4:
-            raise InterpreterError(f"Expected 4 coordinates, got {len(coord_parts)}: {bbox_string}")
+            raise ValueError(f"Expected 4 coordinates, got {len(coord_parts)}: {bbox_string}")
 
         coords = [float(coord.strip()) for coord in coord_parts]
     except ValueError as e:
-        raise InterpreterError(f"Invalid coordinate values in bounding box: {bbox_string}. Error: {e}")
+        raise ValueError(f"Invalid coordinate values in bounding box: {bbox_string}. Error: {e}") from e
 
     return BboxTLBR(*coords)
 

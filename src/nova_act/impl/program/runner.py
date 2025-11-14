@@ -47,7 +47,10 @@ def format_return_value(return_value: JSONType) -> str:
 
 class ProgramRunner:
     def __init__(
-        self, event_handler: EventHandler, state_guardrail: GuardrailCallable | None = None, verbose: bool = False
+        self,
+        event_handler: EventHandler,
+        state_guardrail: GuardrailCallable | None = None,
+        verbose: bool = False,
     ):
         self.event_handler = event_handler
         self.state_guardrail = state_guardrail
@@ -74,6 +77,7 @@ class ProgramRunner:
                         trace_log_lines("State guardrail denied action")
                         raise ActStateGuardrailError()
 
+
                 self.event_handler.send_event(
                     type=EventType.ACTION, action=f"{call.source.name}({call.source.kwargs})", data=return_value
                 )
@@ -81,12 +85,14 @@ class ProgramRunner:
             except (AgentRedirectError, ActStateGuardrailError) as e:
                 error = e
             except InterpreterError as e:
-                error = ActInvalidModelGenerationError(message=str(e))
+                error = ActInvalidModelGenerationError(message=str(e), raw_response=str(e))
             except Exception as e:
                 self.event_handler.send_event(
                     type=EventType.LOG, action=call.source.name, data=f"{type(e).__name__}: {e}"
                 )
                 error = ActActuationError(message=f"{type(e).__name__}: {e}")
+                if isinstance(e, ValueError):
+                    error = ActInvalidModelGenerationError(message=f"{type(e).__name__}: {e}")
 
             call_result = CallResult(call=call.source, return_value=return_value, error=error)
             call_results.append(call_result)
