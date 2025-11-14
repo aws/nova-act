@@ -60,6 +60,7 @@ class BrowserActionProvider:
         """Provide Actions for a BrowserActuatorBase."""
         return [
             self.agent_click,
+            self.agent_hover,
             self.agent_scroll,
             self.agent_type,
             self.go_to_url,
@@ -78,6 +79,12 @@ class BrowserActionProvider:
     ) -> JSONType:
         """Clicks the center of the specified box."""
         return self.actuator.agent_click(box, click_type, click_options)
+
+    @final
+    @tool(name="agentHover")
+    def agent_hover(self: Self, box: str) -> JSONType:
+        """Hovers on the center of the specified box."""
+        return self.actuator.agent_hover(box)
 
     @final
     @tool(name="agentScroll")
@@ -145,7 +152,12 @@ class BrowserActionProvider:
 
 
 class BrowserActuatorBase(ActuatorBase):
-    """An Actuator for Browser use."""
+    """
+    An Actuator for Browser use.
+
+    If an actuation method receives invalid arguments, it should raise ValueError. If it is not able to actuate due to
+    an execution error, it should raise RuntimeError.
+    """
 
     domain = "browser-use"
     _action_provider: BrowserActionProvider | None = None
@@ -165,6 +177,10 @@ class BrowserActuatorBase(ActuatorBase):
         click_options: ClickOptions | None = None,
     ) -> JSONType:
         """Clicks the center of the specified box."""
+
+    @abstractmethod
+    def agent_hover(self, box: str) -> JSONType:
+        """Hovers on the center of the specified box."""
 
     @abstractmethod
     def agent_scroll(self, direction: ScrollDirection, box: str, value: float | None = None) -> JSONType:

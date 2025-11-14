@@ -19,9 +19,11 @@ from nova_act.tools.browser.default.dom_actuation.click_events import get_after_
 from nova_act.tools.browser.default.util.bbox_parser import bounding_box_to_point
 from nova_act.tools.browser.default.util.dispatch_dom_events import dispatch_event_sequence
 from nova_act.tools.browser.default.util.element_helpers import (
+    DEEP_ELEMENT_FROM_POINT_JS,
     check_if_native_dropdown,
     get_element_at_point,
     locate_element,
+    viewport_dimensions,
 )
 from nova_act.tools.browser.default.util.file_upload_helpers import click_and_maybe_return_file_chooser
 from nova_act.tools.browser.interface.types.agent_redirect_error import AgentRedirectError
@@ -53,6 +55,7 @@ def agent_click(
                     "left-double" - double left click
                     "right" - right click
     """
+    bbox.validate_in_viewport(**viewport_dimensions(page))
     point = bounding_box_to_point(bbox)
 
     handle_special_elements(page, point["x"], point["y"])
@@ -76,6 +79,8 @@ def agent_click(
         page.mouse.dblclick(point["x"], point["y"])
     elif click_type == "right":
         page.mouse.click(point["x"], point["y"], button="right")
+    else:
+        raise ValueError(f"Unknown click type: {click_type}")
 
     maybe_blur_field(page, point, click_options)
 
@@ -106,38 +111,7 @@ def get_dropdown_options(page: Page, x: float, y: float) -> list[dict[str, str]]
     options: list[dict[str, str]] | None = page.evaluate(
         """
         ([x, y]) => {
-            function deepElementFromPoint(root, x, y) {
-                let elem = root.elementFromPoint(x, y);
-                if (!elem) return null;
-
-                // Don't dive into shadow DOM if we found a select element
-                if (elem.tagName && elem.tagName.toLowerCase() === "select") {
-                    return elem;
-                }
-
-                // Dive into shadow DOM
-                if (elem.shadowRoot) {
-                    const shadowHit = deepElementFromPoint(elem.shadowRoot, x, y);
-                    if (shadowHit) return shadowHit;
-                }
-
-                // Dive into iframes
-                if (elem.tagName === "IFRAME") {
-                    try {
-                        const rect = elem.getBoundingClientRect();
-                        const frameDoc = elem.contentDocument;
-                        if (frameDoc) {
-                            const innerHit = deepElementFromPoint(frameDoc, x - rect.left, y - rect.top);
-                            if (innerHit) return innerHit;
-                        }
-                    } catch (err) {
-                        // Cross-origin iframe, can't access
-                    }
-                }
-
-                return elem;
-            }
-
+            %s
             function shadowInclusiveParent(el) {
                 if (!el) return null;
                 if (el.parentElement) return el.parentElement;
@@ -170,7 +144,8 @@ def get_dropdown_options(page: Page, x: float, y: float) -> list[dict[str, str]]
                 label: option.label,
             }));
         }
-    """,
+    """
+        % (DEEP_ELEMENT_FROM_POINT_JS,),
         [x, y],
     )
 

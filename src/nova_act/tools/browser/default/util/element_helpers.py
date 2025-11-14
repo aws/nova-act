@@ -15,10 +15,55 @@ import time
 
 from playwright.sync_api import Locator, Page
 
+from nova_act.tools.browser.interface.types.dimensions_dict import DimensionsDict
 from nova_act.tools.browser.interface.types.element_dict import ElementDict
+from nova_act.util.common_js_expressions import Expressions
 from nova_act.util.logging import setup_logging
 
 _LOGGER = setup_logging(__name__)
+
+
+DEEP_ELEMENT_FROM_POINT_JS = """
+function deepElementFromPoint(root, x, y, depth = 0) {
+    // Prevent infinite recursion by limiting depth
+    if (depth > 50) return null;
+
+    let elem = root.elementFromPoint(x, y);
+    if (!elem) return null;
+
+    // Don't dive into shadow DOM if we found a select element
+    if (elem.tagName && elem.tagName.toLowerCase() === "select") {
+        return elem;
+    }
+
+    // Dive into shadow DOM
+    if (elem.shadowRoot) {
+        const shadowHit = deepElementFromPoint(elem.shadowRoot, x, y, depth + 1);
+        if (shadowHit) return shadowHit;
+    }
+
+    // Dive into iframes
+    if (elem.tagName === "IFRAME") {
+        try {
+            const rect = elem.getBoundingClientRect();
+            const frameDoc = elem.contentDocument;
+            if (frameDoc) {
+                const innerHit = deepElementFromPoint(frameDoc, x - rect.left, y - rect.top, depth + 1);
+                if (innerHit) return innerHit;
+            }
+        } catch (err) {
+            // Cross-origin iframe, can't access
+        }
+    }
+
+    return elem;
+}
+"""
+
+
+def viewport_dimensions(page: Page) -> DimensionsDict:
+    viewport = page.evaluate(Expressions.GET_VIEWPORT_SIZE.value)
+    return {"height": viewport["height"], "width": viewport["width"]}
 
 
 def blur(element_info: ElementDict, page: Page) -> None:
@@ -54,7 +99,7 @@ def locate_element(element_info: ElementDict, page: Page) -> Locator:
     raise ValueError(f"Element not found: {element_info}")
 
 
-def get_element_at_point(page: Page, x: float, y: float) -> ElementDict:
+def get_element_at_point(page: Page, x: float, y: float) -> ElementDict | None:
     """
     Get the HTML element at the specified x,y coordinates.
 
@@ -70,39 +115,8 @@ def get_element_at_point(page: Page, x: float, y: float) -> ElementDict:
     element_info: ElementDict = page.evaluate(
         """
         ([x, y]) => {
-            function deepElementFromPoint(root, x, y) {
-                let elem = root.elementFromPoint(x, y);
-                if (!elem) return null;
-
-                // Don't dive into shadow DOM if we found a select element
-                if (elem.tagName && elem.tagName.toLowerCase() === "select") {
-                    return elem;
-                }
-
-                // Dive into shadow DOM
-                if (elem.shadowRoot) {
-                    const shadowHit = deepElementFromPoint(elem.shadowRoot, x, y);
-                    if (shadowHit) return shadowHit;
-                }
-
-                // Dive into iframes
-                if (elem.tagName === "IFRAME") {
-                    try {
-                        const rect = elem.getBoundingClientRect();
-                        const frameDoc = elem.contentDocument;
-                        if (frameDoc) {
-                            const innerHit = deepElementFromPoint(frameDoc, x - rect.left, y - rect.top);
-                            if (innerHit) return innerHit;
-                        }
-                    } catch (err) {
-                        // Cross-origin iframe, can't access
-                    }
-                }
-
-                return elem;
-            }
-
-            const elem = deepElementFromPoint(document, x, y);
+            %s
+            const elem = deepElementFromPoint(document, x, y, 0);
             if (!elem) return null;
 
             const attributes = {};
@@ -120,12 +134,14 @@ def get_element_at_point(page: Page, x: float, y: float) -> ElementDict:
                 attributes: attributes
             };
         }
-        """,
+        """
+        % (DEEP_ELEMENT_FROM_POINT_JS,),
         [x, y],
     )
 
     if element_info is None:
-        raise ValueError(f"Could not find element at point {(x, y)}.")
+        _LOGGER.warning(f"Could not find element at point {(x, y)}.")
+        return
 
     return element_info
 
@@ -133,7 +149,7 @@ def get_element_at_point(page: Page, x: float, y: float) -> ElementDict:
 def check_if_native_dropdown(page: Page, x: float, y: float) -> bool:
     element_info = get_element_at_point(page, x, y)
     if element_info is None:
-        raise ValueError("No element found at point")
+        return False
 
     # Check if the element itself is a select
     if element_info["tagName"].lower() == "select":
@@ -143,38 +159,7 @@ def check_if_native_dropdown(page: Page, x: float, y: float) -> bool:
     result: bool = page.evaluate(
         """
         ([x, y]) => {
-            function deepElementFromPoint(root, x, y) {
-                let elem = root.elementFromPoint(x, y);
-                if (!elem) return null;
-
-                // Don't dive into shadow DOM if we found a select element
-                if (elem.tagName && elem.tagName.toLowerCase() === "select") {
-                    return elem;
-                }
-
-                // Dive into shadow DOM
-                if (elem.shadowRoot) {
-                    const shadowHit = deepElementFromPoint(elem.shadowRoot, x, y);
-                    if (shadowHit) return shadowHit;
-                }
-
-                // Dive into iframes
-                if (elem.tagName === "IFRAME") {
-                    try {
-                        const rect = elem.getBoundingClientRect();
-                        const frameDoc = elem.contentDocument;
-                        if (frameDoc) {
-                            const innerHit = deepElementFromPoint(frameDoc, x - rect.left, y - rect.top);
-                            if (innerHit) return innerHit;
-                        }
-                    } catch (err) {
-                        // Cross-origin iframe, can't access
-                    }
-                }
-
-                return elem;
-            }
-
+            %s
             function shadowInclusiveParent(el) {
                 if (!el) return null;
                 if (el.parentElement) return el.parentElement;
@@ -196,11 +181,12 @@ def check_if_native_dropdown(page: Page, x: float, y: float) -> bool:
                 return null;
             }
 
-            const hitElement = deepElementFromPoint(document, x, y);
+            const hitElement = deepElementFromPoint(document, x, y, 0);
             if (!hitElement) return false;
             return !!findNearestSelect(hitElement);
         }
-        """,
+        """
+        % (DEEP_ELEMENT_FROM_POINT_JS,),
         [x, y],
     )
     return result

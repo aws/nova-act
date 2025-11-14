@@ -17,6 +17,7 @@ import io
 import json
 import os
 import re
+from urllib.parse import urlparse
 
 from PIL import Image, ImageDraw
 from typing_extensions import TypedDict, cast
@@ -33,7 +34,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; img-src 'self' data:">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'none';
+        style-src 'self' 'unsafe-inline'; img-src 'self' data:">
     <title>NovaAct Agent Run</title>
     <style>
         body {{
@@ -175,6 +177,19 @@ def _add_bbox_to_image(image: str, response: str) -> str:
     return "data:image/jpeg;base64," + base64.b64encode(image_bytes_io.getvalue()).decode("utf-8")
 
 
+def sanitize_url(url: str) -> str:
+    """
+    Escapes any HTML which might be in the given string, and removes any dangerous URI schemes
+    """
+    safe_url_schemes = ["http", "https", "about"]
+
+    url = html.escape(url)
+    result = urlparse(url)
+    if result.scheme and result.scheme not in safe_url_schemes:
+        url = f"redacted_url_with_potentially_unsafe_schema='{result.scheme}'"
+    return url
+
+
 def format_run_info(
     steps: int, url: str, time: str, image: str, response: str, server_time_s: float | None = None
 ) -> str:
@@ -182,7 +197,9 @@ def format_run_info(
 
     # HTML escape the url and response to prevent HTML interpretation of <box> tags and to protect against xss
     escaped_response = html.escape(response)
-    escaped_url = html.escape(url)
+    escaped_image = html.escape(image)
+    escaped_time = html.escape(time)
+    escaped_url = sanitize_url(url)
 
     server_time_info = ""
     if server_time_s is not None:
@@ -197,7 +214,7 @@ def format_run_info(
             <h3 style="margin: 0;color: #333;padding: 0;">Step {steps}</h3>
 
             <div class="run-step-body">
-                <img src="{image}"
+                <img src="{escaped_image}"
                     style="border-radius: 5px;
                     object-fit: contain;
                     background-color: lightblue;
@@ -205,7 +222,7 @@ def format_run_info(
                 <pre style="height: fit-content;">{escaped_response}</pre>
                 <div>
                     <div style="margin-bottom: 4px;font-weight: bold;">Timestamp</div>
-                    <div>{time}</div>
+                    <div>{escaped_time}</div>
                 </div>
                 <div style="text-overflow: ellipsis;white-space: nowrap;overflow: hidden;">
                     <div style="margin-bottom: 4px;font-weight: bold;">Active URL</div>

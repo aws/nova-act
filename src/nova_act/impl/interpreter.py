@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import inspect
+from uuid import uuid4
 
 import jsonschema
 from typing_extensions import Any
@@ -30,7 +30,6 @@ class NovaActInterpreter:
     Parse and actuate
     Returns True iff Agent is done, False otherwise
     """
-
 
     @staticmethod
     def interpret_ast(statements: list[Statement], tool_map: dict[str, ActionType]) -> Program:
@@ -60,7 +59,7 @@ class NovaActInterpreter:
                 if return_text is not None:
                     value = decode_string(return_text)
 
-            call = call or Call(name="return", kwargs={"value": value})
+            call = call or Call(name="return", id="return", kwargs={"value": value})
             calls.append(call)
 
         # Handle throw
@@ -69,7 +68,9 @@ class NovaActInterpreter:
             if "expr" in last_stmt and last_stmt["expr"]["kind"] == "NewExpression" and last_stmt["expr"]["args"]:
                 error_msg = decode_string(last_stmt["expr"]["args"][0]["value"])
 
-            call = NovaActInterpreter._validated_call(tool=tool_map["throw"], kwargs={"value": error_msg})
+            call = NovaActInterpreter._validated_call(
+                tool=tool_map["throw"], call_id="throw", kwargs={"value": error_msg}
+            )
             calls.append(call)
 
         # Handle function calls
@@ -81,10 +82,11 @@ class NovaActInterpreter:
             kwargs: dict[str, JSONType]
 
             # Use shared argument preparation logic for standard actuation calls
-            if fn_name in ["agentClick", "agentType", "agentScroll", "goToUrl", "wait"]:
+            if fn_name in ["agentClick", "agentHover", "agentType", "agentScroll", "goToUrl", "wait"]:
                 try:
                     kwargs = prepare_kwargs_for_actuation_calls(fn_name, args)
-                    call = NovaActInterpreter._validated_call(tool=tool_map[fn_name], kwargs=kwargs)
+                    # All fn_names are built in actuation functions, so we use the names for call_ids below
+                    call = NovaActInterpreter._validated_call(tool=tool_map[fn_name], call_id=fn_name, kwargs=kwargs)
                     calls.append(call)
                 except ValueError as e:
                     raise InterpreterError(str(e))
@@ -143,12 +145,12 @@ class NovaActInterpreter:
                 and prev_stmt["expr"]["func"]["var"] == "think"
             ):
                 think_value = decode_string(prev_stmt["expr"]["args"][0]["value"])
-                return Call(name="think", kwargs={"value": think_value})
+                return Call(name="think", id="think", kwargs={"value": think_value})
 
         return None
 
     @staticmethod
-    def _validated_call(tool: ActionType, kwargs: dict[str, JSONType]) -> Call:
+    def _validated_call(tool: ActionType, call_id: str, kwargs: dict[str, JSONType]) -> Call:
         try:
             jsonschema.validate(
                 instance=kwargs,
@@ -157,4 +159,4 @@ class NovaActInterpreter:
         except jsonschema.exceptions.ValidationError as e:
             raise InterpreterError(f"Received invalid arguments for {tool.tool_name}: {str(e)}")
 
-        return Call(name=tool.tool_name, kwargs=kwargs)
+        return Call(name=tool.tool_name, id=call_id, kwargs=kwargs)

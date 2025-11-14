@@ -36,11 +36,12 @@ from nova_act.types.act_errors import (
     ActExecutionError,
     ActTimeoutError,
 )
-from nova_act.types.act_result import ActResult
+from nova_act.types.act_result import ActGetResult
 from nova_act.types.errors import ClientNotStarted, ValidationFailed
 from nova_act.types.events import EventType, LogType
 from nova_act.types.guardrail import GuardrailCallable
 from nova_act.types.state.act import Act
+from nova_act.util.decode_string import decode_awl_raw_program
 from nova_act.util.event_handler import EventHandler
 from nova_act.util.logging import (
     get_session_id_prefix,
@@ -53,11 +54,13 @@ _TRACE_LOGGER = make_trace_logger()
 DEFAULT_ENDPOINT_NAME = "alpha-sunshine"
 
 
-def _handle_act_fail(f: Callable[[ActDispatcher, Act], ActResult]) -> Callable[[ActDispatcher, Act], ActResult]:
+def _handle_act_fail(
+    f: Callable[[ActDispatcher, Act], ActGetResult],
+) -> Callable[[ActDispatcher, Act], ActGetResult]:
     """Update Act objects with appropriate metadata on Exceptions."""
 
     @functools.wraps(f)
-    def wrapper(self: ActDispatcher, act: Act) -> ActResult:
+    def wrapper(self: ActDispatcher, act: Act) -> ActGetResult:
         try:
             return f(self, act)
         except ActError as e:
@@ -87,13 +90,16 @@ class ActDispatcher:
             raise ValidationFailed("actuator must be an instance of BrowserActuatorBase")
         self._actuator = actuator
         self._backend = backend
-        self._tools = actuator.list_actions()
+        self._tools = actuator.list_actions().copy()
         self._tool_map = {tool.tool_name: tool for tool in self._tools}
 
         self._canceled = False
         self._event_handler = event_handler
         self._controller = controller
-        self._program_runner = ProgramRunner(self._event_handler, state_guardrail)
+        self._program_runner = ProgramRunner(
+            self._event_handler,
+            state_guardrail,
+        )
 
     def _cancel_act(self, act: Act) -> None:
         _TRACE_LOGGER.info(f"\n{get_session_id_prefix()}Terminating agent workflow")
@@ -105,7 +111,7 @@ class ActDispatcher:
         raise ActCanceledError()
 
     @_handle_act_fail
-    def dispatch(self, act: Act) -> ActResult:
+    def dispatch(self, act: Act) -> ActGetResult:
         """Dispatch an Act with given Backend and Actuator."""
 
         if self._backend is None:
@@ -118,8 +124,11 @@ class ActDispatcher:
         # Create and run initial Program
         initial_calls: list[Call] = []
         if act.observation_delay_ms:
-            initial_calls += [Call(name="wait", kwargs={"seconds": act.observation_delay_ms / 1000})]
-        initial_calls += [Call(name="waitForPageToSettle", kwargs={}), Call(name="takeObservation", kwargs={})]
+            initial_calls.append(Call(name="wait", id="wait", kwargs={"seconds": act.observation_delay_ms / 1000}))
+        initial_calls += [
+            Call(name="waitForPageToSettle", id="waitForPageToSettle", kwargs={}),
+            Call(name="takeObservation", id="takeObservation", kwargs={}),
+        ]
         program = Program(calls=initial_calls)
         executable = program.compile(self._tool_map)
         program_result = self._program_runner.run(executable)
@@ -142,9 +151,14 @@ class ActDispatcher:
                     raise ActExceededMaxStepsError(f"Exceeded max steps {act.max_steps} without return.")
 
                 # Get a Program from the model
+                trace_log_lines("...")
                 step_object = self._backend.step(act, program_result.call_results, self._tool_map)
                 act.add_step(step_object)
                 program = step_object.program
+
+                # Log the model output
+                awl_program = decode_awl_raw_program(step_object.model_output.awl_raw_program)
+                trace_log_lines(awl_program)
 
                 # Handle pause/cancel conditions
                 while control.state == ControlState.PAUSED:

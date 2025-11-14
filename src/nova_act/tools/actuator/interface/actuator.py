@@ -19,6 +19,8 @@ from strands import tool
 from strands.tools.decorator import DecoratedFunctionTool
 from strands.types.tools import ToolSpec
 
+from nova_act.tools.compatibility import safe_tool_spec
+
 
 @deprecated(version="2.0.200", reason="the `@action` decorator is no longer required.")
 def action(method: Callable[..., Any]) -> Callable[..., Any]:  # type: ignore[explicit-any]
@@ -74,5 +76,5 @@ class ActuatorBase(ABC):
         """Return a dictionary representation of this class."""
         return {
             "domain": self.domain or "",
-            "actions": [action.tool_spec for action in self.list_actions()],
+            "actions": [safe_tool_spec(action.tool_spec) for action in self.list_actions()],
         }

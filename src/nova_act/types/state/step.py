@@ -53,7 +53,7 @@ class ModelOutput:
         try:
             program_ast: list[Statement] = plan_response_json["program"]["body"][0]["body"]["body"]
         except (IndexError, KeyError, TypeError):
-            raise ValueError("actuationPlanResponse is missing program body.")
+            raise LookupError("actuationPlanResponse is missing program body.")
 
         return cls(awl_raw_program=awl_raw_program, request_id=request_id, program_ast=program_ast)
 

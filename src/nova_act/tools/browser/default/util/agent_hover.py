@@ -13,10 +13,19 @@
 # limitations under the License.
 from playwright.sync_api import Page
 
-from nova_act.util.url import validate_url
+from nova_act.tools.browser.default.util.bbox_parser import bounding_box_to_point
+from nova_act.tools.browser.default.util.element_helpers import viewport_dimensions
+from nova_act.types.api.step import BboxTLBR
 
 
-def go_to_url(url: str, page: Page, allow_file_urls: bool = False) -> None:
+def agent_hover(bbox: BboxTLBR, page: Page) -> None:
+    """
+    Hover on a point within a bounding box.
 
-    # Navigate to the URL, after validating
-    page.goto(validate_url(url=url, default_to_https=True, allow_file_urls=allow_file_urls))
+    Args:
+        bounding_box: A dict representation of a bounding box
+        page: Playwright Page object
+    """
+    bbox.validate_in_viewport(**viewport_dimensions(page))
+    point = bounding_box_to_point(bbox)
+    page.mouse.move(point["x"], point["y"])

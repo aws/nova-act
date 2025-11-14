@@ -18,7 +18,7 @@ from typing import Literal
 import requests
 
 from nova_act.__version__ import VERSION
-from nova_act.types.act_result import ActResult
+from nova_act.types.act_result import ActGetResult
 from nova_act.types.errors import NovaActError
 from nova_act.types.state.act import Act
 from nova_act.util.logging import setup_logging
@@ -30,7 +30,7 @@ def send_act_telemetry(
     endpoint: str,
     nova_act_api_key: str | None,
     act: Act,
-    success: ActResult | None,
+    success: ActGetResult | None,
     error: NovaActError | None,
 ) -> None:
     """Send telemetry for the given act."""

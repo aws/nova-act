@@ -10,8 +10,8 @@ pydantic>=2.10.6
 requests
 retry
 pytz
-strands-agents>=0.1.9
-strands-agents-tools
+strands-agents>=1.2.0,<=1.14.0
+strands-agents-tools<=0.2.13
 Deprecated
 boto3
 boto3-stubs

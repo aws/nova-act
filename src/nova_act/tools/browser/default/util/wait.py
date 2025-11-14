@@ -93,7 +93,7 @@ def consecutive_identical_checks(
         screenshot = take_screenshot_as_data_url(page)
         if screenshot is None:
             _LOGGER.debug(f"[CONSECUTIVE_CHECK] {timestamp} - SCREENSHOT FAILED")
-            raise Exception("Attempted to take a screenshot, but failed. Please try again.")
+            raise RuntimeError("Attempted to take a screenshot, but failed. Please try again.")
 
         if save_screenshots:
             save_data_url_to_file(screenshot, f"screenshot_{consecutive_stable_count}.jpeg")

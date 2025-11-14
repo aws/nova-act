@@ -17,7 +17,7 @@ import fire  # type: ignore
 import pandas as pd
 from pydantic import BaseModel
 
-from nova_act import ActAgentError, NovaAct
+from nova_act import ActAgentError, ActInvalidModelGenerationError, NovaAct
 
 
 class Apartment(BaseModel):
@@ -49,12 +49,9 @@ def add_commute_distance(apartment: Apartment, caltrain_city: str, headless: boo
                 f"Enter '{apartment.address}' into the starting point field and press enter. "
                 "Click the walking icon for directions."
             )
-            result = nova.act("Return the shortest time and distance", schema=CaltrainCommute.model_json_schema())
-        except ActAgentError as exc:
-            print(f"Could not retrieve walking distance: {exc}")
-            return None
-        if not result.matches_schema:
-            print(f"Invalid JSON while retrieving walking distance {result=}")
+            result = nova.act_get("Return the shortest time and distance", schema=CaltrainCommute.model_json_schema())
+        except (ActAgentError, ActInvalidModelGenerationError) as exc:
+            print(f"Could not retrieve walking distance: {exc.message}")
             return None
         time_distance = CaltrainCommute.model_validate(result.parsed_response)
         return time_distance
@@ -92,11 +89,12 @@ def main(
         )
 
         for _ in range(5):  # Scroll down a max of 5 times.
-            result = nova.act(
-                "Return the currently visible list of apartments", schema=ApartmentList.model_json_schema()
-            )
-            if not result.matches_schema:
-                print(f"Invalid JSON {result=}")
+            try:
+                result = nova.act_get(
+                    "Return the currently visible list of apartments", schema=ApartmentList.model_json_schema()
+                )
+            except ActInvalidModelGenerationError as exc:
+                print(exc.message)
                 break
             apartment_list = ApartmentList.model_validate(result.parsed_response)
             all_apartments.extend(apartment_list.apartments)

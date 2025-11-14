@@ -27,7 +27,7 @@ import fire  # type: ignore
 import pandas as pd
 from pydantic import BaseModel
 
-from nova_act import ActAgentError, NovaAct
+from nova_act import ActAgentError, ActInvalidModelGenerationError, NovaAct
 
 
 class Apartment(BaseModel):
@@ -59,14 +59,11 @@ def add_biking_distance(apartment: Apartment, caltrain_city: str, headless: bool
                 f"Enter '{apartment.address}' into the starting point field and press enter. "
                 "Click the bicycle icon for cycling directions."
             )
-            result = nova.act(
+            result = nova.act_get(
                 "Return the shortest time and distance for biking", schema=CaltrainBiking.model_json_schema()
             )
-        except ActAgentError as exc:
-            print(f"Could not retrieve biking distance: {exc}")
-            return None
-        if not result.matches_schema:
-            print(f"Invalid JSON while retrieving biking distance {result=}")
+        except (ActAgentError, ActInvalidModelGenerationError) as exc:
+            print(f"Could not retrieve walking distance: {exc.message}")
             return None
         time_distance = CaltrainBiking.model_validate(result.parsed_response)
         return time_distance
@@ -95,11 +92,12 @@ def main(
         )
 
         for _ in range(5):  # Scroll down a max of 5 times.
-            result = nova.act(
-                "Return the currently visible list of apartments", schema=ApartmentList.model_json_schema()
-            )
-            if not result.matches_schema:
-                print(f"Invalid JSON {result=}")
+            try:
+                result = nova.act_get(
+                    "Return the currently visible list of apartments", schema=ApartmentList.model_json_schema()
+                )
+            except ActInvalidModelGenerationError as exc:
+                print(exc.message)
                 break
             apartment_list = ApartmentList.model_validate(result.parsed_response)
             all_apartments.extend(apartment_list.apartments)

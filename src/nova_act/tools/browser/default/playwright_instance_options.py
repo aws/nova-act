@@ -11,9 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from playwright.sync_api import Playwright
+
+from nova_act.types.features import SecurityOptions
 
 _DEFAULT_GO_TO_URL_TIMEOUT = 60
 
@@ -38,6 +40,7 @@ class PlaywrightInstanceOptions:
     proxy: dict[str, str] | None = None
     cdp_use_existing_page: bool = False
     user_browser_args: list[str] | None = None
+    security_options: SecurityOptions = field(default_factory=SecurityOptions)
 
     def __post_init__(self) -> None:
         self.owns_playwright = self.maybe_playwright is None

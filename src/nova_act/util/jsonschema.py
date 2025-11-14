@@ -17,10 +17,11 @@ from typing import Mapping
 
 import jsonschema
 
-from nova_act.types.act_result import ActResult
+from nova_act.types.act_result import ActGetResult, ActResult
 from nova_act.types.json_type import JSONType
 
 BOOL_SCHEMA = {"type": "boolean"}
+STRING_SCHEMA = {"type": "string"}
 
 
 def validate_jsonschema_schema(schema: Mapping[str, JSONType]) -> None:
@@ -35,36 +36,40 @@ def add_schema_to_prompt(prompt: str, schema: Mapping[str, JSONType]) -> str:
     return f"{prompt}, format output with jsonschema: {schema_str}"
 
 
-def populate_json_schema_response(result: ActResult, schema: Mapping[str, JSONType]) -> ActResult:
-    if not result.response:
-        return ActResult(
-            response=result.response,
+def populate_json_schema_response(result: ActResult, schema: Mapping[str, JSONType]) -> ActGetResult:
+    response = result.response if isinstance(result, ActGetResult) else None
+    if not response:
+        return ActGetResult(
+            response=response,
             parsed_response=None,
             valid_json=False,
             matches_schema=False,
             metadata=result.metadata,
         )
     try:
-        parsed_response = json.loads(result.response)
+        if schema != STRING_SCHEMA:
+            parsed_response = json.loads(response)
+        else:
+            parsed_response = response
         jsonschema.validate(instance=parsed_response, schema=schema)
     except json.JSONDecodeError:
-        return ActResult(
-            response=result.response,
+        return ActGetResult(
+            response=response,
             parsed_response=None,
             valid_json=False,
             matches_schema=False,
             metadata=result.metadata,
         )
     except jsonschema.ValidationError:
-        return ActResult(
-            response=result.response,
+        return ActGetResult(
+            response=response,
             parsed_response=parsed_response,
             valid_json=True,
             matches_schema=False,
             metadata=result.metadata,
         )
-    return ActResult(
-        response=result.response,
+    return ActGetResult(
+        response=response,
         parsed_response=parsed_response,
         valid_json=True,
         matches_schema=True,

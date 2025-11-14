@@ -15,7 +15,6 @@ import os
 import sys
 import uuid
 from typing import Any
-from urllib.parse import urlparse
 
 from nova_act.types.errors import (
     InvalidChromeChannel,
@@ -24,11 +23,10 @@ from nova_act.types.errors import (
     InvalidPath,
     InvalidScreenResolution,
     InvalidTimeout,
-    InvalidURL,
     ValidationFailed,
 )
 from nova_act.util.logging import setup_logging
-from nova_act.util.url import verify_certificate
+from nova_act.util.url import validate_url, verify_certificate
 
 MIN_TIMEOUT_S = 2  # 2 sec
 MAX_TIMEOUT_S = 1800  # 30 mins
@@ -56,30 +54,6 @@ SUPPORTED_CHANNELS = {
     "chrome-canary",
     "msedge-canary",
 }
-
-
-def validate_url(url: str, state: str) -> None:
-    """Validate the url value.
-
-    Parameters
-    ----------
-    url: str
-        The url to validate.
-
-    Returns
-    -------
-    None
-    """
-    if not isinstance(url, str):
-        raise InvalidURL(f"{state} URL provided is not a string.")
-
-    if url == "about:blank":
-        # allow about:blank navigation
-        return
-
-    result = urlparse(url)
-    if result.scheme != "file" and not all([result.scheme, result.netloc]):
-        raise InvalidURL(f"{state} URL provided is invalid. Did you include http:// or https:// ?")
 
 
 def validate_path(path: str, description: str, empty_directory_allowed: bool = False) -> None:
@@ -269,6 +243,7 @@ def validate_base_parameters(
     screen_height: int,
     chrome_channel: str,
     ignore_https_errors: bool,
+    allow_file_urls: bool,
     clone_user_data_dir: bool,
     use_default_chrome_browser: bool,
     proxy: dict[str, str] | None = None,
@@ -276,10 +251,10 @@ def validate_base_parameters(
     if not use_existing_page:
         if starting_page is None:
             raise ValidationFailed("starting_page is required when not connecting to existing CDP session.")
-        validate_url(starting_page, "starting_page")
+        validate_url(url=starting_page, allow_file_urls=allow_file_urls)
         validate_url_ssl_certificate(ignore_https_errors, starting_page)
 
-    validate_url(backend_url, "backend_url")
+    validate_url(backend_url)
 
     if use_default_chrome_browser:
         if sys.platform != "darwin":

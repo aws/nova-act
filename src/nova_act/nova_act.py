@@ -31,7 +31,6 @@ from nova_act.impl.inputs import (
     validate_prompt,
     validate_step_limit,
     validate_timeout,
-    validate_url,
 )
 from nova_act.impl.run_info_compiler import RunInfoCompiler
 from nova_act.impl.telemetry import send_act_telemetry, send_environment_telemetry
@@ -45,8 +44,8 @@ from nova_act.tools.browser.interface.playwright_pages import PlaywrightPageMana
 
 
 from nova_act.impl.backends.factory import BackendFactory
-from nova_act.types.act_errors import ActError
-from nova_act.types.act_result import ActResult
+from nova_act.types.act_errors import ActError, ActInvalidModelGenerationError
+from nova_act.types.act_result import ActGetResult, ActResult
 from nova_act.types.errors import (
     AuthError,
     ClientNotStarted,
@@ -56,13 +55,14 @@ from nova_act.types.errors import (
     ValidationFailed,
 )
 from nova_act.types.events import EventType, LogType
-from nova_act.types.features import PreviewFeatures
+from nova_act.types.features import PreviewFeatures, SecurityOptions
 from nova_act.types.guardrail import GuardrailCallable
 from nova_act.types.hooks import StopHook
 from nova_act.types.json_type import JSONType
 from nova_act.types.state.act import Act
 from nova_act.util.event_handler import EventHandler
 from nova_act.util.jsonschema import (
+    STRING_SCHEMA,
     add_schema_to_prompt,
     populate_json_schema_response,
     validate_jsonschema_schema,
@@ -73,6 +73,7 @@ from nova_act.util.logging import (
     set_logging_session,
     setup_logging,
 )
+from nova_act.util.url import validate_url
 
 DEFAULT_SCREEN_WIDTH = 1600
 DEFAULT_SCREEN_HEIGHT = 900
@@ -133,6 +134,7 @@ class NovaAct:
         go_to_url_timeout: int | None = None,
         headless: bool = False,
         ignore_https_errors: bool = False,
+        security_options: SecurityOptions | None = None,
         logs_directory: str | None = None,
         nova_act_api_key: str | None = None,
         playwright_instance: Playwright | None = None,
@@ -206,7 +208,7 @@ class NovaAct:
         go_to_url_timeout : int, optional
             Max wait time on initial page load in seconds
         ignore_https_errors: bool
-            Whether to ignore https errors for url to allow website with self-signed certificates
+            If True, ignore certificate validation errors for https urls. Defaults to False.
         state_guardrail: GuardrailCallable, optional
             A callback function that takes a GuardrailInputState and returns a GuardrailDecision.
             Called after taking an observation but before invoking step on the backend.
@@ -218,6 +220,12 @@ class NovaAct:
             Use the locally installed Chrome browser. Only works on MacOS.
         preview: PreviewFeatures
             Optional preview features for opt-in.
+        security_options: SecurityOptions, optional
+            Set of security-related parameters that overwrite default agent behavior
+            allow_file_urls: bool
+                Allow the browser to navigate to file:// urls. Defaults to False.
+            allowed_file_upload_paths: list[str]
+                List of filepaths from which file uploads are permitted. Defaults to [], disabling all file uploads.
         boto_session : Session, optional
             A boto3 session containing IAM credentials for authentication.
             When provided, enables AWS IAM-based authentication instead of API key authentication.
@@ -225,6 +233,11 @@ class NovaAct:
         proxy: dict[str, str], optional
             Proxy configuration for the browser. Should contain 'server', 'username', and 'password' keys.
         """
+        self._workflow_run = None
+
+        # initialize with default values if not specified by client
+        if not security_options:
+            security_options = SecurityOptions()
 
 
         self._run_info_compiler: RunInfoCompiler | None = None
@@ -268,6 +281,7 @@ class NovaAct:
             logs_directory=logs_directory,
             chrome_channel=_chrome_channel,
             ignore_https_errors=ignore_https_errors,
+            allow_file_urls=security_options.allow_file_urls,
             clone_user_data_dir=clone_user_data_dir,
             use_default_chrome_browser=use_default_chrome_browser,
             proxy=proxy,
@@ -348,8 +362,10 @@ class NovaAct:
             proxy=proxy,
             cdp_use_existing_page=cdp_use_existing_page,
             user_browser_args=user_browser_args,
+            security_options=security_options,
         )
         self._cdp_endpoint_url = cdp_endpoint_url
+        self._allow_file_urls = security_options.allow_file_urls
 
         self._actuator: BrowserActuatorBase
         self._dispatcher: ActDispatcher
@@ -412,7 +428,10 @@ class NovaAct:
     def __exit__(
         self, exc_type: Type[BaseException] | None, exc_value: BaseException | None, traceback: BaseException | None
     ) -> None:
-        self.stop()
+        if not self.started:
+            _LOGGER.warning("Attention: Client is already stopped.")
+            return
+        self._stop(exc_type=exc_type)
 
     @property
     def started(self) -> bool:
@@ -471,7 +490,7 @@ class NovaAct:
     def go_to_url(self, url: str) -> None:
         """Navigates to the specified URL and waits for the page to settle."""
 
-        validate_url(url, "go_to_url")
+        validate_url(url, allow_file_urls=self._allow_file_urls)
 
         if not self.started or self._session_id is None:
             raise ClientNotStarted("Run start() to start the client before running go_to_url")
@@ -537,8 +556,7 @@ class NovaAct:
 
 
         try:
-            workflow_run = None
-            self._session_id = self._backend.create_session(workflow_run)
+            self._session_id = self._backend.create_session(self._workflow_run)
 
 
             set_logging_session(self._session_id)
@@ -605,8 +623,9 @@ class NovaAct:
             except Exception as e:
                 _LOGGER.error(f"Error in stop hook {hook}: {e}", exc_info=True)
 
-    def _stop(self) -> None:
+    def _stop(self, exc_type: Type[BaseException] | None = None) -> None:
         try:
+
             self._execute_stop_hooks()
             self._dispatcher.cancel_prompt()
             self._actuator.stop()
@@ -665,6 +684,102 @@ class NovaAct:
         ActError
         ValidationFailed
         """
+        result = self._act(
+            prompt=prompt,
+            timeout=timeout,
+            max_steps=max_steps,
+            schema=schema,
+            model_temperature=model_temperature,
+            model_top_k=model_top_k,
+            model_seed=model_seed,
+            observation_delay_ms=observation_delay_ms,
+        )
+
+        if schema:
+            return result
+        else:
+            return result.without_response()
+
+    def act_get(
+        self,
+        prompt: str,
+        schema: Mapping[str, JSONType] = STRING_SCHEMA,
+        *,
+        timeout: int | None = None,
+        max_steps: int | None = None,
+        model_temperature: float | None = None,
+        model_top_k: int | None = None,
+        model_seed: int | None = None,
+        observation_delay_ms: int | None = None,
+    ) -> ActGetResult:
+        """Actuate on the web browser using natural language, and return a structured response.
+
+        This method is nearly identical to `act`, except it always provides the model with a
+        JSONSchema for properly formatting responses. It should be used only when the user desires
+        an answer from the model.
+
+        For example, one would use `act_get` as follows, because a structured extract is requested:
+        ```
+        with NovaAct(...) as nova:
+            result = nova.act_get("How many colors do you see on this page?", schema={"type": "integer"})
+            print(result.parsed_response)
+        ```
+
+        In contrast, one would not use `act_get` for an example as follows, because no information is
+        requested beyond the exit status of the call:
+        ```
+        with NovaAct(...) as nova:
+            nova.act("Click on the 'Learn More' button.")
+        ```
+
+        Parameters
+        ----------
+        prompt: str
+            The natural language task to actuate on the web browser.
+        timeout: int, optional
+            The timeout (in seconds) for the task to actuate.
+        max_steps: int
+            Configure the maximum number of steps (browser actuations) `act()` will take before giving up on the task.
+            Use this to make sure the agent doesn't get stuck forever trying different paths. Default is 30.
+        schema: Dict[str, Any]
+            An optional jsonschema, which the output should to adhere to. This defaults to {"type": "string} when not
+            specified.
+        observation_delay_ms: int | None
+            Additional delay in milliseconds before taking an observation of the page
+
+        Returns
+        -------
+        ActResult
+
+        Raises
+        ------
+        ActError
+        ValidationFailed
+
+        """
+        return self._act(
+            prompt=prompt,
+            timeout=timeout,
+            max_steps=max_steps,
+            schema=schema,
+            model_temperature=model_temperature,
+            model_top_k=model_top_k,
+            model_seed=model_seed,
+            observation_delay_ms=observation_delay_ms,
+        )
+
+    def _act(
+        self,
+        prompt: str,
+        timeout: int | None,
+        max_steps: int | None,
+        schema: Mapping[str, JSONType] | None,
+        model_temperature: float | None,
+        model_top_k: int | None,
+        model_seed: int | None,
+        observation_delay_ms: int | None,
+    ) -> ActGetResult:
+        """Shared logic for act() (with/without structured extract)."""
         if not self.started:
             raise ClientNotStarted("Run start() to start the client before calling act().")
 
@@ -677,11 +792,10 @@ class NovaAct:
             prompt = add_schema_to_prompt(prompt, schema)
 
 
-        workflow_run = None
         tools: list[ActionType] | None = None
 
         assert self._session_id is not None, "Session ID should not be None when client is started"
-        act_id = self._backend.create_act(workflow_run, self._session_id, prompt, tools)
+        act_id = self._backend.create_act(self._workflow_run, self._session_id, prompt, tools)
 
         act = Act(
             id=act_id,
@@ -701,13 +815,18 @@ class NovaAct:
 
 
         error: NovaActError | None = None
-        result: ActResult | None = None
+        result: ActGetResult | None = None
 
         try:
             result = self.dispatcher.dispatch(act)
 
             if schema:
                 result = populate_json_schema_response(result, schema)
+                if not result.matches_schema:
+                    raise ActInvalidModelGenerationError(
+                        message=f"Result '{result.response}' did not match expected schema '{schema}.'",
+                        metadata=result.metadata,
+                    )
         except (ActError, AuthError) as e:
             error = e
             raise e

@@ -11,7 +11,7 @@ Nova Act is an early research preview of an SDK + model for building agents desi
 
 Amazon Nova Act is an experimental SDK. When using Nova Act, please keep in mind the following:
 
-1. ⚠️ Please be aware that Nova Act may encounter commands in the content it encounters on third party websites. These unauthorized commands, known as prompt injections, may cause the model to make mistakes or act in a manner that differs from user-provided or model instructions. To reduce the risks associated with prompt injections, it is important to monitor Nova Act and limit its operations to websites you trust.
+1. ⚠️ Please be aware that Nova Act may encounter commands in the content it observes on third party websites, including user-generated content on trusted websites such as social media posts, search results, forum comments, news articles, and document attachments. These unauthorized commands, known as prompt injections, may cause the model to make mistakes or act in a manner that differs from its instructions, such as ignoring your instructions, performing unauthorized actions, or exfiltrating sensitive data. To reduce the risks associated with prompt injections, it is important to monitor Nova Act and review its actions, especially when processing untrusted user-contributed content.
 2. Nova Act may make mistakes. You are responsible for monitoring Nova Act and using it in accordance with our [Acceptable Use Policy](https://www.amazon.com/gp/help/customer/display.html?nodeId=TTFAPMmEqemeDWZaWf). When using the research preview, we collect information on interactions with Nova Act, including prompts and screenshots taken while Nova Act is engaged with the browser, in order to provide, develop, and improve our services. You can request to delete your Nova Act data by emailing us at nova-act@amazon.com.
 3. Do not share your API key. Anyone with access to your API key can use it to operate Nova Act under your Amazon account. If you lose your API key or believe someone else may have access to it, go to https://nova.amazon.com/act to deactivate your key and obtain a new one.
 4. We recommend that you do not provide sensitive information to Nova Act, such as account passwords. Note that if you use sensitive information through Playwright calls, the information could be collected in screenshots if it appears unobstructed on the browser when Nova Act is engaged in completing an action. (See [Entering sensitive information](#entering-sensitive-information) below.).
@@ -98,7 +98,7 @@ playwright install chrome
 from nova_act import NovaAct
 
 with NovaAct(starting_page="https://nova.amazon.com/act") as nova:
-    nova.act("Click learn more. Then, return the title and publication date of the blog.")
+    nova.act_get("Click learn more. Then, return the title and publication date of the blog.")
 ```
 
 The SDK will (1) open Chrome, (2) perform the task as described in the prompt, and then (3) close Chrome. Details of the run will be printed as console log messages.
@@ -118,7 +118,7 @@ Type "help", "copyright", "credits" or "license" for more information.
 >>> from nova_act import NovaAct
 >>> nova = NovaAct(starting_page="https://nova.amazon.com/act")
 >>> nova.start()
->>> nova.act("Click learn more. Then, return the title and publication date of the blog.")
+>>> nova.act_get("Click learn more. Then, return the title and publication date of the blog.")
 ```
 
 Feel free to manipulate the browser in between these `act()` calls as well, but please don't interact with the browser when an `act()` is running because the underlying model will not know what you've changed!
@@ -164,12 +164,12 @@ nova.act("Navigate to the routes tab")
 
 ❌ DON'T
 ```python
-nova.act("I want to go and meet a friend. I should figure out when the Orange Line comes next.")
+nova.act_get("I want to go and meet a friend. I should figure out when the Orange Line comes next.")
 ```
 
 ✅ DO
 ```python
-nova.act(f"Find the next departure time for the Orange Line from Government Center after {time}")
+nova.act_get(f"Find the next departure time for the Orange Line from Government Center after {time}")
 ```
 
 **2. Break up large acts into smaller ones**
@@ -194,13 +194,15 @@ nova.act(f"fill in my name, address, and DOB according to {blob}")
 
 Use `pydantic` and ask `act()` to respond to a question about the browser page in a certain schema.
 
-- Make sure you use a schema whenever you are expecting any kind of structured response, even just a bool (yes/no).
+- Make sure you use a schema whenever you are expecting any kind of structured response, even just a bool (yes/no). If a schema is not provided, the returned object will not contain a response.
 - Put a prompt to extract information in its own separate `act()` call.
+
+For convenience, the `act_get()` function works the same as `act()` but provides a default `STRING_SCHEMA`, so that a response will always be available in the return object whether or not a specific schema is provided. We recommend using `act_get()` for all extraction tasks, to ensure type safety.
 
 Example:
 ```python
 from pydantic import BaseModel
-from nova_act import NovaAct, ActResult
+from nova_act import NovaAct, ActInvalidModelGenerationError
 
 
 class Book(BaseModel):
@@ -218,10 +220,11 @@ def get_books(year: int) -> BookList | None:
     with NovaAct(
         starting_page=f"https://en.wikipedia.org/wiki/List_of_The_New_York_Times_number-one_books_of_{year}#Fiction"
     ) as nova:
-        result = nova.act("Return the books in the Fiction list",
+        try:
+            result = nova.act_get("Return the books in the Fiction list",
                        # Specify the schema for parsing.
                        schema=BookList.model_json_schema())
-        if not result.matches_schema:
+        except ActInvalidModelGenerationError:
             # act response did not match the schema ¯\_(ツ)_/¯
             return None
         # Parse the JSON into the pydantic model.
@@ -233,13 +236,14 @@ If all you need is a bool response, there's a convenient `BOOL_SCHEMA` constant:
 
 Example:
 ```python
-from nova_act import NovaAct, BOOL_SCHEMA
+from nova_act import NovaAct, ActInvalidModelGenerationError, BOOL_SCHEMA
 
 with NovaAct(starting_page="https://nova.amazon.com/act") as nova:
-    result = nova.act("Am I logged in?", schema=BOOL_SCHEMA)
-    if not result.matches_schema:
+    try:
+        result = nova.act_get("Am I logged in?", schema=BOOL_SCHEMA)
+    except ActInvalidModelGenerationError as e:
         # act response did not match the schema ¯\_(ツ)_/¯
-        print(f"Invalid result: {result=}")
+        print(f"Invalid result: {e}")
     else:
         # result.parsed_response is now a bool
         if result.parsed_response:
@@ -356,7 +360,7 @@ When using this feature, you must specify `clone_user_data_dir=False` and pass t
 >>> rsync_from_default_user_data(working_user_data_dir)
 >>> nova = NovaAct(use_default_chrome_browser=True, clone_user_data_dir=False, user_data_dir=working_user_data_dir, starting_page="https://nova.amazon.com/act")
 >>> nova.start()
->>> nova.act("Click learn more. Then, return the title and publication date of the blog.")
+>>> nova.act_get("Click learn more. Then, return the title and publication date of the blog.")
 ...
 >>> nova.stop()
 >>> quit()
@@ -379,6 +383,34 @@ nova.page.keyboard.type(getpass())
 nova.act("sign in")
 ```
 
+### Security Options
+
+NovaAct is initialized with secure default behaviors which you may want to relax depending on your use-case.
+
+#### Allow Navigation to Local `file://` URLS
+
+To enable local file navigation, set the `SecurityOptions.allow_file_urls` flag to True:
+```python
+from nova_act import NovaAct, SecurityOptions
+
+NovaAct(starting_page="file://home/nova-act/site.html", SecurityOptions(allow_file_urls=True))
+```
+#### Allow File Uploads
+To allow the agent to upload files to websites, define one or more filepath patterns in `SecurityOptions.allowed_file_upload_paths`.
+```
+from nova_act import NovaAct, SecurityOptions
+
+NovaAct(starting_page="https://example.com", SecurityOptions(allowed_file_upload_paths=['/home/nova-act/shared/*']))
+```
+
+Examples filepath structures:
+- `["/home/nova-act/shared/*"]` - Allow uploads from specific directory
+- `["/home/nova-act/shared/file.txt"]` - Allow a specific filepath
+- `["*"]` - Enable file uploads from all paths
+- `[]` - Disable file uploads (Default)
+
+
+
 ### State Guardrails
 
 State guardrails allow you to control which URLs the agent can visit during execution. You can provide a callback function that inspects the browser state after each observation and decides whether to allow or block continued execution. If blocked, `act()` will raise `ActStateGuardrailError`. This is useful for preventing the agent from navigating to unauthorized domains or sensitive pages.
@@ -399,12 +431,12 @@ with NovaAct(starting_page="https://example.com", state_guardrail=url_guardrail)
 
 NovaAct will not solve captchas. It is up to the user to do that. If your script encounters captchas in certain places, you can do the following:
 
-1. Check if a captcha is being presented (by using `act()` to inspect the screen)
+1. Check if a captcha is being presented (by using `act_get()` to inspect the screen)
 2. If so, pause the workflow and ask the user to get past the captcha, e.g. using `input()` for a workflow launched from a terminal, and then let the user resume once the flow is past the captcha.
 
 ```python
-result = nova.act("Is there a captcha on the screen?", schema=BOOL_SCHEMA)
-if result.matches_schema and result.parsed_response:
+result = nova.act_get("Is there a captcha on the screen?", schema=BOOL_SCHEMA)
+if result.parsed_response:
     input("Please solve the captcha and hit return when done")
 ...
 ```
@@ -557,7 +589,7 @@ with NovaAct(
     boto_session=boto_session,  # You may use API key here instead
     stop_hooks=[s3_writer]
 ) as nova:
-    nova.act("Click learn more. Then, return the title and publication date of the blog.")
+    nova.act_get("Click learn more. Then, return the title and publication date of the blog.")
 ```
 
 The S3Writer requires the following AWS permissions:
@@ -658,10 +690,6 @@ Returns an `ActResult`.
 
 ```python
 class ActResult:
-    response: str | None
-    parsed_response: Union[Dict[str, Any], List[Any], str, int, float, bool] | None
-    valid_json: bool | None
-    matches_schema: bool | None
     metadata: ActMetadata
 
 class ActMetadata:
@@ -671,6 +699,16 @@ class ActMetadata:
     start_time: float
     end_time: float
     prompt: string
+```
+
+If a schema is passed to `act()` (the `act_get()` function conveniently provides a default `STRING_SCHEMA`), then the returned object will be an `ActGetResult`, a subclass which includes the raw and structured response:
+
+```python
+class ActGetResult(ActResult):
+    response: str | None
+    parsed_response: JSONType
+    valid_json: bool | None
+    matches_schema: bool | None
 ```
 
 #### Do it programmatically
