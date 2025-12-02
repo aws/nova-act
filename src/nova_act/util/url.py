@@ -18,10 +18,18 @@ from urllib.parse import urlparse, urlunparse
 
 import certifi
 
+from nova_act.types.act_errors import ActStateGuardrailError
 from nova_act.types.errors import InvalidCertificate, InvalidURL
+from nova_act.types.guardrail import GuardrailCallable, GuardrailDecision, GuardrailInputState
+from nova_act.util.path_validator import validate_file_url
 
 
-def validate_url(url: str, default_to_https: bool = False, allow_file_urls: bool = False) -> str:
+def validate_url(
+    url: str,
+    default_to_https: bool = False,
+    allowed_file_open_paths: list[str] = [],
+    state_guardrail: GuardrailCallable | None = None,
+) -> str:
     """
     Checks for illegal characters, applies allow-list to only permit specific schemes (http, https, etc),
     and verifies that the url is well-formed.
@@ -34,8 +42,12 @@ def validate_url(url: str, default_to_https: bool = False, allow_file_urls: bool
     default_to_https : bool
         If True and the given url does not contain a scheme, "https://" is prepended to the returned url
 
-    allow_file_urls : bool
-        If True then 'file:' scheme is permitted, else raise InvalidURL
+    allowed_file_open_paths : list[str]
+        If non-empty, then 'file:' scheme is permitted and the given url must point to a file within the
+        list of allowed paths. Else, raise InvalidURL
+
+    state_guardrail : GuardrailCallable
+        If defined, will be called to check guardrail policy against the given URL
 
     Returns
     -------
@@ -71,8 +83,9 @@ def validate_url(url: str, default_to_https: bool = False, allow_file_urls: bool
     http_schemes = ["http", "https"]
     allowed_url_schemes = http_schemes + ["about"]
 
-    # 'file' can be unsafe in some situations so only allow if flag is set
-    if allow_file_urls:
+    # 'file' can be unsafe in some situations so only allow the file:// prefix if
+    # at least one allowed path is configured.
+    if allowed_file_open_paths:
         allowed_url_schemes.append("file")
 
     if parsed_url.scheme not in allowed_url_schemes:
@@ -84,14 +97,24 @@ def validate_url(url: str, default_to_https: bool = False, allow_file_urls: bool
         if parsed_url.scheme == "file":
             message += (
                 "  To allow use of 'file://' set "
-                + "NovaAct parameter 'security_options=SecurityOptions(allow_file_urls=True)'"
+                + "NovaAct parameter 'security_options=SecurityOptions(allowed_file_open_paths=['/path/to/file'])'"
             )
 
         raise InvalidURL(message)
 
+    # If the scheme is file, validate that it points to a path that is permitted
+    if parsed_url.scheme == "file":
+        validate_file_url(url, allowed_file_open_paths)
+
     # If the scheme is http/https, assert that there is a netloc part of the path
     if parsed_url.scheme in http_schemes and not parsed_url.netloc:
         raise InvalidURL(f"Invalid URL format. URL: '{url}'")
+
+    # If a state guardrail is defined, check it
+    if state_guardrail is not None:
+        decision = state_guardrail(GuardrailInputState(browser_url=url))
+        if decision == GuardrailDecision.BLOCK:
+            raise ActStateGuardrailError(f"State guardrail blocked URL: '{url}'")
 
     return url
 

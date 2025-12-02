@@ -1,0 +1,6 @@
+build
+setuptools
+twine
+wheel
+mypy
+boto3-stubs

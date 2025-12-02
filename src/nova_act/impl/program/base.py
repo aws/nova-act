@@ -29,6 +29,7 @@ class Call(FrozenBaseModel):
     name: str
     kwargs: dict[str, JSONType]
     id: str
+    is_tool: bool = False
 
 
 @dataclass(frozen=True)

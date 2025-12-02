@@ -116,7 +116,7 @@ def get_element_at_point(page: Page, x: float, y: float) -> ElementDict | None:
         """
         ([x, y]) => {
             %s
-            const elem = deepElementFromPoint(document, x, y, 0);
+            const elem = deepElementFromPoint(document, x, y);
             if (!elem) return null;
 
             const attributes = {};
@@ -181,7 +181,7 @@ def check_if_native_dropdown(page: Page, x: float, y: float) -> bool:
                 return null;
             }
 
-            const hitElement = deepElementFromPoint(document, x, y, 0);
+            const hitElement = deepElementFromPoint(document, x, y);
             if (!hitElement) return false;
             return !!findNearestSelect(hitElement);
         }
@@ -212,10 +212,12 @@ def is_element_focused(page: Page, x: float, y: float) -> bool:
     result: bool = page.evaluate(
         """
         ([x, y]) => {
-            const elem = document.elementFromPoint(x, y);
+            %s
+            const elem = deepElementFromPoint(document, x, y);
             return elem.contains(document.activeElement);
         }
-        """,
+        """
+        % (DEEP_ELEMENT_FROM_POINT_JS,),
         [x, y],
     )
     return result

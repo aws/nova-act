@@ -18,9 +18,12 @@ import shutil
 import tempfile
 from typing import Literal, Mapping, Type, cast
 
-from boto3.session import Session
+from boto3 import Session
 from playwright.sync_api import Page, Playwright
 
+from nova_act.impl.backends.starburst.connector import StarburstBackend
+from nova_act.impl.backends.starburst.types import ActErrorData
+from nova_act.impl.backends.sunburst import SunburstBackend
 from nova_act.impl.common import rsync_to_temp_dir
 from nova_act.impl.controller import NovaStateController
 from nova_act.impl.dispatcher import ActDispatcher
@@ -38,14 +41,21 @@ from nova_act.tools.actuator.interface.actuator import ActionType
 from nova_act.tools.browser.default.default_nova_local_browser_actuator import (
     DefaultNovaLocalBrowserActuator,
 )
-from nova_act.tools.browser.default.playwright_instance_options import PlaywrightInstanceOptions
+from nova_act.tools.browser.default.playwright_instance_options import (
+    PlaywrightInstanceOptions,
+)
 from nova_act.tools.browser.interface.browser import BrowserActuatorBase
 from nova_act.tools.browser.interface.playwright_pages import PlaywrightPageManagerBase
+from nova_act.tools.human.interface.human_input_callback import (
+    DefaultHumanInputCallbacks,
+    HumanInputCallbacksBase,
+)
 
 
 from nova_act.impl.backends.factory import BackendFactory
 from nova_act.types.act_errors import ActError, ActInvalidModelGenerationError
 from nova_act.types.act_result import ActGetResult, ActResult
+from nova_act.types.api.status import ActStatus
 from nova_act.types.errors import (
     AuthError,
     ClientNotStarted,
@@ -60,6 +70,10 @@ from nova_act.types.guardrail import GuardrailCallable
 from nova_act.types.hooks import StopHook
 from nova_act.types.json_type import JSONType
 from nova_act.types.state.act import Act
+from nova_act.types.workflow import Workflow, get_current_workflow
+from nova_act.types.workflow_run import WorkflowRun
+from nova_act.util.decode_string import decode_awl_raw_program
+from nova_act.util.error_messages import get_missing_workflow_definition_error, get_no_authentication_error
 from nova_act.util.event_handler import EventHandler
 from nova_act.util.jsonschema import (
     STRING_SCHEMA,
@@ -72,6 +86,7 @@ from nova_act.util.logging import (
     make_trace_logger,
     set_logging_session,
     setup_logging,
+    trace_log_lines,
 )
 from nova_act.util.url import validate_url
 
@@ -85,16 +100,15 @@ _TRACE_LOGGER = make_trace_logger()
 ManagedActuatorType = Type[DefaultNovaLocalBrowserActuator | ExtensionActuator]
 
 
-
 class NovaAct:
     """Client for interacting with the Nova Act Agent.
 
     Example:
     ```
     >>> from nova_act import NovaAct
-    >>> n = NovaAct(starting_page="https://nova.amazon.com/act")
+    >>> n = NovaAct(starting_page="https://nova.amazon.com/act/gym/next-dot/search")
     >>> n.start()
-    >>> n.act("Click learn more. Then, return the title and publication date of the blog.")
+    >>> n.act("Find flights from Boston to Wolf on Feb 22nd")
     ```
 
     Attributes
@@ -124,7 +138,6 @@ class NovaAct:
         self,
         starting_page: str | None = None,
         *,
-        boto_session: Session | None = None,
         cdp_endpoint_url: str | None = None,
         cdp_headers: dict[str, str] | None = None,
         cdp_use_existing_page: bool = False,
@@ -150,6 +163,9 @@ class NovaAct:
         use_default_chrome_browser: bool = False,
         user_agent: str | None = None,
         user_data_dir: str | None = None,
+        human_input_callbacks: HumanInputCallbacksBase | None = None,
+        tools: list[ActionType] | None = None,
+        workflow: Workflow | None = None,
     ):
         """Initialize a client object.
 
@@ -222,26 +238,32 @@ class NovaAct:
             Optional preview features for opt-in.
         security_options: SecurityOptions, optional
             Set of security-related parameters that overwrite default agent behavior
-            allow_file_urls: bool
-                Allow the browser to navigate to file:// urls. Defaults to False.
+            allowed_file_open_paths: list[str]
+                List of filepaths that the browser is allowed to navigate to as file:// urls.
+                Defaults to [], which disallows the file:// url scheme.
             allowed_file_upload_paths: list[str]
                 List of filepaths from which file uploads are permitted. Defaults to [], disabling all file uploads.
-        boto_session : Session, optional
-            A boto3 session containing IAM credentials for authentication.
-            When provided, enables AWS IAM-based authentication instead of API key authentication.
-            Cannot be used together with nova_act_api_key.
         proxy: dict[str, str], optional
             Proxy configuration for the browser. Should contain 'server', 'username', and 'password' keys.
+        human_input_callbacks: HumanInputCallbacksBase | None = None
+            An implementation of human input callbacks. If not provided, a request for human input tool will not be
+            made.
+        tools: list[ActionType] | None = None,
+            A list of client provided tools.
         """
-        self._workflow_run = None
+        self._workflow_run: WorkflowRun | None = None
 
         # initialize with default values if not specified by client
         if not security_options:
             security_options = SecurityOptions()
 
 
+        self._workflow: Workflow | None = None
+        self._set_workflow(workflow)
+
         self._run_info_compiler: RunInfoCompiler | None = None
         self._starting_page = starting_page
+        self._state_guardrail = state_guardrail
 
 
         if preview is not None:
@@ -263,12 +285,22 @@ class NovaAct:
         _headless = headless or bool(os.environ.get("NOVA_ACT_HEADLESS"))
 
         self._nova_act_api_key = nova_act_api_key or os.environ.get("NOVA_ACT_API_KEY")
-        self._boto_session = boto_session
+
+        self._validate_authentication(scripted_api_key=nova_act_api_key)
 
         self._backend = BackendFactory.create_backend(
             api_key=self._nova_act_api_key,
-            boto_session=self._boto_session,
+            workflow=self._workflow,
         )
+
+        # For SunburstBackend without an explicit workflow, create a default one
+        # This centralizes workflow_run creation/update in Workflow.__enter__/__exit__
+        if isinstance(self._backend, SunburstBackend) and self._workflow is None:
+            self._workflow = Workflow(
+                model_id="nova-act-latest",
+                nova_act_api_key=self._nova_act_api_key,
+            )
+            self._workflow._managed = True
 
         validate_base_parameters(
             starting_page=self._starting_page,
@@ -281,10 +313,11 @@ class NovaAct:
             logs_directory=logs_directory,
             chrome_channel=_chrome_channel,
             ignore_https_errors=ignore_https_errors,
-            allow_file_urls=security_options.allow_file_urls,
+            allowed_file_open_paths=security_options.allowed_file_open_paths,
             clone_user_data_dir=clone_user_data_dir,
             use_default_chrome_browser=use_default_chrome_browser,
             proxy=proxy,
+            state_guardrail=state_guardrail,
         )
 
         self._session_user_data_dir_is_temp: bool = False
@@ -342,6 +375,11 @@ class NovaAct:
 
         self._session_id: str | None = None
 
+        # Session-level time tracking
+        self._session_total_time_worked_s: float = 0.0
+        self._session_total_human_wait_s: float = 0.0
+        self._session_act_count: int = 0
+
 
         playwright_options = PlaywrightInstanceOptions(
             maybe_playwright=playwright_instance,
@@ -365,7 +403,7 @@ class NovaAct:
             security_options=security_options,
         )
         self._cdp_endpoint_url = cdp_endpoint_url
-        self._allow_file_urls = security_options.allow_file_urls
+        self._allowed_file_open_paths = security_options.allowed_file_open_paths
 
         self._actuator: BrowserActuatorBase
         self._dispatcher: ActDispatcher
@@ -386,6 +424,7 @@ class NovaAct:
                 _LOGGER.debug(f"Using a DefaultNovaLocalBrowserActuator: {actuator.__name__}")
                 self._actuator = actuator(
                     playwright_options=playwright_options,
+                    state_guardrail=state_guardrail,
                 )
             else:
                 raise ValidationFailed(
@@ -398,15 +437,83 @@ class NovaAct:
             )
             self._actuator = actuator
 
+        self._tools: list[ActionType] = tools or []
+        self._human_input_callbacks = human_input_callbacks or self._get_default_human_input_callbacks()
 
         self._dispatcher = ActDispatcher(
             actuator=self._actuator,
             backend=self._backend,
             event_handler=self._event_handler,
             controller=self._controller,
+            human_input_callbacks=self._human_input_callbacks,
+            tools=self._tools,
             state_guardrail=state_guardrail,
         )
 
+    def _validate_authentication(self, scripted_api_key: str | None) -> None:
+        """Validate authentication configuration for NovaAct without Workflow.
+
+        When a Workflow is used, authentication is validated by Workflow._initialize_backend
+        before NovaAct is instantiated, so we can skip validation here.
+
+        For NovaAct usage without Workflow, we validate:
+        - At least one auth method exists (API key or AWS credentials)
+        - AWS credentials alone require a Workflow
+        - Warn when both API key and AWS credentials are present
+
+        Args:
+            scripted_api_key: The API key parameter passed to __init__
+
+        Raises:
+            AuthError: If no authentication method is available
+            ValueError: If AWS credentials are present but workflow is missing
+        """
+
+
+        has_aws_credentials = Session().get_credentials() is not None
+        has_api_key = self._nova_act_api_key is not None
+        has_workflow = self._workflow is not None
+        has_env_api_key = scripted_api_key is None and os.environ.get("NOVA_ACT_API_KEY") is not None
+
+        # Workflow authentication is already validated in Workflow._initialize_backend
+        if has_workflow:
+            return
+
+        # No authentication credentials at all
+        if not has_api_key and not has_aws_credentials:
+            raise AuthError(get_no_authentication_error())
+
+        # AWS credentials require a Workflow construct
+        if has_aws_credentials and not has_api_key:
+            raise ValueError(get_missing_workflow_definition_error())
+
+        # Warn when API key takes precedence over AWS credentials
+        if has_env_api_key and has_aws_credentials:
+            _LOGGER.warning(
+                "Note: Using nova.amazon.com free version API Key from "
+                "environment variable 'NOVA_ACT_API_KEY'. Ignoring AWS Credentials."
+            )
+
+    def _set_workflow(self, workflow: Workflow | None) -> None:
+        if workflow is None:
+            workflow = get_current_workflow()
+
+        workflow_run: WorkflowRun | None = None
+        if workflow is not None:
+            if workflow.workflow_run is None:
+                raise ValidationFailed(
+                    "Workflow does not have workflow run set. Please use Workflow as a context manager"
+                )
+            workflow_run = workflow.workflow_run
+
+        self._workflow = workflow
+        self._workflow_run = workflow_run
+
+    def _get_default_human_input_callbacks(self) -> HumanInputCallbacksBase:
+        """Get the default HumanInputCallbacks implementation."""
+
+
+        return DefaultHumanInputCallbacks()
 
     def _log_stop_hooks_registration(self) -> None:
         """Log registered stop hooks for debugging purposes."""
@@ -490,12 +597,13 @@ class NovaAct:
     def go_to_url(self, url: str) -> None:
         """Navigates to the specified URL and waits for the page to settle."""
 
-        validate_url(url, allow_file_urls=self._allow_file_urls)
+        validate_url(url, allowed_file_open_paths=self._allowed_file_open_paths, state_guardrail=self._state_guardrail)
 
         if not self.started or self._session_id is None:
             raise ClientNotStarted("Run start() to start the client before running go_to_url")
 
-        self.dispatcher.go_to_url(url)
+        self._actuator.go_to_url(url)
+        self._actuator.wait_for_page_to_settle()
 
     @property
     def dispatcher(self) -> ActDispatcher:
@@ -556,8 +664,14 @@ class NovaAct:
 
 
         try:
+            # Enter workflow context if we manage it
+            # This calls Workflow.__enter__() which creates the workflow_run
+            if self._workflow is not None and self._workflow._managed:
+                self._workflow.__enter__()
+                self._workflow_run = self._workflow.workflow_run
             self._session_id = self._backend.create_session(self._workflow_run)
 
+            self._human_input_callbacks.act_session_id = self._session_id
 
             set_logging_session(self._session_id)
             self._session_logs_directory = self._init_session_logs_directory(self._logs_directory, self._session_id)
@@ -574,7 +688,6 @@ class NovaAct:
 
             self._actuator.start(starting_page=self._starting_page, session_logs_directory=self._session_logs_directory)
 
-            self._dispatcher.wait_for_page_to_settle()
             self._run_info_compiler = RunInfoCompiler(self._session_logs_directory)
             session_logs_str = f" logs dir {self._session_logs_directory}" if self._session_logs_directory else ""
 
@@ -625,10 +738,41 @@ class NovaAct:
 
     def _stop(self, exc_type: Type[BaseException] | None = None) -> None:
         try:
-
             self._execute_stop_hooks()
             self._dispatcher.cancel_prompt()
             self._actuator.stop()
+
+            # Log session-level time worked summary
+            if self._session_act_count > 0 and self._session_total_time_worked_s > 0:
+                from nova_act.types.act_metadata import _format_duration
+
+                time_worked_str = _format_duration(self._session_total_time_worked_s)
+                act_calls_text = "act call" if self._session_act_count == 1 else "act calls"
+
+                if self._session_total_human_wait_s > 0:
+                    human_wait_str = _format_duration(self._session_total_human_wait_s)
+                    session_summary = (
+                        f"⏱️  Approx. Total Time Worked in Session: {time_worked_str} "
+                        f"across {self._session_act_count} {act_calls_text} "
+                        f"(excluding {human_wait_str} human wait)"
+                    )
+                else:
+                    session_summary = (
+                        f"⏱️  Approx. Total Time Worked in Session: {time_worked_str} "
+                        f"across {self._session_act_count} {act_calls_text}"
+                    )
+
+                trace_log_lines(session_summary)
+
+                # Write session summary to JSON file
+                if self._run_info_compiler and self._session_id:
+                    self._run_info_compiler.write_session_summary(
+                        session_id=self._session_id,
+                        total_time_worked_s=self._session_total_time_worked_s,
+                        total_human_wait_s=self._session_total_human_wait_s,
+                        act_count=self._session_act_count,
+                    )
+
             _TRACE_LOGGER.info(f"\nend session: {self._session_id}\n")
             self._event_handler.send_event(
                 type=EventType.LOG, log_level=LogType.INFO, data=f"end session: {self._session_id}"
@@ -636,6 +780,11 @@ class NovaAct:
 
             self._session_id = None
             set_logging_session(None)
+
+            # Exit workflow context if we manage it
+            # This calls Workflow.__exit__() which updates the workflow_run status
+            if self._workflow is not None and self._workflow._managed:
+                self._workflow.__exit__(exc_type, None, None)
         except Exception as e:
             raise StopFailed(str(e)) from e
 
@@ -653,11 +802,11 @@ class NovaAct:
         *,
         timeout: int | None = None,
         max_steps: int | None = None,
-        schema: Mapping[str, JSONType] | None = None,
         model_temperature: float | None = None,
         model_top_k: int | None = None,
         model_seed: int | None = None,
         observation_delay_ms: int | None = None,
+        schema: Mapping[str, JSONType] | None = None,
     ) -> ActResult:
         """Actuate on the web browser using natural language.
 
@@ -670,10 +819,12 @@ class NovaAct:
         max_steps: int
             Configure the maximum number of steps (browser actuations) `act()` will take before giving up on the task.
             Use this to make sure the agent doesn't get stuck forever trying different paths. Default is 30.
-        schema: Dict[str, Any] | None
-            An optional jsonschema, which the output should to adhere to
         observation_delay_ms: int | None
             Additional delay in milliseconds before taking an observation of the page
+        schema: Dict[str, Any] | None
+            .. deprecated::
+                Use :meth:`act_get` instead for structured responses.
+            An optional jsonschema, which the output should to adhere to
 
         Returns
         -------
@@ -696,8 +847,10 @@ class NovaAct:
         )
 
         if schema:
+            # schema is deprecated but allow duck-typing to preserve backward compatibility.
             return result
         else:
+            # Return the response-erased base result type.
             return result.without_response()
 
     def act_get(
@@ -793,6 +946,9 @@ class NovaAct:
 
 
         tools: list[ActionType] | None = None
+        tools = self._tools.copy()
+        if not isinstance(self._human_input_callbacks, DefaultHumanInputCallbacks):
+            tools += self._human_input_callbacks.as_tools()
 
         assert self._session_id is not None, "Session ID should not be None when client is started"
         act_id = self._backend.create_act(self._workflow_run, self._session_id, prompt, tools)
@@ -807,12 +963,14 @@ class NovaAct:
             model_top_k=model_top_k,
             model_seed=model_seed,
             observation_delay_ms=observation_delay_ms,
+            workflow_run=self._workflow_run,
         )
-        _TRACE_LOGGER.info(f'{get_session_id_prefix()}act("{prompt}")')
+        trace_log_lines(decode_awl_raw_program(f'act("{prompt}")'))
 
         self._event_handler.set_act(act)
         self._event_handler.send_event(type=EventType.LOG, log_level=LogType.INFO, data=f'act("{prompt}")')
 
+        self._human_input_callbacks.current_act_id = act.metadata.act_id
 
         error: NovaActError | None = None
         result: ActGetResult | None = None
@@ -851,6 +1009,34 @@ class NovaAct:
                     data=f"** View your act run here: {file_path}",
                 )
 
+            # Update act status based on execution result on Finally
+            if isinstance(self._backend, (StarburstBackend, SunburstBackend)):
+                # Determine status based on execution outcome
+                status: ActStatus
+                error_data: ActErrorData | None = None
+                if error is not None:
+                    status = "FAILED"
+                    error_data = ActErrorData(message=str(error), type=type(error).__name__)
+                else:
+                    status = "SUCCEEDED"
+
+                if self._workflow_run is not None:
+                    self._backend.update_act(
+                        workflow_run=self._workflow_run,
+                        session_id=act.session_id,
+                        act_id=act.id,
+                        status=status,
+                        error=error_data,
+                    )
+                else:
+                    # This should not happen since we check for workflow_run earlier
+                    raise ValueError("StarburstBackend requires workflow context for update_act")
+
+        # Update session-level time tracking
+        if result and result.metadata.time_worked_s is not None:
+            self._session_total_time_worked_s += result.metadata.time_worked_s
+            self._session_total_human_wait_s += result.metadata.human_wait_time_s
+            self._session_act_count += 1
 
         return result
 

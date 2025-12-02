@@ -64,6 +64,7 @@ class Step:
     model_output: ModelOutput
     observed_time: datetime
     server_time_s: float | None
+    step_id: str | None = None
     trace: TraceDict | None = None
 
     # Input validation

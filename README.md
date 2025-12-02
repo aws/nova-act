@@ -1,21 +1,11 @@
-# Nova Act
+# Nova Act SDK
 
 A Python SDK for Amazon Nova Act.
 
-Nova Act is an early research preview of an SDK + model for building agents designed to reliably take actions in web browsers. Building with the SDK enables developers to break down complex workflows into smaller, reliable, commands, add more detail where needed, call APIs, and intersperse direct browser manipulation. Developers can interleave Python code, whether it be tests, breakpoints, asserts, or threadpooling for parallelization. Read more about the announcement: https://labs.amazon.science/blog/nova-act.
+Amazon Nova Act is available as a new AWS service to build and manage fleets of reliable AI agents for automating production UI workflows at scale. Nova Act completes repetitive UI workflows in the browser and escalates to a human supervisor when appropriate. You can define workflows by combining the flexibility of natural language with Python code. Start by exploring in the web playground at nova.amazon.com/act, develop and debug in your IDE, deploy to AWS, and monitor your workflows in the AWS Console, all in just a few steps.
 
-> We are now working with select customers to productionize their agents, with capabilities including [AWS IAM authentication](https://aws.amazon.com/iam/), [Amazon S3](https://aws.amazon.com/s3/) secure storage, and integration with the [Amazon Bedrock AgentCore Browser](https://aws.amazon.com/bedrock/agentcore). Learn more in our [blog post](https://labs.amazon.science/blog/prototype-to-production) and join our [waitlist](https://amazonexteu.qualtrics.com/jfe/form/SV_9siTXCFdKHpdwCa).
+(Preview) Nova Act also integrates with external tools through API calls, remote MCP, or agentic frameworks, such as Strands Agents.
 
-
-## Disclosures
-
-Amazon Nova Act is an experimental SDK. When using Nova Act, please keep in mind the following:
-
-1. ⚠️ Please be aware that Nova Act may encounter commands in the content it observes on third party websites, including user-generated content on trusted websites such as social media posts, search results, forum comments, news articles, and document attachments. These unauthorized commands, known as prompt injections, may cause the model to make mistakes or act in a manner that differs from its instructions, such as ignoring your instructions, performing unauthorized actions, or exfiltrating sensitive data. To reduce the risks associated with prompt injections, it is important to monitor Nova Act and review its actions, especially when processing untrusted user-contributed content.
-2. Nova Act may make mistakes. You are responsible for monitoring Nova Act and using it in accordance with our [Acceptable Use Policy](https://www.amazon.com/gp/help/customer/display.html?nodeId=TTFAPMmEqemeDWZaWf). When using the research preview, we collect information on interactions with Nova Act, including prompts and screenshots taken while Nova Act is engaged with the browser, in order to provide, develop, and improve our services. You can request to delete your Nova Act data by emailing us at nova-act@amazon.com.
-3. Do not share your API key. Anyone with access to your API key can use it to operate Nova Act under your Amazon account. If you lose your API key or believe someone else may have access to it, go to https://nova.amazon.com/act to deactivate your key and obtain a new one.
-4. We recommend that you do not provide sensitive information to Nova Act, such as account passwords. Note that if you use sensitive information through Playwright calls, the information could be collected in screenshots if it appears unobstructed on the browser when Nova Act is engaged in completing an action. (See [Entering sensitive information](#entering-sensitive-information) below.).
-5. If you are using our browsing environment defaults, to identify our agent, look for `NovaAct` in the user agent string. If you operate Nova Act in your own browsing environment or customize the user agent, we recommend that you include that same string.
 
 ## Table of contents
 * [Pre-requisites](#pre-requisites)
@@ -23,7 +13,10 @@ Amazon Nova Act is an experimental SDK. When using Nova Act, please keep in mind
 * [Nova Act Authentication and Installation](#authentication)
 * [Quick Start](#quick-start)
 * [How to prompt Nova Act](#how-to-prompt-act)
+* [Workflows](#workflows)
 * [Extract information from a web page](#extracting-information-from-a-web-page)
+* [Human-in-the-loop (HITL)](#hitl-human-in-the-loop) 
+* [Tools](#tools)
 * [Run multiple sessions in parallel](#running-multiple-sessions-in-parallel)
 * [Authentication, cookies, and persisting browser state](#authentication-cookies-and-persistent-browser-state)
 * [Handling sensitive data](#entering-sensitive-information)
@@ -33,6 +26,7 @@ Amazon Nova Act is an experimental SDK. When using Nova Act, please keep in mind
 * [Working with dates](#picking-dates)
 * [Setting the browser user agent](#setting-the-browser-user-agent)
 * [Using a proxy](#using-a-proxy)
+* [Time worked tracking utility](#time-worked-tracking-utility)
 * [Logging and viewing traces](#logging)
 * [Recording a video of a session](#recording-a-session)
 * [Storing Session Data in Amazon S3](#storing-session-data-in-your-amazon-s3-bucket)
@@ -40,8 +34,11 @@ Amazon Nova Act is an experimental SDK. When using Nova Act, please keep in mind
 * [Viewing headless sessions](#viewing-a-session-that-is-running-in-headless-mode)
 * [Use Nova Act SDK with Amazon Bedrock AgentCore Browser Tool](#use-nova-act-sdk-with-amazon-bedrock-agentcore-browser-tool)
 * [Known limitations](#known-limitations)
+* [Disclosures](#disclosures)
+* [Report a Bug](#report-a-bug)
 * [Reference: Nova Act constructor parameters](#initializing-novaact)
 * [Reference: Actuating the browser](#actuating-the-browser)
+* [Reference: Nova Act CLI](#nova-act-cli)
 
 ## Pre-requisites
 
@@ -60,6 +57,8 @@ Accelerate your development process with the [Nova Act extension](https://github
 
 #### API Key Authentication
 
+Note: When using the Nova Act Playground and/or choosing Nova Act developer tools with API key authentication, access and use are subject to the nova.amazon.com Terms of Use. 
+
 
 Navigate to https://nova.amazon.com/act and generate an API key.
 
@@ -68,6 +67,11 @@ To save it as an environment variable, execute in the terminal:
 export NOVA_ACT_API_KEY="your_api_key"
 ```
 
+#### IAM-based Authentication
+
+Note: When choosing developer tools with AWS IAM authentication and/or deploying workflows to the Nova Act AWS service, your AWS Service Terms and/or Customer Agreement (or other agreement governing your use of the AWS Service) apply.
+
+Nova Act also supports authentication using IAM credentials. For details please refer to the Amazon [Nova Act User Guide documentation](https://docs.aws.amazon.com/nova-act/latest/userguide/). To use IAM-based credentials use the Workflow constructs (see [Worfklows](#workflows)). Please note the SDK will instantiate a default boto session if AWS credentials are already configured in your environment.
 
 ### Installation
 
@@ -97,8 +101,8 @@ playwright install chrome
 ```python
 from nova_act import NovaAct
 
-with NovaAct(starting_page="https://nova.amazon.com/act") as nova:
-    nova.act_get("Click learn more. Then, return the title and publication date of the blog.")
+with NovaAct(starting_page=“https://nova.amazon.com/act/gym/next-dot/search") as nova:
+    nova.act("Find flights from Boston to Wolf on Feb 22nd")
 ```
 
 The SDK will (1) open Chrome, (2) perform the task as described in the prompt, and then (3) close Chrome. Details of the run will be printed as console log messages.
@@ -116,41 +120,30 @@ Using interactive Python is a nice way to experiment:
 Python 3.10.16 (main, Dec  3 2024, 17:27:57) [Clang 16.0.0 (clang-1600.0.26.4)] on darwin
 Type "help", "copyright", "credits" or "license" for more information.
 >>> from nova_act import NovaAct
->>> nova = NovaAct(starting_page="https://nova.amazon.com/act")
+>>> nova = NovaAct(starting_page="https://nova.amazon.com/act/gym/next-dot/search")
 >>> nova.start()
->>> nova.act_get("Click learn more. Then, return the title and publication date of the blog.")
+>>> nova.act("Find flights from Boston to Wolf on Feb 22nd")
 ```
 
-Feel free to manipulate the browser in between these `act()` calls as well, but please don't interact with the browser when an `act()` is running because the underlying model will not know what you've changed!
-
+Please don't interact with the browser when an `act()` is running because the underlying model will not know what you've changed!
 > Note: When using interactive mode, `ctrl+x` can exit the agent action leaving the browser intact for another `act()` call. `ctrl+c` does not do this -- it will exit the browser and require a `NovaAct` restart.
-
 
 ### Samples
 
 The [samples](./src/nova_act/samples) folder contains several examples of using Nova Act to complete various tasks, including:
-* search for apartments on a real estate website, search for each apartment's distance from a train station, and combine these into a single result set. [This sample](./src/nova_act/samples/apartments_caltrain.py) demonstrates running multiple NovaActs in parallel (more detail below).
-* order a meal from Sweetgreen and have it delivered. [This sample](./src/nova_act/samples/order_salad.py) demonstrates how to override the `user_data_dir` to provide a browser that is authenticated to order.sweetgreen.com (more detail below).
+* search for apartments on a real estate website, find each apartment's distance from a train station using a maps website, and combine these into a single result set. [This sample](./src/nova_act/samples/search_apartments_calculate_commute.py) demonstrates running multiple NovaActs in parallel (more detail below).
+* book a flight using data that is provided by a tool, and return the booking number. [This sample](./src/nova_act/samples/booking_with_data_from_tool.py) demonstrates how to implement a python function as a tool that can be used to provide data for the workflow.
+* allows a human to log into an email application, and approve to print the number of emails. [This sample](./src/nova_act/samples/print_number_of_emails.py) demonstrates providing HITL (Human in the loop) callback implementations to incorporate human participation in the workflow.
+
+For more samples showing how to use Nova Act SDK, please refer to this [Github repository](https://github.com/amazon-agi-labs/nova-act-samples)
 
 ## How to prompt act()
 
-Existing computer-use agents attempt to accomplish an end-to-end task by specifying the entire goal, possibly with hints to guide the agent, in one prompt. The agent then must take many steps sequentially to achieve the goal, and any issues or nondeterminism along the way can throw the workflow off track.
+The simplest way to use Nova Act to achieve an end-to-end task is by specifying the entire goal, possibly with hints to guide the agent, in one prompt. However, the agent then must take many steps sequentially to achieve the goal, and any issues or nondeterminism along the way can throw the workflow off track. We have found that Nova Act works most reliably when the task can be accomplished in fewer than 30 steps.
 
-Unfortunately, the current SOTA agent models are unable to achieve a satisfactory level of reliability when used this way. With Nova Act, we suggest breaking up the steps in the prompt to multiple `act()` calls as if you were telling another person how to complete a task. We believe this is the current best route for building repeatable, reliable, easy to maintain workflows.
+Make sure the prompt is direct and spells out exactly what you want Nova Act to do, including what information you want it to return, if any (read more on data extraction [here](#extracting-information-from-a-web-page)). Aim to completely specify the choices the agent should make and what values it should put in form fields. During your testing, if you see act() going off track, enhance the prompt with hints (e.g. how to use certain UI elements it encounters, how to get to a particular function on the website, or what paths to avoid) — just like you would do with a new team member who might be unfamiliar with the task and the website. If the agent is taking a long winding path or you are unable to get repeated reliability, break the task up into stages and connect these in code.
 
-When prompting Nova Act:
-
-**1. Be prescriptive and succinct in what the agent should do**
-
-❌ DON'T
-```python
-nova.act("From my order history, find my most recent order from India Palace and reorder it")
-```
-
-✅ DO
-```python
-nova.act("Click the hamburger menu icon, go to Order History, find my most recent order from India Palace and reorder it")
-```
+**1. Be direct and succinct in what the agent should do**
 
 ❌ DON'T
 ```python
@@ -172,7 +165,7 @@ nova.act_get("I want to go and meet a friend. I should figure out when the Orang
 nova.act_get(f"Find the next departure time for the Orange Line from Government Center after {time}")
 ```
 
-**2. Break up large acts into smaller ones**
+**2. Provide complete instructions**
 
 ❌ DON'T
 ```python
@@ -181,18 +174,220 @@ nova.act("book me a hotel that costs less than $100 with the highest star rating
 
 ✅ DO
 ```python
-nova.act(f"search for hotels in Houston between {startdate} and {enddate}")
-nova.act("sort by avg customer review")
-nova.act("hit book on the first hotel that is $100 or less")
-nova.act(f"fill in my name, address, and DOB according to {blob}")
-...
+nova.act(f"book a hotel for two adults in Houston between {startdate} and {enddate} that costs less than $100 per night with the highest star rating. two queen beds preferred but single king also ok. stop when you get to the enter customer details or payment page.")
 ```
+
+**3. Break up large acts into smaller ones**
+
+❌ DON'T
+```python
+nova.act("book me a hotel that costs less than $100 with the highest star rating then find the closest car rental and get me car there, finally find a lunch spot nearby and book it at 12:30pm")
+```
+
+✅ DO
+```python
+hotel_address = nova.act_get(f"book a hotel for two adults in Houston between {startdate} and {enddate} that costs less than $100 per night with the highest star rating. two queen beds preferred but single king also ok. return the address of the hotel you booked.").response
+nova.act(f“book a restaurant near {hotel_address} at 12:30pm for two people”)
+nova.act(f“rent a small sized car between {startdate} and {enddate} from a car rental place near {hotel_address}”)
+```
+
+And if the agent still struggles, break it down:
+
+```python
+nova.act(f"search for hotels for two adults in Houston between {startdate} and {enddate}")
+nova.act("sort by avg customer review")
+hotel_address = nova.act_get("book the first hotel that is $100 or less. prefer two queen beds if there is an option. return the address of the hotel you booked.").response
+nova.act(f“book a restaurant near {hotel_address} at 12:30pm on {startdate} for two people”)
+nova.act(f“search for car rental places near {hotel_address} and navigate to the closest one’s website”)
+nova.act(f“rent a small sized car between {startdate} and {enddate}, pickup time 12pm, drop-off 12pm.”)
+```
+
+## Workflows
+
+A workflow defines your agent's end-to-end task. Workflows are comprised of act() statements and Python code that orchestrate the automation logic.
+
+The `nova-act` SDK provides a number of convenience wrappers for managing workflows deployed with the NovaAct AWS service. Simply call the CreateWorkflowDefinition API (or use the AWS Console) and get a WorkflowDefinition to get started.
+
+### The Context Manager
+
+The core type driving workflow coordination with the NovaAct service is `Workflow`. This class provides a [context manager](https://peps.python.org/pep-0343/) which will handle calling the necessary workflow API operations from the Amazon Nova Act service. It calls `CreateWorkflowRun` when your run starts and `UpdateWorkflowRun` with the appropriate status when it finishes. It is provided to the `NovaAct` client via a constructor argument, so that all called APIs will be associated with the correct workflow + run (`CreateSession`, `CreateAct`, `InvokeActStep`, `UpdateAct` etc.). See the following example for how to use it:
+
+```python
+import os
+from nova_act import NovaAct, Workflow
+
+def main():
+    with Workflow(
+        workflow_definition_name="<your-workflow-name>",
+        model_id="nova-act-latest"
+    ) as workflow:
+        with NovaAct(
+            starting_page="https://nova.amazon.com/act/gym/next-dot/search",
+            workflow=workflow,
+        ) as nova:
+            nova.act("Find flights from Boston to Wolf on Feb 22nd")
+
+if name == "main":
+    main()
+```
+
+### The Decorator
+
+For convenience, the SDK also exposes a [decorator](https://peps.python.org/pep-0318/) which can be used to annotate functions to be run under a given workflow. The decorator leverages [ContextVars](https://peps.python.org/pep-0567/) to inject the correct `Workflow` object into each `NovaAct` instance within the function; no need to provide the `workflow` keyword argument! The following syntax provides identical functionality to the previous example:
+
+```python
+from nova_act import NovaAct, workflow
+
+@workflow(
+    workflow_definition_name="<your-workflow-name>",
+    model_id="nova-act-latest",
+)
+def main():
+    with NovaAct(
+        starting_page="https://nova.amazon.com/act/gym/next-dot/search",
+        headless=True,
+        tty=False
+    ) as nova:
+        nova.act("Find flights from Boston to Wolf on Feb 22nd")
+
+if __name__ == "__main__":
+    main()
+```
+
+#### Configuring AWS Credentials with `boto_session_kwargs`
+
+The `Workflow` class accepts an optional `boto_session_kwargs` parameter for customizing the boto3 Session configuration. **By default, if not provided, the workflow uses `{"region_name": "us-east-1"}`** when AWS credentials are available.
+
+If you need to customize your AWS session (e.g., to use a specific profile or provide explicit credentials), you can pass a custom dictionary to `boto_session_kwargs`. This works with both the **Context Manager** and **Decorator** versions:
+
+**Using the Context Manager:**
+
+```python
+from nova_act import NovaAct, Workflow
+
+def main():
+    with Workflow(
+        workflow_definition_name="<your-workflow-name>",
+        model_id="nova-act-latest",
+        boto_session_kwargs={
+            "profile_name": "my-aws-profile",
+            "region_name": "us-east-1"
+        }
+    ) as workflow:
+        with NovaAct(
+            starting_page="https://nova.amazon.com/act/gym/next-dot/search",
+            workflow=workflow,
+        ) as nova:
+            nova.act("Find flights from Boston to Wolf on Feb 22nd")
+
+if __name__ == "__main__":
+    main()
+```
+
+**Using the Decorator:**
+
+```python
+from nova_act import NovaAct, workflow
+
+@workflow(
+    workflow_definition_name="<your-workflow-name>",
+    model_id="nova-act-latest",
+    boto_session_kwargs={
+        "profile_name": "my-aws-profile",
+        "region_name": "us-east-1"
+    }
+)
+def main():
+    with NovaAct(
+        starting_page="https://nova.amazon.com/act/gym/next-dot/search",
+        headless=True,
+        tty=False
+    ) as nova:
+        nova.act("Find flights from Boston to Wolf on Feb 22nd")
+
+if __name__ == "__main__":
+    main()
+```
+
+**Note:** If you don't provide `boto_session_kwargs` and don't use an API key, the workflow will automatically load AWS credentials using boto3 (more details [here](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/configuration.html) on how boto3 loads AWS credentials).
+
+### Best Practices
+
+#### Multi-threading
+
+The `Workflow` class will work as-is for multi-threaded workflows. See the following example:
+
+```python
+from nova_act import NovaAct, Workflow
+
+def multi_threaded_helper(workflow: Workflow):
+    with NovaAct(..., workflow=workflow) as nova:
+       # nova will have the appropriate workflow run
+ 
+with Workflow(
+    workflow_definition_name="my-workflow",
+    model_id="nova-act-latest"
+) as workflow:
+    t = Thread(target=multi_threaded_helper, args=(workflow,))
+    t.start()
+    t.join()
+```
+
+Because the `@workflow` decorator leverages ContextVars for injecting context, and because ContextVars are intentionally designed to be thread-specific, users will have to provide the context to any functions that will run in different threads from where the wrapping function is defined. See the following example:
+
+```python
+from contextvars import copy_context
+from nova_act import NovaAct, workflow
+
+def multi_threaded_helper():
+    with NovaAct(...) as nova:
+       # nova will have the appropriate workflow run
+ 
+@workflow(
+    workflow_definition_name="my-workflow"
+    model_id="nova-act-latest",
+)
+def multi_threaded_workflow():
+    ctx = copy_context()
+    t = Thread(target=ctx.run, args=(multi_threaded_helper,))
+    t.start()
+    t.join()
+
+multi_threaded_workflow()
+```
+
+Or, alternatively, use the `workflow` argument directly to manually inject it, as when directly leveraging the `Workflow` class:
+
+```python
+from nova_act import NovaAct, get_current_workflow, workflow
+
+def multi_threaded_helper(workflow: Workflow):
+    with NovaAct(..., workflow=workflow) as nova:
+       # nova will have the appropriate workflow run
+ 
+@workflow(
+    workflow_definition_name="my-workflow"
+    model_id="nova-act-latest",
+)
+def multi_threaded_workflow():
+    t = Thread(target=multi_threaded_helper, args=(get_current_workflow(),))
+    t.start()
+    t.join()
+
+multi_threaded_workflow()  
+```
+#### Multi-processing
+The `Workflow` construct does not currently support passing between multi-processing because it maintains a boto3 Session and Client as instance variables, and those objects are not [pickle](https://docs.python.org/3/library/pickle.html)-able. Support coming soon!
+
+### Nova Act CLI
+
+The Nova Act CLI provides a streamlined command-line interface for deploying Python workflows to AWS AgentCore Runtime, handling containerization, ECR management, IAM roles, and multi-region deployments automatically. See the [Nova Act CLI README](./src/nova_act/cli/README.md) for installation and usage instructions.
 
 ## Common Building Blocks
 
 ### Extracting information from a web page
 
-Use `pydantic` and ask `act()` to respond to a question about the browser page in a certain schema.
+Use `pydantic` and ask `act_get` to respond to a question about the browser page in a certain schema.
 
 - Make sure you use a schema whenever you are expecting any kind of structured response, even just a bool (yes/no). If a schema is not provided, the returned object will not contain a response.
 - Put a prompt to extract information in its own separate `act()` call.
@@ -200,44 +395,40 @@ Use `pydantic` and ask `act()` to respond to a question about the browser page i
 For convenience, the `act_get()` function works the same as `act()` but provides a default `STRING_SCHEMA`, so that a response will always be available in the return object whether or not a specific schema is provided. We recommend using `act_get()` for all extraction tasks, to ensure type safety.
 
 Example:
+
 ```python
+from nova_act import NovaAct
 from pydantic import BaseModel
-from nova_act import NovaAct, ActInvalidModelGenerationError
 
+class Measurement(BaseModel):
+    value: float
+    unit: str
 
-class Book(BaseModel):
-    title: str
-    author: str
+class PlanetData(BaseModel):
+    gravity: Measurement
+    average_temperature: Measurement
 
-class BookList(BaseModel):
-    books: list[Book]
-
-
-def get_books(year: int) -> BookList | None:
-    """
-    Get top NYT top books of the year and return as a BookList. Return None if there is an error.
-    """
-    with NovaAct(
-        starting_page=f"https://en.wikipedia.org/wiki/List_of_The_New_York_Times_number-one_books_of_{year}#Fiction"
+with NovaAct(
+        starting_page="https://nova.amazon.com/act/gym/next-dot"
     ) as nova:
-        try:
-            result = nova.act_get("Return the books in the Fiction list",
-                       # Specify the schema for parsing.
-                       schema=BookList.model_json_schema())
-        except ActInvalidModelGenerationError:
-            # act response did not match the schema ¯\_(ツ)_/¯
-            return None
-        # Parse the JSON into the pydantic model.
-        book_list = BookList.model_validate(result.parsed_response)
-        return book_list
+        planet = 'Proxima Centauri b'
+        result = nova.act_get(
+            f"Go to the {planet} page and return the gravity and average temperature.",
+            schema=PlanetData.model_json_schema(),
+        )
+
+        # Parse the response into the data model
+        planet_data = PlanetData.model_validate(result.parsed_response)
+
+        # Do something with the parsed data
+        print(f"✓ {planet} data:\n{planet_data.model_dump_json(indent=2)}")
 ```
 
 If all you need is a bool response, there's a convenient `BOOL_SCHEMA` constant:
-
 Example:
+
 ```python
 from nova_act import NovaAct, ActInvalidModelGenerationError, BOOL_SCHEMA
-
 with NovaAct(starting_page="https://nova.amazon.com/act") as nova:
     try:
         result = nova.act_get("Am I logged in?", schema=BOOL_SCHEMA)
@@ -252,53 +443,91 @@ with NovaAct(starting_page="https://nova.amazon.com/act") as nova:
             print("You are not logged in")
 ```
 
+### Human-in-the-loop (HITL)
+
+Nova Act's Human-in-the-Loop (HITL) capability enables seamless human supervision within autonomous web workflows. HITL is available in the Nova Act SDK for you to implement in your workflows (not provided as a managed AWS service). When your workflow encounters scenarios requiring human judgment or intervention, HITL can provide tools and user interfaces for supervisors to assist, verify, or take control of the process. 
+
+#### HITL patterns
+
+##### Human approval
+
+Human approval enables asynchronous human decision-making in automated processes. When Nova Act encounters a decision point requiring human judgment, it captures a screenshot of the current state and presents it to a human reviewer via a browser-based interface. Use this when you need binary or multi-choice decisions (Approve/Reject, Yes/No, or selecting from predefined options).
+
+##### UI takeover
+
+UI takeover enables real-time human control of a remote browser session. When Nova Act encounters a task that requires human interaction, it hands control of the browser to a human operator via a live-streaming interface. The operator can interact with the browser using mouse and keyboard in real-time
+
+#### Implementing HITL
+
+Please refer to the [Amazon Nova Act User Guide documentation on HITL](https://docs.aws.amazon.com/nova-act/latest/userguide/hitl.html#implementing-hitl) for implementing HITL in your production workflows.
+
+##### Implementing HITL using the SDK
+
+To implement HITL patterns in the Nova Act SDK, define a class that extends `HumanInputCallbacksBase` and implements two of its abstract methods `approve` and `ui_takeover`. Pass an instance of it to the `human_input_callbacks` argument of the `NovaAct` constructor.
+
+- `approve` - is a callback that will be triggered for the Human approval pattern (e.g Approve expense reports or purchase approvals)
+- `ui_takeover` - is a callback that will be triggered for the UI takeover pattern (e.g Solve CAPTCHA challenges)
+
+```
+from nova_act import NovaAct, Workflow
+from nova_act.tools.human.interface.human_input_callback import (
+    ApprovalResponse, HumanInputCallbacksBase, UiTakeoverResponse,
+)
+
+class MyHumanInputCallbacks(HumanInputCallbacksBase):
+    def approve(self, message: str) -> ApprovalResponse:
+        ... 
+
+    def ui_takeover(self, message: str) -> UiTakeoverResponse:
+        ...
+
+with NovaAct(
+    starting_page=...,
+    tty=False,
+    human_input_callbacks=MyHumanInputCallbacks(),
+) as nova:
+    ...
+    print(f"Task completed: {result.response}")
+```
+
+Refer to [this sample](./src/nova_act/samples/print_number_of_emails.py) for a working example.
+
+
+### Tool Use Beyond the Browser (Preview)
+
+(Preview) Nova Act allows you to integrate external tools beyond the browser, such as an API Call or Database Query, into workflows. Nova Act SDK allows using a Python function as a tool that can be invoked during a workflow step. To make a Python function available as a tool, annotate it with the @tool decorator. You can pass a list of tools to the NovaAct constructor argument tools.
+
+```
+from nova_act import NovaAct, tool
+
+@tool
+def my_tool(str: input) -> str:
+   ...
+
+with NovaAct(
+    starting_page=...,
+    tools=[my_tool],
+)
+```
+
+Refer to [this sample](./src/nova_act/samples/booking_with_data_from_tool.py) for a working example.
+
 ### Handling ActErrors
 
 Once the `NovaAct` client is started, it might encounter errors during the `act()` execution. All of these error types are included in the [`nova_act.types.act_errors` module](./src/nova_act/types/act_errors.py), and are organized as follows:
 1. `ActAgentError`: Indicates requested prompt failed to complete; users may retry with a different request.
-   * Examples include: `ActAgentFailed` (the agent raised an error because the task was not possible), `ActExceededMaxStepsError` (`act()` failed to complete within the configured maximum number of steps), or `ActTimeoutError` (`act()` failed to complete within the configured timeout).
+   * Examples include: `ActAgentFailed` (the agent raised an error because the task was not possible), `ActInvalidModelGenerationError` (model generated output that could not be interpreted), or `ActExceededMaxStepsError` (`act()` failed to complete within the configured maximum number of steps)
 1. `ActExecutionError`: Indicates a local error encountered while executing valid output from the agent
    * Examples include: `ActActuationError` (client encountered an exception while actuating the Browser), or `ActCanceledError` (the user canceled execution).
 1. `ActClientError`: Indicates a request to the NovaAct Service was invalid; users may retry with a different request.
-   * Examples include: `ActInvalidModelGenerationError` (model generated output that could not be interpreted), `ActGuardrailsError` (the request was blocked by our RAI guardrails), or `ActRateLimitExceededError` (request was throttled; rate should be reduced).
+   * Examples include: `ActGuardrailsError` (the request was blocked by our RAI guardrails) or `ActRateLimitExceededError` (request was throttled; rate should be reduced).
 1. `ActServerError`: Indicates the NovaAct Service encountered an error processing the request.
    * Examples include: `ActInternalServerError` (internal error processing request), `ActBadResponseError` (the service returned a response with unrecognized shape), or `ActServiceUnavailableError` (the service could not be reached.)
 
 Users may catch `ActAgentError`s and `ActClientError`s and retry with the appropriate request; for `ActExecutionError`s and `ActServerError`s, please submit an issue to the team to look into, including (1) your SDK version, (2) your platform + operating system, (3) the full error trace, and (4) steps to reproduce.
 
-
 ### Running multiple sessions in parallel
-
-One `NovaAct` instance can only actuate one browser at a time. However, it is possible to actuate multiple browsers concurrently with multiple `NovaAct` instances! They are quite lightweight. You can use this to parallelize parts of your task, creating a kind of browser use map-reduce for the internet. The following will search for books in parallel across different browser instances. Note, the below code builds on the books sample in the previous "Extracting information from a web page" section.
-
-Using the `get_books` example above:
-
-```python
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
-from nova_act import ActError, NovaAct
-
-
-# Accumulate the complete list here.
-all_books = []
-# Set max workers to the max number of active browser sessions.
-with ThreadPoolExecutor(max_workers=10) as executor:
-    # Get all books from years 2010 to 2024 in parallel.
-    future_to_books = {
-        executor.submit(get_books, year): year for year in range(2010, 2025)
-    }
-    # Collect the results in ot all_books.
-    for future in as_completed(future_to_books.keys()):
-        try:
-            year = future_to_books[future]
-            book_list = future.result()
-            if book_list is not None:
-                all_books.extend(book_list.books)
-        except ActError as exc:
-            print(f"Skipping year due to error: {exc}")
-
-print(f"Found {len(all_books)} books:\n{all_books}")
-```
+One `NovaAct` instance can only actuate one browser at a time. However, it is possible to actuate multiple browsers concurrently with multiple `NovaAct` instances! They are quite lightweight. You can use this to parallelize parts of your task, creating a kind of browser use map-reduce for the internet. [This sample](./src/nova_act/samples/search_apartments_calculate_commute.py) shows running multiple sessions in parallel.
 
 ### Authentication, cookies, and persistent browser state
 
@@ -337,18 +566,19 @@ The script is included in the installation: `python -m nova_act.samples.setup_ch
 If your local default Chrome browser has extensions or security features you need for sites you need your workflow to access, you can configure the SDK to use the Chrome browser installed on your machine rather than the one managed by the SDK using the `NovaAct` parameters below.
 
 > **Important notes:**
-> 
+>
 > - This feature currently only works for MacOS
 > - This will quit your default running Chrome and restart it with new arguments. At the end of the session, it will quit Chrome.
 > - If your Chrome browser has many tabs open, consider closing unnecessary ones before running the automation, as Chrome's performance during the restart can be affected by high numbers of open tabs.
 
-Before starting NovaAct with this feature, you must copy the files from your system Chrome user_data_dir to a location of your choice. 
+Before starting NovaAct with this feature, you must copy the files from your system Chrome user_data_dir to a location of your choice.
 This is necessary as Chrome does not allow CDP connections into instances started with the system default user_data_dir.
 
 Manually, this is can be done with:
 ```
 rsync -a --exclude="Singleton*" /Users/$USER/Library/Application\ Support/Google/Chrome/ <your choice of location>
 ```
+
 You can also use the convenience function `rsync_from_default_user_data(<your choice of location>)` to create and update that directory as part of your script.
 Note that invoking `rsync_from_default_user_data` will overwrite changes in the destination directory and make it an exact mirror of `/Users/$USER/Library/Application\ Support/Google/Chrome/` by overwriting existing files with the same name as in the source and deleting files not in it. If you want to persist profile changes that NovaAct made in the working directory back to your system, you must then mirror the changes back into the system default dir with your own implementation after stopping NovaAct.
 
@@ -358,9 +588,9 @@ When using this feature, you must specify `clone_user_data_dir=False` and pass t
 >>> from nova_act import NovaAct, rsync_from_default_user_data
 >>> working_user_data_dir = "/Users/$USER/your_choice_of_path"
 >>> rsync_from_default_user_data(working_user_data_dir)
->>> nova = NovaAct(use_default_chrome_browser=True, clone_user_data_dir=False, user_data_dir=working_user_data_dir, starting_page="https://nova.amazon.com/act")
+>>> nova = NovaAct(use_default_chrome_browser=True, clone_user_data_dir=False, user_data_dir=working_user_data_dir, starting_page="https://nova.amazon.com/act/gym/next-dot/search")
 >>> nova.start()
->>> nova.act_get("Click learn more. Then, return the title and publication date of the blog.")
+>>> nova.act_get("Find flights from Boston to Wolf on Feb 22nd")
 ...
 >>> nova.stop()
 >>> quit()
@@ -368,7 +598,7 @@ When using this feature, you must specify `clone_user_data_dir=False` and pass t
 
 ### Entering sensitive information
 
-To enter a password or sensitive information (credit card, social security number), do not prompt the model with the sensitive information. Ask the model to focus on the element you want to fill in. Then use Playwright APIs directly to type the data, using `client.page.keyboard.type(sensitive_string)`. You can get that data in the way you wish: prompting in the command line using [`getpass`](https://docs.python.org/3/library/getpass.html), using an argument, or setting env variable.
+To enter a password or sensitive information (e.g., credit card and social security number), do not prompt the model with the sensitive information. Ask the model to focus on the element you want to fill in. Then use Playwright APIs directly to type the data, using `client.page.keyboard.type(sensitive_string)`. You can get that data in the way you wish: prompting in the command line using [`getpass`](https://docs.python.org/3/library/getpass.html), using an argument, or setting env variable.
 
 Note that any passwords or other sensitive data saved with a Chromium-based browser's password manager on Linux systems without a system-level keyring (ex. Libsecret, KWallet) will be stored in plaintext within a user's profile directory.
 
@@ -389,27 +619,28 @@ NovaAct is initialized with secure default behaviors which you may want to relax
 
 #### Allow Navigation to Local `file://` URLS
 
-To enable local file navigation, set the `SecurityOptions.allow_file_urls` flag to True:
+To enable local file navigation, define one or more filepath patterns in `SecurityOptions.allowed_file_open_paths`
 ```python
 from nova_act import NovaAct, SecurityOptions
 
-NovaAct(starting_page="file://home/nova-act/site.html", SecurityOptions(allow_file_urls=True))
+NovaAct(starting_page="file://home/nova-act/site/index.html", SecurityOptions(allowed_file_open_paths=['/home/nova-act/site/*']))
 ```
+
 #### Allow File Uploads
 To allow the agent to upload files to websites, define one or more filepath patterns in `SecurityOptions.allowed_file_upload_paths`.
-```
+
+```python
 from nova_act import NovaAct, SecurityOptions
 
 NovaAct(starting_page="https://example.com", SecurityOptions(allowed_file_upload_paths=['/home/nova-act/shared/*']))
 ```
 
-Examples filepath structures:
-- `["/home/nova-act/shared/*"]` - Allow uploads from specific directory
+#### Filepath Structures
+The filepath parameters support the following formats:
+- `["/home/nova-act/shared/*"]` - Allow from specific directory
 - `["/home/nova-act/shared/file.txt"]` - Allow a specific filepath
-- `["*"]` - Enable file uploads from all paths
-- `[]` - Disable file uploads (Default)
-
-
+- `["*"]` - Enable for all paths
+- `[]` - Disable the feature (Default)
 
 ### State Guardrails
 
@@ -417,31 +648,34 @@ State guardrails allow you to control which URLs the agent can visit during exec
 
 ```python
 from nova_act import NovaAct, GuardrailDecision, GuardrailInputState
+from urllib.parse import urlparse
+import fnmatch
 
 def url_guardrail(state: GuardrailInputState) -> GuardrailDecision:
-    if "blocked-domain.com" in state.browser_url:
+    hostname = urlparse(state.browser_url).hostname
+    if not hostname:
         return GuardrailDecision.BLOCK
-    return GuardrailDecision.PASS
 
-with NovaAct(starting_page="https://example.com", state_guardrail=url_guardrail) as nova:
-    nova.act("Navigate to the homepage")  # Will be blocked if it tries to visit blocked-domain.com
+    # Example URL block-list
+    blocked = ["*.blocked-domain.com", "*.another-blocked-domain.com"]
+    if any(fnmatch.fnmatch(hostname, pattern) for pattern in blocked):
+        return GuardrailDecision.BLOCK
+
+    # Example URL allow-list
+    allowed = ["allowed-domain.com", "*.another-allowed-domain.com"]
+    if any(fnmatch.fnmatch(hostname, pattern) for pattern in allowed):
+        return GuardrailDecision.PASS
+
+    return GuardrailDecision.BLOCK
+
+with NovaAct(starting_page="https://allowed-domain.com", state_guardrail=url_guardrail) as nova:
+    # The following will be blocked if agent tries to visit a blocklisted domain or leave one of the allowlisted domains
+    nova.act("Navigate to the homepage")
 ```
 
 ### Captchas
 
-NovaAct will not solve captchas. It is up to the user to do that. If your script encounters captchas in certain places, you can do the following:
-
-1. Check if a captcha is being presented (by using `act_get()` to inspect the screen)
-2. If so, pause the workflow and ask the user to get past the captcha, e.g. using `input()` for a workflow launched from a terminal, and then let the user resume once the flow is past the captcha.
-
-```python
-result = nova.act_get("Is there a captcha on the screen?", schema=BOOL_SCHEMA)
-if result.parsed_response:
-    input("Please solve the captcha and hit return when done")
-...
-```
-
-Please refer to the section below on [headless browsing](#viewing-a-session-that-is-running-in-headless-mode) to see how to handle captchas when running Nova Act in headless mode and in the cloud.
+You should use the `ui_takeover` callback (see [HITL](#hitl-human-in-the-loop)) if your script encounters captchas in certain places. This will allow redirecting the step of solving Captcha to a human.
 
 ### Search on a website
 
@@ -494,15 +728,19 @@ with open("downloaded.pdf", "wb") as f:
     f.write(response.body())
 ```
 
-To upload a file on a site that uses the `file` `input` type, you can use Playwright's `set_input_files` facility. For a page with a single file upload affordance, the following sample will work but if you need to select among multiple input elements, please see Playwright documentation.
+NovaAct can natively upload files using the appropriate upload action on the page. To do that, first you must allow NovaAct to access the file for upload. Then instruct it to
+upload it by filename:
 
 ```python
-# This starts the upload but does not block on its completion.
-nova.page.set_input_files('input[type="file"]', upload_filename)
+upload_filename = "/upload_path/upload_me.pdf"
 
-# Use act to wait for the upload completion. MODIFY THIS TO MATCH THE UPLOAD INDICATOR ON YOUR SITE.
-nova.act("wait for the upload spinner to finish")
+with NovaAct(..., security_options=SecurityOptions(allowed_file_upload_paths=["/upload_path/*"])) as nova:
+    nova.act(f"upload {upload_filename} using the upload receipt button")
 ```
+
+> **Important security note**:
+>
+> Pick `allowed_file_upload_paths` narrowly to minimize NovaAct's access to your filesystem to avoid data exfiltration by malicious sites or web content.
 
 ### Picking dates
 
@@ -545,8 +783,8 @@ nova = NovaAct(
 
 > **Note:** Proxy configuration is not supported when connecting to a CDP endpoint or when using the default Chrome browser (`use_default_chrome_browser=True`).
 
-### Logging
 
+### Logging
 By default, `NovaAct` will emit all logs level `logging.INFO` or above. This can be overridden by specifying an integer value under the `NOVA_ACT_LOG_LEVEL` environment variable. Integers should correspond to [Python logging levels](https://docs.python.org/3/library/logging.html#logging-levels).
  
 ### Viewing act traces
@@ -559,9 +797,41 @@ After an `act()` finishes, it will output traces of what it did in a self-contai
  
 You can change the directory for this by passing in a `logs_directory` argument to `NovaAct`.
 
+### Time worked tracking utility
+
+The time_worked utility tracks and reports the approximate time spent by the agent working on tasks, excluding time spent waiting for human input. This helps you understand the actual agent execution time.
+
+#### How It Works
+Approximate time worked is calculated using this basic formula:
+```
+time_worked = (end_time - start_time) - human_wait_time
+```
+
+When an `act()` call completes (successfully or with an error), the following is calculated:
+- **Approx. Time Worked**: Total execution time (end time minus start time) minus any time spent waiting for human input
+- **Human Wait Time**: Time spent waiting for `approve()` or `ui_takeover()` callbacks from when the callback is issued to when the agent execution continues
+
+#### Console Output
+
+At the end of each `act()` call, you'll see a time worked summary in the console, as well as in the JSON and HTML reports:
+
+Without human input:
+```
+⏱️ Approx. Time Worked: 11.8s
+```
+
+With human input:
+```
+⏱️  Approx. Time Worked: 28.3s (excluding 4.5s human wait)
+```
+
+#### Important Disclaimer
+
+> **Note:** Time worked calculations are approximate and may have inaccuracies due to system timing variations, network latency, or other factors. This metric should be viewed as a utility to help understand agent execution patterns and should not be used for formal time tracking or billing purposes.
+
 ### Recording a session
  
-You can record an entire browser session easily by setting the `logs_directory` and specifying `record_video=True` in the constructor for `NovaAct`.
+You can easily record an entire browser session locally by setting the `logs_directory` and specifying `record_video=True` in the constructor for `NovaAct`.
 
 ### Storing Session Data in Your Amazon S3 Bucket
 
@@ -585,11 +855,11 @@ s3_writer = S3Writer(
 
 # Use the S3Writer with NovaAct
 with NovaAct(
-    starting_page="https://nova.amazon.com/act",
+    starting_page="https://nova.amazon.com/act/gym/next-dot/search",
     boto_session=boto_session,  # You may use API key here instead
     stop_hooks=[s3_writer]
 ) as nova:
-    nova.act_get("Click learn more. Then, return the title and publication date of the blog.")
+    result = nova.act_get("Find flights from Boston to Wolf on Feb 22nd")
 ```
 
 The S3Writer requires the following AWS permissions:
@@ -635,24 +905,23 @@ Note that if you are running Nova Act on a remote host, you may need to set up p
 ## Use Nova Act SDK with Amazon Bedrock AgentCore Browser Tool
 
 The Nova Act SDK can be used together with the [Amazon Bedrock AgentCore Browser Tool](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/browser-tool.html) for production-ready browser automation at scale. The AgentCore Browser Tool provides a fully managed cloud-based browser automation solution that addresses limitations around real-time data access, while the Nova Act SDK gives you the flexibility to build sophisticated agent workflows.
-
 See [this blog post](https://aws.amazon.com/blogs/machine-learning/introducing-amazon-bedrock-agentcore-browser-tool/) for integration instructions.
 
 > **Note**: When the Nova Act SDK and Bedrock AgentCore Browser run on different operating systems (e.g., SDK on MacOS and AgentCore Browser on Linux), keyboard commands may not translate correctly between systems. This impacts certain SDK functions like `agent_type()`, which uses keyboard shortcuts (such as `ControlOrMeta+A` for "select all") that are OS-dependent. This behavior is an expected consequence of the cross-OS integration architecture and should be considered when developing automations that use keyboard input methods.
 
 ## Known limitations
-Nova Act is a research preview intended for prototyping and exploration. It’s the first step in our vision for building the key capabilities for useful agents at scale. You can expect to encounter many limitations at this stage — please provide feedback to [nova-act@amazon.com](mailto:nova-act@amazon.com?subject=Nova%20Act%20Bug%20Report) to help us make it better.
+Our vision for Nova Act is to provide key capabilities to build useful agents at scale. If you encounter limitations with Nova Act — please provide feedback to [nova-act@amazon.com](mailto:nova-act@amazon.com?subject=Nova%20Act%20Bug%20Report) to help us make it better.
+
 
 For example:
 
-* `act()` cannot interact with non-browser applications.
-* `act()` is unreliable with high-level prompts.
-* `act()` cannot interact with elements hidden behind a mouseover.
-* `act()` cannot interact with the browser window. This means that browser modals such as those requesting access to use your location don't interfere with act() but must be manually acknowledged if desired.
-* `act()` is not yet optimized for PDF file actuation.
-* Screen size constraints
-  * Nova Act is optimized for resolutions between `864×1296` and `1536×2304`
+* `act()` cannot interact with non-browser applications;
+* `act()` cannot interact with the browser window. This means that browser modals such as those requesting access to use your location don't interfere with act() but must be manually acknowledged if desired;
+* Screen size constraints;
+  * Nova Act is optimized for resolutions between `864×1296` and `1536×2304`; and
   * Performance may degrade outside this range
+
+Learn more in the AWS AI Service Card for Amazon Nova Act.
 
 ## Reference
 
@@ -673,6 +942,8 @@ The constructor accepts the following:
   * `username` (optional): Username for proxy authentication
   * `password` (optional): Password for proxy authentication
   * Note: Proxy is not supported when connecting to a CDP endpoint or using the default Chrome browser
+* `human_input_callbacks` (optional): An implementation of human input callbacks. If not provided, a request for human input tool will not be made.
+* `tools` (optional): A list of client provided tools.
 
 This creates one browser session. You can create as many browser sessions as you wish and run them in parallel but a single session must be single-threaded.
 
@@ -723,13 +994,27 @@ dom_string = nova.page.content()
 nova.page.keyboard.type("hello")
 ```
 
+## Disclosures
+
+Note: When using the Nova Act Playground and/or choosing Nova Act developer tools with API key authentication, access and use are subject to the nova.amazon.com Terms of Use. When choosing Nova Act developer tools with AWS IAM authentication and/or deploying workflows to the Nova Act AWS service, your AWS Service Terms and/or Customer Agreement (or other agreement governing your use of the AWS Service) apply.
+
+1. Nova Act may not always get it right. 
+2. ⚠️ Please be aware that Nova Act may encounter commands in the content it observes on third party websites, including user-generated content on trusted websites such as social media posts, search results, forum comments, news articles, and document attachments. These unauthorized commands, known as prompt injections, may cause the model to make mistakes or act in a manner that differs from its instructions, such as ignoring your instructions, performing unauthorized actions, or exfiltrating sensitive data. To reduce the risks associated with prompt injections, it is important to monitor Nova Act and review its actions, especially when processing untrusted user-contributed content.
+3. We recommend you do not provide sensitive information to Nova Act, such as account passwords. Note that if you use sensitive information through Playwright calls, the information could be collected in screenshots if it appears unobstructed on the browser when Nova Act is engaged in completing an action. (See Entering sensitive information below.).
+4. When choosing developer tools on nova.amazon.com/act with API key authentication, we collect information on interactions with Nova Act, including in-browser screenshots to develop and improve our services. Email us at nova-act@amazon.com to request deletion of your Nova Act data.
+5. Do not share your API key generated on https://nova.amazon.com/act. Anyone with access to your API key can use it to operate Nova Act under your Amazon account. If you lose your API key or believe someone else may have access to it, go to https://nova.amazon.com/act to deactivate your key and obtain a new one.
+6. If you are using our browsing environment defaults, look for `NovaAct` in the user agent string to identify our agent. If you operate Nova Act in your own browsing environment or customize the user agent, we recommend that you include that same string.
+
 ## Report a Bug
+
 Help us improve! If you notice any issues, please let us know by submitting a bug report via nova-act@amazon.com. 
+
+
 Be sure to include the following in the email:
 - Description of the issue;
-- Session ID, which will have been printed out as a console log message;
+- Session ID, which will have been printed out as a console log message; and
 - Script of the workflow you are using.
-	 
+
 Your feedback is valuable in ensuring a better experience for everyone.
 
 Thanks for experimenting with Nova Act!

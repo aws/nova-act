@@ -36,6 +36,7 @@ from nova_act.tools.browser.interface.types.click_types import ClickOptions
 from nova_act.tools.browser.interface.types.scroll_types import ScrollDirection
 from nova_act.types.api.step import BboxTLWH
 from nova_act.types.errors import InvalidURL
+from nova_act.types.guardrail import GuardrailCallable
 from nova_act.types.json_type import JSONType
 from nova_act.util.common_js_expressions import Expressions
 
@@ -48,8 +49,10 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
     def __init__(
         self,
         playwright_options: PlaywrightInstanceOptions,
+        state_guardrail: GuardrailCallable | None = None,
     ):
         self._playwright_manager = PlaywrightInstanceManager(playwright_options)
+        self._state_guardrail = state_guardrail
 
     def start(self, **kwargs: Any) -> None:  # type: ignore[explicit-any]
         if not self._playwright_manager.started:
@@ -121,7 +124,8 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
             go_to_url(
                 url,
                 self._playwright_manager.main_page,
-                allow_file_urls=self._playwright_manager.security_options.allow_file_urls,
+                allowed_file_open_paths=self._playwright_manager.security_options.allowed_file_open_paths,
+                state_guardrail=self._state_guardrail,
             )
         except InvalidURL as e:
             raise ValueError(str(e)) from e

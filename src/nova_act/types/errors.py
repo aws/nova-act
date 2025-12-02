@@ -123,3 +123,5 @@ class InterpreterError(NovaActError):
     """Indicates an error encountered while interpreting model output."""
 
 
+class InvalidTrajectoryReplay(NovaActError):
+    """Indicates a Trajectory is being replayed on an invalid environment."""

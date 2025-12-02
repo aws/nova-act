@@ -37,6 +37,7 @@ class NovaStateController:
         )
         self._state = ControlState.ACTIVE
         self._lock = threading.Lock()
+        self._tty = tty
 
     @property
     def state(self) -> ControlState:

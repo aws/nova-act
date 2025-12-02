@@ -25,6 +25,7 @@ from nova_act.types.errors import (
     InvalidTimeout,
     ValidationFailed,
 )
+from nova_act.types.guardrail import GuardrailCallable
 from nova_act.util.logging import setup_logging
 from nova_act.util.url import validate_url, verify_certificate
 
@@ -243,15 +244,18 @@ def validate_base_parameters(
     screen_height: int,
     chrome_channel: str,
     ignore_https_errors: bool,
-    allow_file_urls: bool,
+    allowed_file_open_paths: list[str],
     clone_user_data_dir: bool,
     use_default_chrome_browser: bool,
     proxy: dict[str, str] | None = None,
+    state_guardrail: GuardrailCallable | None = None,
 ) -> None:
     if not use_existing_page:
         if starting_page is None:
             raise ValidationFailed("starting_page is required when not connecting to existing CDP session.")
-        validate_url(url=starting_page, allow_file_urls=allow_file_urls)
+        validate_url(
+            url=starting_page, allowed_file_open_paths=allowed_file_open_paths, state_guardrail=state_guardrail
+        )
         validate_url_ssl_certificate(ignore_https_errors, starting_page)
 
     validate_url(backend_url)

@@ -15,27 +15,59 @@ import logging
 import os
 import sys
 from contextvars import ContextVar
+from dataclasses import dataclass
+from enum import Enum
 from typing import Callable
 
-_session_id = ContextVar("session_id", default=None)
+
+class SessionState(Enum):
+    UNKNOWN = " "
+    OBSERVING = "👀 "
+    THINKING = "💭 "
+    ACTING = "🎬 "
+
+
+@dataclass
+class SessionContext:
+    id: str
+    state: SessionState
+
+    def trace_prefix(self, *, with_state_emoji: bool = False) -> str:
+        return f"{self.id[-4:]}> {self.state.value if with_state_emoji else ''}"
+
+
+_session_context = ContextVar[SessionContext | None]("session_context", default=None)
+
+
+def get_session_context() -> SessionContext | None:
+    return _session_context.get()
 
 
 def get_session_id_prefix() -> str:
-    session_id = _session_id.get()
-    if session_id is None:
-        session_id = ""
-    return f"{session_id[:4]}> "
+    session_context = _session_context.get()
+    if session_context is None:
+        return ""
+    return session_context.trace_prefix()
 
 
 def get_session_id() -> str:
-    session_id = _session_id.get()
-    if session_id is None:
-        session_id = ""
-    return session_id
+    session_context = _session_context.get()
+    if session_context is None:
+        return ""
+    return session_context.id
 
 
 def set_logging_session(session_id: str | None) -> None:
-    _session_id.set(session_id)  # type: ignore
+    if session_id is None:
+        _session_context.set(None)
+    else:
+        _session_context.set(SessionContext(id=session_id, state=SessionState.UNKNOWN))
+
+
+def set_logging_session_state(state: SessionState) -> None:
+    session_context = _session_context.get()
+    if session_context is not None:
+        session_context.state = state
 
 
 _LOG_ENV_VAR = "NOVA_ACT_LOG_LEVEL"
@@ -69,11 +101,11 @@ def make_trace_logger() -> logging.Logger:
     return logger
 
 
-def trace_log_lines(raw_lines: str) -> None:
+def trace_log_lines(message: str, level: int = logging.INFO) -> None:
     """Trace log a multi-line statement to the terminal."""
-    lines = raw_lines.split("\n")
+    lines = message.split("\n")
     for line in lines:
-        make_trace_logger().info(f"{get_session_id_prefix()}{line}")
+        make_trace_logger().log(level, f"{get_session_id_prefix()}{line}")
 
 
 class LoadScroller:

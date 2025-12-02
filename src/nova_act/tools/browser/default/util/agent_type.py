@@ -15,9 +15,7 @@ import os
 
 from playwright.sync_api import Page
 
-from nova_act.tools.browser.default.dom_actuation.type_events import get_after_type_events
 from nova_act.tools.browser.default.util.bbox_parser import bounding_box_to_point
-from nova_act.tools.browser.default.util.dispatch_dom_events import dispatch_event_sequence
 from nova_act.tools.browser.default.util.element_helpers import (
     blur,
     check_if_native_dropdown,
@@ -116,7 +114,7 @@ def agent_type(
         return
 
     page.keyboard.press(f"{modifier_key}+A")
-    page.keyboard.press("Backspace")
+    page.keyboard.press("Delete")
 
     if len(value) > 10:
         page.keyboard.insert_text(value)
@@ -125,18 +123,6 @@ def agent_type(
 
     if additional_options and additional_options == "pressEnter":
         page.keyboard.press("Enter")
-    else:
-        # blur the input box
-        if element_info.get("blurField"):
-            try:
-                blur(element_info, page)
-
-                element = locate_element(element_info, page)
-                after_type_events = get_after_type_events(point)
-
-                dispatch_event_sequence(element, after_type_events)
-            except Exception as e:
-                _LOGGER.debug(f"Error blurring element: {e}")
 
 
 def handle_color_input(page: Page, element_info: ElementDict, color_value: str) -> None:
