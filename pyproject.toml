@@ -27,7 +27,7 @@ optional-dependencies.dev = {file = "requirements-dev.txt"}
 optional-dependencies.cli = {file = "requirements-cli.txt"}
 
 [tool.setuptools.package-data]
-nova_act = ["artifacts/**/*", "artifacts/*"]
+nova_act = ["cli/workflow/services/*/templates/*"]
 
 [tool.mypy]
 disallow_untyped_defs = true

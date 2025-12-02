@@ -158,9 +158,7 @@ class NovaActClient:
         # Set correct user_agent_extra
         config.user_agent_extra = DEFAULT_USER_AGENT_EXTRA  # type: ignore[attr-defined]
 
-        self._client = boto_session.client(
-            service_name="nova-act", endpoint_url=endpoint_url, config=config
-        )  # type: ignore[call-overload]
+        self._client = boto_session.client(service_name="nova-act", endpoint_url=endpoint_url, config=config)
 
     def _translate_client_error(self, error: ClientError) -> Exception:
         """Translate boto3 ClientError to appropriate SDK error type."""
