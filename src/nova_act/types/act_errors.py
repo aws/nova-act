@@ -128,6 +128,14 @@ class NoHumanInputToolAvailable(ActInvalidModelGenerationError):
     """Indicates the model requested human input but no callbacks were provided."""
 
 
+@set_default_message("Act Canceled during Human Approval.")
+class ApproveCanceledError(ActCanceledError):
+    """Indicates the client received a cancel response during human approval and stopped."""
+
+
+@set_default_message("Act Canceled during Human UI Takeover.")
+class UiTakeoverCanceledError(ActCanceledError):
+    """Indicates the client received a cancel signal during human UI takeover and stopped."""
 
 
 @set_default_message("Encountered error actuating model actions.")
@@ -189,7 +197,8 @@ class ActGuardrailsError(ActClientError):
 
 @set_default_message(
     "We have quota limits to ensure sufficient capacity for all users. If you need dedicated "
-    "quota for a more ambitious project, please get in touch at nova-act@amazon.com. "
+    "quota for a more ambitious project, please request a limit increase by filling out "
+    "https://amazonexteu.qualtrics.com/jfe/form/SV_3V3pUMJFeMWpq1o. "
     "We're excited to see what you build!"
 )
 class ActRateLimitExceededError(ActClientError):
@@ -245,11 +254,6 @@ class ActModelError(ActPromptError):
 @deprecated(version="2.1.0", reason="This error will no longer be raised as the Chrome extension has been deprecated.")
 class ActDispatchError(ActClientError):
     """Failed to dispatch Act."""
-
-
-@deprecated(version="2.1.0", reason="Rolled into AuthError.")
-class ActNotAuthorizedError(ActError):
-    """Invalid IAM credentials for Moonshine backend."""
 
 
 @deprecated(version="2.1.0", reason="No longer raised; roughly correlates with new ActAPIError.")

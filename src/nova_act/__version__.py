@@ -11,4 +11,4 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-VERSION = "2.3.18.0"  # pragma: no cover
+VERSION = "3.0.0.0"  # pragma: no cover

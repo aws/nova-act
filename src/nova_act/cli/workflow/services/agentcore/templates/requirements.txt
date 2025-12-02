@@ -1,0 +1,3 @@
+bedrock-agentcore
+nova-act
+pyyaml

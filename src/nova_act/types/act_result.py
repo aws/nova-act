@@ -17,7 +17,6 @@ import dataclasses
 
 from nova_act.types.act_metadata import ActMetadata
 from nova_act.types.json_type import JSONType
-from nova_act.util.logging import trace_log_lines
 
 """
 Successful outcome of act()
@@ -68,69 +67,8 @@ class ActGetResult(ActResult):
     valid_json: bool | None = None
     matches_schema: bool | None = None
 
-    def without_response(self) -> ActResultWithoutResponse:
+    def without_response(self) -> ActResult:
         """Convert to an ActResultWithoutResponse."""
-        return ActResultWithoutResponse(
+        return ActResult(
             metadata=self.metadata,
-            response=self.response,
-            parsed_response=self.parsed_response,
-            valid_json=self.valid_json,
-            matches_schema=self.matches_schema,
         )
-
-
-@dataclasses.dataclass(frozen=True, repr=False)
-class ActResultWithoutResponse(ActResult):
-    """A result from act() without a provided schema."""
-
-    _response: str | None = dataclasses.field(init=False, repr=False)
-    _parsed_response: JSONType | None = dataclasses.field(init=False, repr=False)
-    _valid_json: bool | None = dataclasses.field(init=False, repr=False)
-    _matches_schema: bool | None = dataclasses.field(init=False, repr=False)
-
-    def __init__(
-        self,
-        metadata: ActMetadata,
-        response: str | None = None,
-        parsed_response: JSONType | None = None,
-        valid_json: bool | None = None,
-        matches_schema: bool | None = None,
-    ) -> None:
-        super().__init__(
-            metadata=metadata,
-            # fmt: on
-        )
-        object.__setattr__(self, "_response", response)
-        object.__setattr__(self, "_parsed_response", parsed_response)
-        object.__setattr__(self, "_valid_json", valid_json)
-        object.__setattr__(self, "_matches_schema", matches_schema)
-
-    @staticmethod
-    def emit_warning() -> None:
-        trace_log_lines(
-            "\033[91m"  # warn in red
-            "WARNING: Asking Act for a structured extract without providing a schema could lead to undefined "
-            "behavior. In future versions, such workflows will fail. Use act_get, or make sure to provide a "
-            "schema!"
-            "\033[0m"  # reset color
-        )
-
-    @property
-    def response(self) -> str | None:
-        type(self).emit_warning()
-        return self._response
-
-    @property
-    def parsed_response(self) -> JSONType | None:
-        type(self).emit_warning()
-        return self._parsed_response
-
-    @property
-    def valid_json(self) -> bool | None:
-        type(self).emit_warning()
-        return self._valid_json
-
-    @property
-    def matches_schema(self) -> bool | None:
-        type(self).emit_warning()
-        return self._matches_schema

@@ -25,6 +25,8 @@ class ActMetadata:
     end_time: float | None
     prompt: str
     step_server_times_s: list[float] = dataclasses.field(default_factory=list)
+    time_worked_s: float | None = None
+    human_wait_time_s: float = 0.0
 
     def __repr__(self) -> str:
         local_tz = datetime.now().astimezone().tzinfo
@@ -46,6 +48,21 @@ class ActMetadata:
             formatted_times = [f"{t:.3f}" for t in self.step_server_times_s]
             step_times_line = f"    step_server_times_s = {formatted_times}\n"
 
+        time_worked_line = ""
+        if self.time_worked_s is not None:
+            try:
+                time_worked_str = _format_duration(self.time_worked_s)
+                if self.human_wait_time_s > 0:
+                    human_wait_str = _format_duration(self.human_wait_time_s)
+                    time_worked_line = (
+                        f"    time_worked = {time_worked_str} " f"(excluding {human_wait_str} human wait)\n"
+                    )
+                else:
+                    time_worked_line = f"    time_worked = {time_worked_str}\n"
+            except (TypeError, AttributeError):
+                # Handle cases where time values are mocks or invalid types
+                time_worked_line = f"    time_worked = {self.time_worked_s}\n"
+
         return (
             f"ActMetadata(\n"
             f"    session_id = {self.session_id}\n"
@@ -54,6 +71,35 @@ class ActMetadata:
             f"    start_time = {start_time_str}\n"
             f"    end_time = {end_time_str}\n"
             f"{step_times_line}"
+            f"{time_worked_line}"
             f"    prompt = '{self.prompt}'\n"
             f")"
         )
+
+
+def _format_duration(seconds: float) -> str:
+    """Format duration in seconds to human-readable string.
+
+    Examples:
+        45.234 -> "45.2s"
+        154.567 -> "2m 34.6s"
+        3725.123 -> "1h 2m 5.1s"
+
+    Args:
+        seconds: Duration in seconds
+
+    Returns:
+        Human-readable duration string
+    """
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+
+    # Use divmod for efficient calculation using division and modulo
+    total_minutes, remaining_seconds = divmod(seconds, 60)
+    total_minutes = int(total_minutes)
+
+    if total_minutes < 60:
+        return f"{total_minutes}m {remaining_seconds:.1f}s"
+
+    hours, minutes = divmod(total_minutes, 60)
+    return f"{hours}h {minutes}m {remaining_seconds:.1f}s"

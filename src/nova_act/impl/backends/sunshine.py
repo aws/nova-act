@@ -270,6 +270,7 @@ class SunshineBackend(AwlBackend[ApiKeyEndpoints]):
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
                 "X-Api-Key": f"{self.api_key}",
+                "Accept-Encoding": "gzip, deflate",  # exclude zstd, which is buggy in some library versions
             },
             json=request,
             timeout=(DEFAULT_REQUEST_CONNECT_TIMEOUT, DEFAULT_REQUEST_READ_TIMEOUT),

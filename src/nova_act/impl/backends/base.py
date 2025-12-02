@@ -18,11 +18,13 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Dict, Generic, Optional, TypeVar, cast
 
+from nova_act.impl.backends.starburst.types import ActErrorData
 from nova_act.impl.interpreter import NovaActInterpreter
 from nova_act.impl.program.base import Call, CallResult, Program
 from nova_act.tools.actuator.interface.actuator import ActionType
 from nova_act.tools.browser.interface.browser import BrowserObservation
 from nova_act.types.act_errors import ActInvalidModelGenerationError
+from nova_act.types.api.status import ActStatus, WorkflowRunStatus
 from nova_act.types.errors import InterpreterError
 from nova_act.types.json_type import JSONType
 from nova_act.types.state.act import Act
@@ -148,6 +150,26 @@ class Backend(ABC, Generic[T]):
     ) -> str:
         """Create an act. Must be implemented by concrete backends."""
 
+    @abstractmethod
+    def update_act(
+        self,
+        workflow_run: WorkflowRun | None,
+        session_id: str,
+        act_id: str,
+        status: ActStatus,
+        error: ActErrorData | None = None,
+    ) -> str:
+        """Update an act. Must be implemented by concrete backends."""
+
+    @abstractmethod
+    def create_workflow_run(
+        self, workflow_definition_name: str, log_group_name: str | None = None, model_id: str = "default"
+    ) -> WorkflowRun:
+        """Create a workflow run. Must be implemented by concrete backends."""
+
+    @abstractmethod
+    def update_workflow_run(self, workflow_run: WorkflowRun | None, status: WorkflowRunStatus) -> str:
+        """Update a workflow run. Must be implemented by concrete backends."""
 
 
 class AwlBackend(Backend[T]):
@@ -240,7 +262,11 @@ class AwlBackend(Backend[T]):
         """
 
     def create_session(self, workflow_run: WorkflowRun | None) -> str:
-        """Create a session. Default implementation for all backends."""
+        """Create a session if not exists. Default implementation for all backends."""
+
+        if hasattr(self, "_session_id") and self._session_id is not None:
+            return str(self._session_id)
+
         return str(uuid.uuid4())
 
     def create_act(
@@ -249,3 +275,23 @@ class AwlBackend(Backend[T]):
         """Create an act. Default implementation for non-workflow backends."""
         return str(uuid.uuid4())
 
+    def update_act(
+        self,
+        workflow_run: WorkflowRun | None,
+        session_id: str,
+        act_id: str,
+        status: ActStatus,
+        error: ActErrorData | None = None,
+    ) -> str:
+        """Update an act. Default implementation for non-workflow backends."""
+        raise NotImplementedError(f"{self.__class__.__name__} does not support workflow operations")
+
+    def create_workflow_run(
+        self, workflow_definition_name: str, log_group_name: str | None = None, model_id: str = "default"
+    ) -> WorkflowRun:
+        """Create a workflow run. Default implementation for non-workflow backends."""
+        raise NotImplementedError(f"{self.__class__.__name__} does not support workflow operations")
+
+    def update_workflow_run(self, workflow_run: WorkflowRun | None, status: WorkflowRunStatus) -> str:
+        """Update a workflow run. Default implementation for non-workflow backends."""
+        raise NotImplementedError(f"{self.__class__.__name__} does not support workflow operations")

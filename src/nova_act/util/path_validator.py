@@ -15,6 +15,42 @@ import os
 from pathlib import Path
 
 from nova_act.types.act_errors import ActActuationError
+from nova_act.types.errors import InvalidURL
+
+
+def validate_file_url(candidate_url: str, allowed_paths: list[str]) -> None:
+    """
+    Validate that a given file:// url points to a filepath that is within one
+    of the given allowed paths
+
+    Args:
+        candidate_url: The file:// path to validate
+        allowed_paths: List of allowed path patterns (does not include file:// prefix)
+
+    Raises:
+        InvalidURL: If the url is not allowed
+
+    Pattern Matching:
+    - "*" matches all paths
+    - "/path/to/dir/*" matches all files in directory and subdirectories
+    - "/path/to/file.txt" matches exact file
+    """
+
+    # Strip file: prefix, leaving leading "//" slashes if present
+    if candidate_url.startswith("file:"):
+        candidate_path = candidate_url[5:]
+    else:
+        raise InvalidURL(f"Given url is not a file:// URL: '{candidate_url}'")
+
+    try:
+        _validate_file_access_path(
+            candidate_path=candidate_path,
+            allowed_paths=allowed_paths,
+            operation="file url",
+            param_name="allowed_file_open_paths",
+        )
+    except _FileAccessError as e:
+        raise InvalidURL(str(e)) from e
 
 
 def validate_file_upload_path(candidate_path: str, allowed_paths: list[str]) -> None:
@@ -33,6 +69,24 @@ def validate_file_upload_path(candidate_path: str, allowed_paths: list[str]) -> 
     - "/path/to/dir/*" matches all files in directory and subdirectories
     - "/path/to/file.txt" matches exact file
     """
+    try:
+        _validate_file_access_path(
+            candidate_path=candidate_path,
+            allowed_paths=allowed_paths,
+            operation="file upload",
+            param_name="allowed_file_upload_paths",
+        )
+    except _FileAccessError as e:
+        raise ActActuationError(str(e)) from e
+
+
+class _FileAccessError(Exception):
+    """Internal helper exception, to be mapped to InvalidURL or ActActuationError"""
+
+    pass
+
+
+def _validate_file_access_path(candidate_path: str, allowed_paths: list[str], operation: str, param_name: str) -> None:
 
     # Skip if the given list of allowed paths is empty
     if allowed_paths:
@@ -45,7 +99,7 @@ def validate_file_upload_path(candidate_path: str, allowed_paths: list[str]) -> 
         try:
             normalized_candidate_path = _normalize_path(candidate_path)
         except Exception as e:
-            raise ActActuationError(f"Unable to resolve path: '{candidate_path}'. Error: {e}")
+            raise _FileAccessError(f"Unable to resolve path: '{candidate_path}'. Error: {e}") from e
 
         # Check against each allowed path
         for allowed_path in allowed_paths:
@@ -58,11 +112,11 @@ def validate_file_upload_path(candidate_path: str, allowed_paths: list[str]) -> 
                 continue
 
     # No match found - block the operation
-    raise ActActuationError(
-        f"Blocked file upload: given path is not in the list of allowed paths: '{candidate_path}'\n"
+    raise _FileAccessError(
+        f"Blocked {operation}: given path is not in the list of allowed paths: '{candidate_path}'\n"
         f"Allowed path list: {allowed_paths}\n"
         f"To allow, set NovaAct parameter "
-        f"security_options=SecurityOptions(allowed_file_upload_paths=['/path/to/directory/*'])"
+        f"security_options=SecurityOptions({param_name}=['/path/to/directory/*'])"
     )
 
 
@@ -75,6 +129,7 @@ def validate_allowed_paths(allowed_paths: list[str]) -> None:
     - No empty or whitespace-only paths
     - Paths can be normalized successfully
     - No path traversal patterns
+    - Wildcards only allowed in the filename, not the directory path
 
     Args:
         allowed_paths: List of path patterns to validate
@@ -92,6 +147,17 @@ def validate_allowed_paths(allowed_paths: list[str]) -> None:
             raise ValueError(
                 f"Invalid allowed path: '{path}'. Path traversal patterns (..) are not allowed in the allowlist"
             )
+
+        # Disallow wildcard characters in directory path (only allowed in filename)
+        if "*" in path and path != "*":
+            path_obj = Path(path)
+            # Check if any parent directory contains a wildcard
+            for parent in path_obj.parents:
+                if "*" in str(parent):
+                    raise ValueError(
+                        f"Invalid allowed path: '{path}'. Wildcard characters are only allowed in the filename, "
+                        f"not in the directory path"
+                    )
 
         # Try to normalize the path - this will catch most invalid paths
         try:

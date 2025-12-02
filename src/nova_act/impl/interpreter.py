@@ -22,7 +22,7 @@ from nova_act.types.api.step import Statement
 from nova_act.types.errors import InterpreterError
 from nova_act.types.json_type import JSONType
 from nova_act.util.argument_preparation import prepare_kwargs_for_actuation_calls
-from nova_act.util.decode_string import decode_string
+from nova_act.util.decode_string import safe_string
 
 
 class NovaActInterpreter:
@@ -57,7 +57,7 @@ class NovaActInterpreter:
                 return_text = expr["value"]
 
                 if return_text is not None:
-                    value = decode_string(return_text)
+                    value = safe_string(return_text)
 
             call = call or Call(name="return", id="return", kwargs={"value": value})
             calls.append(call)
@@ -66,7 +66,7 @@ class NovaActInterpreter:
         elif stmt_kind == "ThrowStatement":
             error_msg = ""
             if "expr" in last_stmt and last_stmt["expr"]["kind"] == "NewExpression" and last_stmt["expr"]["args"]:
-                error_msg = decode_string(last_stmt["expr"]["args"][0]["value"])
+                error_msg = safe_string(last_stmt["expr"]["args"][0]["value"])
 
             call = NovaActInterpreter._validated_call(
                 tool=tool_map["throw"], call_id="throw", kwargs={"value": error_msg}
@@ -105,7 +105,7 @@ class NovaActInterpreter:
                 return NovaActInterpreter._parse_object_expression(arg)
             elif (value := arg.get("value")) is not None:
                 if arg.get("kind") == "Str" or isinstance(value, str):
-                    result = decode_string(value)
+                    result = safe_string(value)
                     return result
                 elif arg.get("kind") == "Number":
                     return value
@@ -128,7 +128,7 @@ class NovaActInterpreter:
                 if value_node["kind"] == "Bool":
                     result[key] = value_node["value"]
                 elif value_node["kind"] == "Str":
-                    result[key] = decode_string(value_node["value"])
+                    result[key] = safe_string(value_node["value"])
                 elif value_node["kind"] == "Number":
                     result[key] = value_node["value"]
                 elif value_node["kind"] == "ObjectExpression":
@@ -144,7 +144,7 @@ class NovaActInterpreter:
                 and prev_stmt["expr"]["kind"] == "Call"
                 and prev_stmt["expr"]["func"]["var"] == "think"
             ):
-                think_value = decode_string(prev_stmt["expr"]["args"][0]["value"])
+                think_value = safe_string(prev_stmt["expr"]["args"][0]["value"])
                 return Call(name="think", id="think", kwargs={"value": think_value})
 
         return None

@@ -57,18 +57,28 @@ def should_install_chromium_dependencies() -> bool:
     return True
 
 
-def rsync_to_temp_dir(src_dir: str, extra_args: list[str] = ['--exclude="Singleton*"']) -> str:
+def rsync_to_temp_dir(src_dir: str) -> str:
     """rsync from src_dir to a temp_dir after normalizing paths; return the created directory"""
+
+    # Note: For security reasons, if refactoring this function in the future, do not take extra
+    # args from untrusted callers without sanitizing inputs
     temp_dir = tempfile.mkdtemp(suffix="_nova_act_user_data_dir")
     normalized_src_dir = src_dir.rstrip("/") + "/"
     if not os.path.exists(normalized_src_dir):
         raise ValueError(f"Source directory {src_dir} does not exist")
-    rsync_cmd = ["rsync", "-a", "--delete", *extra_args, normalized_src_dir, temp_dir]
-    subprocess.run(rsync_cmd, check=True)
+
+    if system() == "Windows":
+        robo_cmd = ["robocopy", normalized_src_dir, temp_dir, "/MIR", "/XF", '"Singleton*"', "/XD", '"Singleton*"']
+        proc = subprocess.run(robo_cmd, capture_output=True, text=True)
+        if proc.returncode >= 8:
+            raise subprocess.CalledProcessError(proc.returncode, robo_cmd, output=proc.stdout, stderr=proc.stderr)
+    else:
+        rsync_cmd = ["rsync", "-a", "--delete", '--exclude="Singleton*"', normalized_src_dir, temp_dir]
+        subprocess.run(rsync_cmd, check=True)
     return temp_dir
 
 
-def rsync_from_default_user_data(dest_dir: str, extra_args: list[str] = ['--exclude="Singleton*"']) -> str:
+def rsync_from_default_user_data(dest_dir: str) -> str:
     """rsync from system default user_data_dir (MacOs only)"""
     assert system() == "Darwin", "This function is only supported on macOS"
 
@@ -79,6 +89,9 @@ def rsync_from_default_user_data(dest_dir: str, extra_args: list[str] = ['--excl
     # This ensures rsync copies the contents rather than the folder
     src_dir = os.path.join(str(Path.home()), "Library", "Application Support", "Google", "Chrome", "")
 
+    # Note: For security reasons, if refactoring this function in the future, do not take extra
+    # args from untrusted callers without sanitizing inputs
+    extra_args = ['--exclude="Singleton*"']
     normalized_dest = os.path.abspath(dest_dir)
     common_path = os.path.commonpath([src_dir, normalized_dest])
     if os.path.samefile(common_path, src_dir):

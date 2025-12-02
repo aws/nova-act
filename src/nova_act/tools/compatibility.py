@@ -16,7 +16,7 @@
 from typing import TYPE_CHECKING, Union, cast
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, ValidationError, ValidationInfo, field_validator
+from pydantic import BaseModel, Field, ValidationError
 from strands.tools.mcp import MCPAgentTool
 from strands.tools.mcp.mcp_types import MCPToolResult
 from strands.types.tools import JSONSchema, ToolResult, ToolSpec
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 _LOGGER = setup_logging(__name__)
 
 
-TOOL_DESCRIPTION_MAX_LENGTH = 1000
+TOOL_DESCRIPTION_MAX_LENGTH = 10000
 TOOL_DESCRIPTION_MIN_LENGTH = 1
 TOOL_NAME_MAX_LENGTH = 64
 TOOL_NAME_MIN_LENGTH = 1
@@ -104,17 +104,6 @@ class NovaToolSpec(BaseModel):
     """A human-readable description of what the tool does."""
     input_schema: JSONSchema[str, JSONType] = Field(alias="inputSchema")
     """JSON Schema defining the expected input parameters."""
-
-    @field_validator("description", mode="before")
-    @classmethod
-    def format_description(cls, value: str, info: ValidationInfo) -> str:  # type: ignore[explicit-any]
-        if len(value) > TOOL_DESCRIPTION_MAX_LENGTH:
-            name = info.data.get("name", "<unknown>")
-            _LOGGER.warning(
-                f"Description for tool '{name}' longer than max length {TOOL_DESCRIPTION_MAX_LENGTH}; "
-                "The description provided to NovaAct will be truncated."
-            )
-        return value[:TOOL_DESCRIPTION_MAX_LENGTH]
 
     @classmethod
     def from_strands(cls, tool_spec: ToolSpec) -> Self:
