@@ -675,7 +675,7 @@ with NovaAct(starting_page="https://allowed-domain.com", state_guardrail=url_gua
 
 ### Captchas
 
-You should use the `ui_takeover` callback (see [HITL](#hitl-human-in-the-loop)) if your script encounters captchas in certain places. This will allow redirecting the step of solving Captcha to a human.
+You should use the `ui_takeover` callback (see [HITL](#human-in-the-loop-hitl)) if your script encounters captchas in certain places. This will allow redirecting the step of solving Captcha to a human.
 
 ### Search on a website
 
