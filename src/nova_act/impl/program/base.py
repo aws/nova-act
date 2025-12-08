@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from dataclasses import dataclass, field
-from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from nova_act.tools.actuator.interface.actuator import ActionType
+from nova_act.tools.compatibility import callable_tool
 from nova_act.types.act_errors import ActToolError
 from nova_act.types.json_type import JSONType
 
@@ -28,7 +28,8 @@ class FrozenBaseModel(BaseModel):
 class Call(FrozenBaseModel):
     name: str
     kwargs: dict[str, JSONType]
-    id: str = Field(default_factory=lambda: str(uuid4()))
+    id: str
+    is_tool: bool = False
 
 
 @dataclass(frozen=True)
@@ -72,9 +73,8 @@ class Program(FrozenBaseModel):
     def compile(self, tool_map: dict[str, ActionType]) -> CompiledProgram:
         compiled_calls = []
         for call in self.calls:
-
             target = tool_map.get(call.name)
             if target is None:
                 raise ActToolError(message=f"Tool '{call.name}' was not found.")
-            compiled_calls.append(CompiledCall(source=call, target=target))
+            compiled_calls.append(CompiledCall(source=call, target=callable_tool(target)))
         return CompiledProgram(calls=compiled_calls)

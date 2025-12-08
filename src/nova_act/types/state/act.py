@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import dataclasses
 import time
 
 # using dataclasses for end states
@@ -22,8 +23,9 @@ from attrs.setters import frozen
 
 from nova_act.tools.actuator.interface.actuator import ActionType
 from nova_act.types.act_metadata import ActMetadata
-from nova_act.types.act_result import ActResult
+from nova_act.types.act_result import ActGetResult
 from nova_act.types.state.step import StepWithProgram
+from nova_act.types.workflow_run import WorkflowRun
 
 DEFAULT_ACT_MAX_STEPS = 30
 
@@ -51,13 +53,18 @@ class Act:
     model_seed: int | None = field(default=None, on_setattr=frozen)
     observation_delay_ms: int | None = field(default=None, on_setattr=frozen)
 
+
+    tools: list[ActionType] = field(factory=list)  # HITL + custom tools
+    # Workflow context (immutable)
+    workflow_run: WorkflowRun | None = field(default=None, on_setattr=frozen)
+
     # generate start_time on construction; make immutable
     start_time: float = field(factory=lambda: time.time(), on_setattr=frozen, init=False)
 
     # rest of fields are mutable
     end_time: float | None = field(factory=lambda: None, init=False)
     _steps: list[StepWithProgram] = field(factory=list, init=False)
-    _result: ActResult | None = field(factory=lambda: None, init=False)
+    _result: ActGetResult | None = field(factory=lambda: None, init=False)
 
     acknowledged: bool = field(factory=lambda: False, init=False)
     is_complete: bool = field(factory=lambda: False, init=False)
@@ -84,7 +91,7 @@ class Act:
         return [round(step.server_time_s, 3) for step in self._steps if step.server_time_s is not None]
 
     @property
-    def result(self) -> ActResult | None:
+    def result(self) -> ActGetResult | None:
         return self._result
 
     def add_step(self, step: StepWithProgram) -> None:
@@ -95,9 +102,38 @@ class Act:
     def complete(self, response: str | None) -> None:
         self.end_time = time.time()
         # fmt: off
-        self._result = ActResult(
+        self._result = ActGetResult(
             response=response,
             metadata=self.metadata,
         )
         # fmt: on
         self.is_complete = True
+
+    def set_time_worked(self, time_worked_s: float | None, human_wait_time_s: float) -> None:
+        """Set time worked metrics after act completion.
+
+        This method updates the act's result metadata with time worked information.
+        It should only be called after the act has completed and has a result.
+
+        Args:
+            time_worked_s: The calculated time worked in seconds (excluding human wait time)
+            human_wait_time_s: The total human wait time in seconds
+
+        Note:
+            This method uses object.__setattr__() to update the frozen ActResult dataclass.
+            This is intentional as time worked is calculated after the result is created.
+        """
+        if self._result is None:
+            # Act has no result yet - this should not happen in normal flow
+            return
+
+        # Create new metadata with time worked fields using dataclasses.replace
+        new_metadata = dataclasses.replace(
+            self._result.metadata,
+            time_worked_s=time_worked_s,
+            human_wait_time_s=human_wait_time_s,
+        )
+
+        # Update the frozen ActResult with new metadata
+        # Using object.__setattr__() is necessary because ActResult is a frozen dataclass
+        object.__setattr__(self._result, "metadata", new_metadata)

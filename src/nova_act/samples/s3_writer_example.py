@@ -62,12 +62,11 @@ def main(
 
     # Use the S3Writer with NovaAct
     with NovaAct(
-        starting_page="https://nova.amazon.com/act",
+        starting_page="https://nova.amazon.com/act/gym/next-dot/search",
         record_video=record_video,
-        boto_session=boto_session,
         stop_hooks=[s3_writer],
     ) as nova:
-        nova.act("Click learn more. Then, return the title and publication date of the blog.")
+        nova.act("Find flights from Boston to Wolf on Feb 22nd")
 
 
 if __name__ == "__main__":

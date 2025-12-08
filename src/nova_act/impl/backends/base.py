@@ -13,30 +13,23 @@
 # limitations under the License.
 from __future__ import annotations
 
-import json
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Dict, Generic, Optional, TypeVar, cast
 
+from nova_act.impl.backends.starburst.types import ActErrorData
 from nova_act.impl.interpreter import NovaActInterpreter
 from nova_act.impl.program.base import Call, CallResult, Program
 from nova_act.tools.actuator.interface.actuator import ActionType
 from nova_act.tools.browser.interface.browser import BrowserObservation
-from nova_act.types.act_errors import ActBadResponseError, ActInvalidModelGenerationError
+from nova_act.types.act_errors import ActInvalidModelGenerationError
+from nova_act.types.api.status import ActStatus, WorkflowRunStatus
 from nova_act.types.errors import InterpreterError
 from nova_act.types.json_type import JSONType
 from nova_act.types.state.act import Act
 from nova_act.types.state.step import Step, StepWithProgram
 from nova_act.types.workflow_run import WorkflowRun
-from nova_act.util.decode_string import decode_string
-from nova_act.util.logging import (
-    get_session_id_prefix,
-    make_trace_logger,
-    trace_log_lines,
-)
-
-_TRACE_LOGGER = make_trace_logger()
 
 T = TypeVar("T", bound="Endpoints")
 
@@ -157,18 +150,30 @@ class Backend(ABC, Generic[T]):
     ) -> str:
         """Create an act. Must be implemented by concrete backends."""
 
+    @abstractmethod
+    def update_act(
+        self,
+        workflow_run: WorkflowRun | None,
+        session_id: str,
+        act_id: str,
+        status: ActStatus,
+        error: ActErrorData | None = None,
+    ) -> str:
+        """Update an act. Must be implemented by concrete backends."""
+
+    @abstractmethod
+    def create_workflow_run(
+        self, workflow_definition_name: str, log_group_name: str | None = None, model_id: str = "default"
+    ) -> WorkflowRun:
+        """Create a workflow run. Must be implemented by concrete backends."""
+
+    @abstractmethod
+    def update_workflow_run(self, workflow_run: WorkflowRun | None, status: WorkflowRunStatus) -> str:
+        """Update a workflow run. Must be implemented by concrete backends."""
 
 
 class AwlBackend(Backend[T]):
-
-    @staticmethod
-    def _decode_awl_raw_program(awl_raw_program: str) -> str:
-        lines = awl_raw_program.split("\\n")
-        decoded_lines = []
-        for line in lines:
-            decoded_lines.append(decode_string(line))
-        awl_program = "\n".join(decoded_lines)
-        return awl_program
+    """Legacy Backends which pass AWL + AST."""
 
     def step(self, act: Act, call_results: list[CallResult], tool_map: dict[str, ActionType] = {}) -> StepWithProgram:
         """
@@ -206,38 +211,25 @@ class AwlBackend(Backend[T]):
             raise ValueError("No observation found in call_results")
 
         # Get the step from the model using legacy backends
-        _TRACE_LOGGER.info(f"{get_session_id_prefix()}...")
         step_object = self.awl_step(act, observation, error_executing_previous_step, call_results)
-
-        # Log it
-        awl_program = AwlBackend._decode_awl_raw_program(step_object.model_output.awl_raw_program)
-        trace_log_lines(awl_program)
 
         # Interpret a program from the AST
         try:
             base_program = NovaActInterpreter.interpret_ast(step_object.model_output.program_ast, tool_map)
-        except InterpreterError as e:
-            # Interpreter received invalid action type or arguments from model
+        except (InterpreterError, ValueError) as e:
+            # Interpreter received invalid Statements, action type or arguments from model
             raise ActInvalidModelGenerationError(
-                request_id=step_object.model_output.request_id,
-                status_code=200,
-                message=str(e),
-                raw_response=step_object.model_output.awl_raw_program,
-            )
-        except ValueError as e:
-            # Interpreter received invalid Statements from server
-            raise ActBadResponseError(
-                request_id=step_object.model_output.request_id,
-                status_code=200,
-                message=str(e),
-                raw_response=json.dumps(step_object.model_output.program_ast),
+                message=str(e), metadata=act.metadata, raw_response=step_object.model_output.awl_raw_program
             )
         calls = base_program.calls
 
         # Add additional calls as necessary
         if act.observation_delay_ms:
-            calls += [Call(name="wait", kwargs={"seconds": act.observation_delay_ms / 1000})]
-        calls += [Call(name="waitForPageToSettle", kwargs={}), Call(name="takeObservation", kwargs={})]
+            calls += [Call(name="wait", id="wait", kwargs={"seconds": act.observation_delay_ms / 1000})]
+        calls += [
+            Call(name="waitForPageToSettle", id="waitForPageToSettle", kwargs={}),
+            Call(name="takeObservation", id="takeObservation", kwargs={}),
+        ]
 
         # Return a new Step object with our Program included
         return step_object.with_program(Program(calls=calls))
@@ -270,7 +262,11 @@ class AwlBackend(Backend[T]):
         """
 
     def create_session(self, workflow_run: WorkflowRun | None) -> str:
-        """Create a session. Default implementation for all backends."""
+        """Create a session if not exists. Default implementation for all backends."""
+
+        if hasattr(self, "_session_id") and self._session_id is not None:
+            return str(self._session_id)
+
         return str(uuid.uuid4())
 
     def create_act(
@@ -279,3 +275,23 @@ class AwlBackend(Backend[T]):
         """Create an act. Default implementation for non-workflow backends."""
         return str(uuid.uuid4())
 
+    def update_act(
+        self,
+        workflow_run: WorkflowRun | None,
+        session_id: str,
+        act_id: str,
+        status: ActStatus,
+        error: ActErrorData | None = None,
+    ) -> str:
+        """Update an act. Default implementation for non-workflow backends."""
+        raise NotImplementedError(f"{self.__class__.__name__} does not support workflow operations")
+
+    def create_workflow_run(
+        self, workflow_definition_name: str, log_group_name: str | None = None, model_id: str = "default"
+    ) -> WorkflowRun:
+        """Create a workflow run. Default implementation for non-workflow backends."""
+        raise NotImplementedError(f"{self.__class__.__name__} does not support workflow operations")
+
+    def update_workflow_run(self, workflow_run: WorkflowRun | None, status: WorkflowRunStatus) -> str:
+        """Update a workflow run. Default implementation for non-workflow backends."""
+        raise NotImplementedError(f"{self.__class__.__name__} does not support workflow operations")

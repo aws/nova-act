@@ -13,14 +13,14 @@
 # limitations under the License.
 import base64
 import io
-import re
-from typing import Literal, Tuple, Union
+from typing import Literal, Union
 
 import numpy as np
 import requests
 from PIL import Image, ImageChops
 from playwright.sync_api import Page
 
+from nova_act.tools.browser.default.util.bbox_parser import parse_bbox_string
 from nova_act.tools.browser.interface.types.dimensions_dict import DimensionsDict
 
 
@@ -164,49 +164,5 @@ def compare_images(image1_data_url: str, image2_data_url: str, threshold: int = 
 
     except Exception as e:
         raise RuntimeError(f"Unable to compare images: {str(e)}")
-
-
-def parse_box_coordinates(box_string: str) -> Tuple[int, int, int, int]:
-    """
-    Parse a string in the format "<box>top, left, bottom, right</box>" to extract coordinates.
-
-    Args:
-        box_string: A string containing box coordinates in the format "<box>top, left, bottom, right</box>"
-
-    Returns:
-        A tuple of integers (top, left, bottom, right) representing the box coordinates
-
-    Raises:
-        ValueError: If the string format is invalid or coordinates cannot be parsed
-    """
-    # Use regex to extract the coordinates from the box string
-    match = re.search(r"<box>(.*?)</box>", box_string)
-    if not match:
-        raise ValueError("Invalid box string format. Expected format: <box>top, left, bottom, right</box>")
-
-    # Extract the coordinates string and split by commas
-    coords_str = match.group(1)
-    coords = [s.strip() for s in coords_str.split(",")]
-
-    # Ensure we have exactly 4 coordinates
-    if len(coords) != 4:
-        raise ValueError("Box coordinates must contain exactly 4 values: top, left, bottom, right")
-
-    try:
-        # Convert coordinates to integers
-        top, left, bottom, right = map(int, coords)
-
-        # Validate coordinates
-        if top < 0 or left < 0 or bottom <= top or right <= left:
-            raise ValueError(
-                "Invalid box coordinates: top and left must be non-negative, "
-                "bottom must be greater than top, and right must be greater than left"
-            )
-
-        return (top, left, bottom, right)
-    except ValueError as e:
-        if "invalid literal for int" in str(e):
-            raise ValueError("Box coordinates must be integers")
-        raise
 
 

@@ -11,19 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Optional, Protocol
+from typing import Optional
 
 from playwright.sync_api import FileChooser, Page
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
-
-
-class _FileChooserInfo(Protocol):
-    """
-    What Playwright yields inside `with page.expect_file_chooser(...) as info:`.
-    https://playwright.dev/python/docs/api/class-filechooser
-    """
-
-    value: FileChooser
 
 
 def click_and_maybe_return_file_chooser(
@@ -48,30 +39,12 @@ def click_and_maybe_return_file_chooser(
     However, because this file chooser is left open, for some sites, it also prevents any other action
     from being taken until a file has been uploaded.
     """
-    # Some tests may pass a simple Mock for `page` without the expect_file_chooser API.
-    expect_file_chooser_function = getattr(page, "expect_file_chooser", None)
-    if expect_file_chooser_function is None:
-        page.mouse.click(x, y)
-        return None
-
     try:
-        context_manager = expect_file_chooser_function(timeout=timeout_ms)
-
-        # If the expect file function returned something that isn't a context manager (e.g. in mocked tests)
-        # also just click and bail out.
-        is_context_manager = hasattr(context_manager, "__enter__") and hasattr(context_manager, "__exit__")
-        if not is_context_manager:
-            page.mouse.click(x, y)
-            return None
-
-        file_chooser_info: _FileChooserInfo
-        with context_manager as file_chooser_info:
-            # Perform the intended click exactly once while listening for the chooser.
+        with page.expect_file_chooser(timeout=timeout_ms) as file_chooser_info:
             page.mouse.click(x, y)
 
         # If a file chooser shows up, return it (Playwright provides it at `info.value`)
         return file_chooser_info.value
-
     except (PlaywrightTimeoutError, AttributeError, TypeError):
         # Timeout => no chooser fired.
         # AttributeError/TypeError => likely a half-mocked page; treat as no chooser.

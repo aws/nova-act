@@ -19,6 +19,8 @@ from typing_extensions import Callable, Type
 from nova_act.types.act_metadata import ActMetadata
 from nova_act.types.errors import NovaActError
 
+
+
 MAX_CHARS = 500
 
 
@@ -77,8 +79,29 @@ class ActError(NovaActError):
             return f"Error in __str__: {e}"
 
 
+@set_default_message("Timed out; try increasing the 'timeout' kwarg on the 'act' call")
+class ActTimeoutError(ActError):
+    """Indicates an act call timed out."""
+
+
 class ActAgentError(ActError):
     """Indicates the provided prompt cannot be completed in the given configuration."""
+
+
+@set_default_message("The model output could not be processed. Please try a different request.")
+class ActInvalidModelGenerationError(ActAgentError):
+    """Indicates the Act model failed or produced invalid output."""
+
+    def __init__(
+        self,
+        message: str | None = None,
+        metadata: ActMetadata | None = None,
+        raw_response: str | None = None,
+    ):
+        super().__init__(message=message, metadata=metadata)
+        self.raw_response = raw_response
+
+
 
 
 @set_default_message("The requested action was not possible")
@@ -91,11 +114,6 @@ class ActExceededMaxStepsError(ActAgentError):
     """Indicates an Act session exceeded the maximum allowed steps."""
 
 
-@set_default_message("Timed out; try increasing the 'timeout' kwarg on the 'act' call")
-class ActTimeoutError(ActAgentError):
-    """Indicates an act call timed out."""
-
-
 class ActExecutionError(ActError):
     """Indicates an error encountered during client execution."""
 
@@ -105,6 +123,19 @@ class ActCanceledError(ActExecutionError):
     """Indicates the client received a cancel signal and stopped."""
 
 
+@set_default_message("Human input required to proceed. Implement and provide human_input_callbacks.")
+class NoHumanInputToolAvailable(ActInvalidModelGenerationError):
+    """Indicates the model requested human input but no callbacks were provided."""
+
+
+@set_default_message("Act Canceled during Human Approval.")
+class ApproveCanceledError(ActCanceledError):
+    """Indicates the client received a cancel response during human approval and stopped."""
+
+
+@set_default_message("Act Canceled during Human UI Takeover.")
+class UiTakeoverCanceledError(ActCanceledError):
+    """Indicates the client received a cancel signal during human UI takeover and stopped."""
 
 
 @set_default_message("Encountered error actuating model actions.")
@@ -115,6 +146,11 @@ class ActActuationError(ActExecutionError):
 @set_default_message("Failed to invoke a tool.")
 class ActToolError(ActExecutionError):
     """Indicates a failure running a tool."""
+
+
+@set_default_message("Failed to invoke MCP tool.")
+class ActMCPError(ActToolError):
+    """Indicates a failure running an MCP-provided tool."""
 
 
 @set_default_message("Blocked by agent state guardrail")
@@ -159,16 +195,10 @@ class ActGuardrailsError(ActClientError):
     """Indicates an Act request was blocked by the agent guardrails system."""
 
 
-@set_default_message("The model output could not be processed. Please try a different request.")
-class ActInvalidModelGenerationError(ActClientError):
-    """Indicates the Act model failed or produced invalid output."""
-
-
-
-
 @set_default_message(
     "We have quota limits to ensure sufficient capacity for all users. If you need dedicated "
-    "quota for a more ambitious project, please get in touch at nova-act@amazon.com. "
+    "quota for a more ambitious project, please request a limit increase by filling out "
+    "https://amazonexteu.qualtrics.com/jfe/form/SV_3V3pUMJFeMWpq1o. "
     "We're excited to see what you build!"
 )
 class ActRateLimitExceededError(ActClientError):
@@ -224,11 +254,6 @@ class ActModelError(ActPromptError):
 @deprecated(version="2.1.0", reason="This error will no longer be raised as the Chrome extension has been deprecated.")
 class ActDispatchError(ActClientError):
     """Failed to dispatch Act."""
-
-
-@deprecated(version="2.1.0", reason="Rolled into AuthError.")
-class ActNotAuthorizedError(ActError):
-    """Invalid IAM credentials for Moonshine backend."""
 
 
 @deprecated(version="2.1.0", reason="No longer raised; roughly correlates with new ActAPIError.")

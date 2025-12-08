@@ -13,11 +13,20 @@
 # limitations under the License.
 from playwright.sync_api import Page
 
+from nova_act.types.guardrail import GuardrailCallable
+from nova_act.util.url import validate_url
 
-def go_to_url(url: str, page: Page) -> None:
-    if "://" not in url:
-        # If URL doesn't have a protocol, add https:// as default
-        url = f"https://{url}"
 
-    # Navigate to the URL
-    page.goto(url)
+def go_to_url(
+    url: str, page: Page, allowed_file_open_paths: list[str] = [], state_guardrail: GuardrailCallable | None = None
+) -> None:
+
+    # Navigate to the URL, after validating
+    page.goto(
+        validate_url(
+            url=url,
+            default_to_https=True,
+            allowed_file_open_paths=allowed_file_open_paths,
+            state_guardrail=state_guardrail,
+        )
+    )

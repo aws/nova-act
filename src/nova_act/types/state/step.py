@@ -53,7 +53,7 @@ class ModelOutput:
         try:
             program_ast: list[Statement] = plan_response_json["program"]["body"][0]["body"]["body"]
         except (IndexError, KeyError, TypeError):
-            raise ValueError("actuationPlanResponse is missing program body.")
+            raise LookupError("actuationPlanResponse is missing program body.")
 
         return cls(awl_raw_program=awl_raw_program, request_id=request_id, program_ast=program_ast)
 
@@ -64,6 +64,7 @@ class Step:
     model_output: ModelOutput
     observed_time: datetime
     server_time_s: float | None
+    step_id: str | None = None
     trace: TraceDict | None = None
 
     # Input validation

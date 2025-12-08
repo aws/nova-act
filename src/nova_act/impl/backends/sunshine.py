@@ -73,7 +73,9 @@ class SunshineBackend(AwlBackend[ApiKeyEndpoints]):
     @classmethod
     def get_available_endpoints(cls) -> Dict[str, ApiKeyEndpoints]:
         return {
-            "prod": ApiKeyEndpoints(api_url="https://nova.amazon.com/agent", keygen_url="https://nova.amazon.com/act"),
+            "prod": ApiKeyEndpoints(
+                api_url="https://api.nova.amazon.com/agent", keygen_url="https://nova.amazon.com/dev-apis"
+            ),
         }
 
     @classmethod
@@ -123,6 +125,11 @@ class SunshineBackend(AwlBackend[ApiKeyEndpoints]):
                     json_response["actuationPlanResponse"],
                     request_id or "",
                 )
+            except LookupError:
+                raise ActInvalidModelGenerationError(
+                    metadata=act.metadata,
+                    raw_response=response.text,
+                )
             except Exception as e:
                 raise ActBadResponseError(
                     request_id=request_id,
@@ -146,9 +153,8 @@ class SunshineBackend(AwlBackend[ApiKeyEndpoints]):
             reason = json_response.get("reason")
             if reason in ["MODEL_ERROR"]:
                 raise ActInvalidModelGenerationError(
-                    request_id=request_id,
-                    status_code=status_code,
                     message=json_response.get("message"),
+                    metadata=act.metadata,
                     raw_response=response.text,
                 )
             elif reason in ["SESSION_ALREADY_STARTED", "SESSION_DOES_NOT_EXIST"]:
@@ -261,9 +267,10 @@ class SunshineBackend(AwlBackend[ApiKeyEndpoints]):
         return requests.post(
             self.step_uri,
             headers={
-                "Authorization": f"ApiKey {self.api_key}",
+                "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
                 "X-Api-Key": f"{self.api_key}",
+                "Accept-Encoding": "gzip, deflate",  # exclude zstd, which is buggy in some library versions
             },
             json=request,
             timeout=(DEFAULT_REQUEST_CONNECT_TIMEOUT, DEFAULT_REQUEST_READ_TIMEOUT),

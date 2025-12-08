@@ -20,6 +20,7 @@ from playwright.sync_api import Page
 from nova_act.tools.browser.default.playwright import PlaywrightInstanceManager
 from nova_act.tools.browser.default.playwright_instance_options import PlaywrightInstanceOptions
 from nova_act.tools.browser.default.util.agent_click import agent_click
+from nova_act.tools.browser.default.util.agent_hover import agent_hover
 from nova_act.tools.browser.default.util.agent_scroll import agent_scroll
 from nova_act.tools.browser.default.util.agent_type import agent_type
 from nova_act.tools.browser.default.util.bbox_parser import parse_bbox_string
@@ -34,6 +35,8 @@ from nova_act.tools.browser.interface.playwright_pages import PlaywrightPageMana
 from nova_act.tools.browser.interface.types.click_types import ClickOptions
 from nova_act.tools.browser.interface.types.scroll_types import ScrollDirection
 from nova_act.types.api.step import BboxTLWH
+from nova_act.types.errors import InvalidURL
+from nova_act.types.guardrail import GuardrailCallable
 from nova_act.types.json_type import JSONType
 from nova_act.util.common_js_expressions import Expressions
 
@@ -46,8 +49,10 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
     def __init__(
         self,
         playwright_options: PlaywrightInstanceOptions,
+        state_guardrail: GuardrailCallable | None = None,
     ):
         self._playwright_manager = PlaywrightInstanceManager(playwright_options)
+        self._state_guardrail = state_guardrail
 
     def start(self, **kwargs: Any) -> None:  # type: ignore[explicit-any]
         if not self._playwright_manager.started:
@@ -80,6 +85,12 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
         agent_click(bbox, self._playwright_manager.main_page, click_type or "left", click_options)
         return None
 
+    def agent_hover(self, box: str) -> JSONType:
+        """Hovers on the center of the specified box."""
+        bbox = parse_bbox_string(box)
+        agent_hover(bbox, self._playwright_manager.main_page)
+        return None
+
     def agent_scroll(self, direction: ScrollDirection, box: str, value: float | None = None) -> JSONType:
         """Scrolls the element in the specified box in the specified direction.
 
@@ -102,12 +113,22 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
             self._playwright_manager.main_page,
             self._playwright_manager.modifier_key,
             "pressEnter" if pressEnter else None,
+            allowed_file_upload_paths=self._playwright_manager.security_options.allowed_file_upload_paths,
         )
         return None
 
     def go_to_url(self, url: str) -> JSONType:
         """Navigates to the specified URL."""
-        go_to_url(url, self._playwright_manager.main_page)
+
+        try:
+            go_to_url(
+                url,
+                self._playwright_manager.main_page,
+                allowed_file_open_paths=self._playwright_manager.security_options.allowed_file_open_paths,
+                state_guardrail=self._state_guardrail,
+            )
+        except InvalidURL as e:
+            raise ValueError(str(e)) from e
         return None
 
     def _return(self, value: str | None) -> JSONType:
@@ -150,10 +171,11 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
                 dimensions = self._playwright_manager.main_page.evaluate(Expressions.GET_VIEWPORT_SIZE.value)
                 user_agent = self._playwright_manager.main_page.evaluate(Expressions.GET_USER_AGENT.value)
                 break
-            except Exception:
+            except Exception as e:
                 wait_for_page_to_settle(self._playwright_manager.main_page, WAIT_FOR_PAGE_TO_SETTLE_CONFIG)
                 if attempt == MAX_PAGE_EVALUATE_RETRIES - 1:  # Last attempt
-                    raise
+                    # Cast it as RuntimeError but also surface the original cause.
+                    raise RuntimeError(f"{type(e).__str__}: {e}") from e
 
         # At this point, dimensions and user_agent are guaranteed to be set
         # because either the try block succeeded or an exception was raised

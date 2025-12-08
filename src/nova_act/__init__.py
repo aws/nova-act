@@ -14,10 +14,15 @@
 import builtins
 import pdb
 import sys
-import threading
+
+from strands import tool
 
 from nova_act.impl.common import rsync_from_default_user_data
 from nova_act.impl.extension import ExtensionActuator
+from nova_act.tools.human.interface.human_input_callback import (
+    HumanInputCallbacksProvider,
+)
+
 
 from nova_act.nova_act import NovaAct
 from nova_act.tools.browser.default.default_nova_local_browser_actuator import DefaultNovaLocalBrowserActuator
@@ -37,7 +42,6 @@ from nova_act.types.act_errors import (
     ActInternalServerError,
     ActInvalidModelGenerationError,
     ActModelError,
-    ActNotAuthorizedError,
     ActProtocolError,
     ActRateLimitExceededError,
     ActServerError,
@@ -45,11 +49,13 @@ from nova_act.types.act_errors import (
     ActTimeoutError,
 )
 from nova_act.types.act_metadata import ActMetadata
-from nova_act.types.act_result import ActResult
+from nova_act.types.act_result import ActGetResult, ActResult
 from nova_act.types.errors import NovaActError, StartFailed, StopFailed, ValidationFailed
+from nova_act.types.features import SecurityOptions
 from nova_act.types.guardrail import GuardrailDecision, GuardrailInputState
 from nova_act.types.json_type import JSONType
-from nova_act.util.jsonschema import BOOL_SCHEMA
+from nova_act.types.workflow import Workflow, get_current_workflow, workflow
+from nova_act.util.jsonschema import BOOL_SCHEMA, STRING_SCHEMA
 from nova_act.util.logging import setup_logging
 
 __all__ = [
@@ -65,7 +71,6 @@ __all__ = [
     "ActExceededMaxStepsError",
     "ActGuardrailsError",
     "ActInternalServerError",
-    "ActNotAuthorizedError",
     "ActInvalidModelGenerationError",
     "ActModelError",
     "ActRateLimitExceededError",
@@ -73,12 +78,15 @@ __all__ = [
     "ActTimeoutError",
     "ActMetadata",
     "ActResult",
+    "ActGetResult",
     "ActStateGuardrailError",
     "NovaActError",
+    "SecurityOptions",
     "StartFailed",
     "StopFailed",
     "ValidationFailed",
     "BOOL_SCHEMA",
+    "STRING_SCHEMA",
     "BrowserActuatorBase",
     "ExtensionActuator",
     "DefaultNovaLocalBrowserActuator",
@@ -86,6 +94,11 @@ __all__ = [
     "rsync_from_default_user_data",
     "GuardrailDecision",
     "GuardrailInputState",
+    "HumanInputCallbacksProvider",
+    "tool",
+    "Workflow",
+    "get_current_workflow",
+    "workflow",
 ]
 
 
