@@ -18,6 +18,9 @@ BEDROCK_AGENT_CONTROL_SERVICE = "bedrock-agentcore-control"
 BEDROCK_AGENT_DATA_SERVICE = "bedrock-agentcore"
 STS_SERVICE = "sts"
 
+# Timeout configuration
+DEFAULT_READ_TIMEOUT = 7200  # 2 hours in seconds
+
 # Error codes
 ALREADY_EXISTS_ERROR = "AlreadyExists"
 CONFLICT_ERROR = "Conflict"

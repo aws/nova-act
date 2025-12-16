@@ -64,19 +64,24 @@ def get_no_authentication_error() -> str:
 
 
 def get_missing_workflow_definition_error() -> str:
-    """Get the error message when workflow_definition_name is missing for AWS workflows.
+    """Get the error message when AWS credentials are set but NOVA_ACT_API_KEY is not and
+    user is trying to run a non-workflow example.
 
     Returns:
         A formatted error message string.
     """
     return create_warning_box(
         [
-            "Detected AWS Credentials Without Workflow Construct",
+            "Authentication Failed With Invalid Credentials Configuration",
             "",
-            f"To use {NOVA_ACT_FREE_VERSION}, set the NOVA_ACT_API_KEY environment variable",
+            "There are two options for authenticating with Nova Act:",
+            f"(1) {NOVA_ACT_FREE_VERSION} with API keys or (2) {NOVA_ACT_AWS_SERVICE} with AWS credentials.",
+            "",
+            f"To use (1) {NOVA_ACT_FREE_VERSION}, set the NOVA_ACT_API_KEY environment variable",
             'or pass in explicitly using NovaAct(nova_act_api_key="<YOUR KEY HERE>", ...)',
+            "To generate an API Key go to https://nova.amazon.com/act?tab=dev_tools",
             "",
-            f"To use {NOVA_ACT_AWS_SERVICE}, you must use a Workflow construct. For example:",
+            f"To use (2) {NOVA_ACT_AWS_SERVICE}, you must use a Workflow construct. For example:",
             "",
             '@workflow(workflow_definition_name="<your-workflow-name>", model_id="nova-act-latest")',
             "def explore_destinations():",
@@ -84,6 +89,8 @@ def get_missing_workflow_definition_error() -> str:
             '        nova.act("Find flights from Boston to Wolf on Feb 22nd")',
             "",
             "To create a workflow definition name, use the Nova Act CLI or go to",
-            "https://us-east-1.console.aws.amazon.com/nova-act/home",
+            "https://docs.aws.amazon.com/nova-act/latest/userguide/step-2-develop-locally.html#develop-with-aws-iam",
+            "",
+            "Please configure one or the other in order to run your workflow.",
         ]
     )

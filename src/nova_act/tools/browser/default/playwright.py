@@ -20,13 +20,16 @@ import requests
 from install_playwright import install
 from playwright.sync_api import BrowserContext
 from playwright.sync_api import Error as PlaywrightError
-from playwright.sync_api import Page, sync_playwright
+from playwright.sync_api import Page, Route, sync_playwright
 
 from nova_act.impl.common import quit_default_chrome_browser, should_install_chromium_dependencies
+from nova_act.impl.inputs import validate_url_ssl_certificate
 from nova_act.tools.browser.default.playwright_instance_options import PlaywrightInstanceOptions
 from nova_act.types.errors import (
     ClientNotStarted,
+    InvalidCertificate,
     InvalidPlaywrightState,
+    InvalidURL,
     PageNotFoundError,
     StartFailed,
     ValidationFailed,
@@ -85,6 +88,8 @@ class PlaywrightInstanceManager:
         # For local executions Playwright will resolve the the modifier key appropriately.
         # Docs: https://playwright.dev/docs/api/class-keyboard#keyboard-press
         self._modifier_key = "ControlOrMeta"
+        self._safe_site_validation_error: InvalidURL | InvalidCertificate | None = None
+        self._ssl_hook_enabled = False
 
     @property
     def started(self) -> bool:
@@ -128,6 +133,43 @@ class PlaywrightInstanceManager:
         if self._go_to_url_timeout is not None:
             context.set_default_navigation_timeout(self._go_to_url_timeout)
         return context
+
+    def setup_ssl_validation_hook(self, context: BrowserContext) -> None:
+        """Set up SSL certificate validation for all navigation requests."""
+        if self._ssl_hook_enabled:
+            return
+
+        def handle_navigation(route: Route) -> None:
+            if route.request.is_navigation_request() and route.request.url:
+                try:
+                    validate_url_ssl_certificate(self._ignore_https_errors, route.request.url)
+                    route.continue_()
+                except (InvalidCertificate, InvalidURL) as e:
+                    if self._safe_site_validation_error is None:
+                        self._safe_site_validation_error = e
+                    # Force navigate to a safe page
+                    route.fulfill(body="<html><body>SSL Error</body></html>", content_type="text/html")
+                    raise
+            else:
+                route.continue_()
+
+        context.route("**", handle_navigation)
+        self._ssl_hook_enabled = True
+
+    def clear_ssl_error(self) -> None:
+        """Explicitly clear the stored SSL validation error."""
+        self._safe_site_validation_error = None
+
+    def disable_ssl_validation_hook(self) -> None:
+        """Disable SSL validation for manual browsing."""
+        if self._context and self._ssl_hook_enabled:
+            self._context.unroute("**")
+            self._ssl_hook_enabled = False
+
+    @property
+    def safe_site_validation_error(self) -> InvalidURL | InvalidCertificate | None:
+        """Get any stored SSL validation error without clearing it."""
+        return self._safe_site_validation_error
 
     def start(self, session_logs_directory: str | None) -> None:
         """Start and attach the Browser"""

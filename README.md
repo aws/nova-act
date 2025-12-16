@@ -7,6 +7,18 @@ Amazon Nova Act is available as a new AWS service to build and manage fleets of 
 (Preview) Nova Act also integrates with external tools through API calls, remote MCP, or agentic frameworks, such as Strands Agents.
 
 
+> #### ⚠️ Notice: Support for Nova Act SDK versions prior to 3.0 will end on January 21, 2026.
+
+> Please follow the upgrade instructions below:
+
+ > ```bash
+ > # Upgrade to the latest version
+ > pip install --upgrade nova-act
+ >
+ > # Check your current version
+ > pip show nova-act
+ > ```
+
 ## Table of contents
 * [Pre-requisites](#pre-requisites)
 * [Nova Act IDE Extension](#quick-set-up-with-ide-extension)
@@ -231,6 +243,19 @@ if name == "main":
     main()
 ```
 
+#### Retry handling
+By default, when a Nova Act request times out, the Nova Act SDK will retry it once. This can be overridden by passing in a `boto_config` object to the Workflow constructor. You can also use this object to override the default 60 second `read_timeout`. For example, to retry a request 4 times (for a total of 5 attempts) with a 90 second timeout:
+
+```python
+boto_config = Config(retries={"total_max_attempts": 5, "mode": "standard"}, read_timeout=90)
+with Workflow(
+    boto_config=boto_config,
+    workflow_definition_name="<your-workflow-name>",
+    model_id="nova-act-latest"
+) as workflow:
+```
+Note that retrying the same Nova Act request may result in increased cost if the request ends up executing multiple times. For more information on retries including retry modes, please refer to the [botocore retry documentation](https://botocore.amazonaws.com/v1/documentation/api/latest/reference/config.html).
+
 ### The Decorator
 
 For convenience, the SDK also exposes a [decorator](https://peps.python.org/pep-0318/) which can be used to annotate functions to be run under a given workflow. The decorator leverages [ContextVars](https://peps.python.org/pep-0567/) to inject the correct `Workflow` object into each `NovaAct` instance within the function; no need to provide the `workflow` keyword argument! The following syntax provides identical functionality to the previous example:
@@ -243,11 +268,7 @@ from nova_act import NovaAct, workflow
     model_id="nova-act-latest",
 )
 def main():
-    with NovaAct(
-        starting_page="https://nova.amazon.com/act/gym/next-dot/search",
-        headless=True,
-        tty=False
-    ) as nova:
+    with NovaAct(starting_page="https://nova.amazon.com/act/gym/next-dot/search") as nova:
         nova.act("Find flights from Boston to Wolf on Feb 22nd")
 
 if __name__ == "__main__":
@@ -298,11 +319,7 @@ from nova_act import NovaAct, workflow
     }
 )
 def main():
-    with NovaAct(
-        starting_page="https://nova.amazon.com/act/gym/next-dot/search",
-        headless=True,
-        tty=False
-    ) as nova:
+    with NovaAct(starting_page="https://nova.amazon.com/act/gym/next-dot/search") as nova:
         nova.act("Find flights from Boston to Wolf on Feb 22nd")
 
 if __name__ == "__main__":

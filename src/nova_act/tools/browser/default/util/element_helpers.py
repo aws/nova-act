@@ -214,7 +214,36 @@ def is_element_focused(page: Page, x: float, y: float) -> bool:
         ([x, y]) => {
             %s
             const elem = deepElementFromPoint(document, x, y);
-            return elem.contains(document.activeElement);
+            function getDeepActiveElement() {
+                let active = document.activeElement;
+
+                while (active) {
+                    // Shadow DOM
+                    if (active.shadowRoot && active.shadowRoot.activeElement) {
+                        active = active.shadowRoot.activeElement;
+                        continue;
+                    }
+
+                    // Iframe (same-origin only)
+                    if (active.tagName === "IFRAME") {
+                        try {
+                            const iframeDoc = active.contentDocument;
+                            if (iframeDoc && iframeDoc.activeElement) {
+                                active = iframeDoc.activeElement;
+                                continue;
+                            }
+                        } catch {
+                            // Cross-origin iframe
+                        }
+                    }
+
+                    break;
+                }
+
+                return active;
+            }
+            const activeElement = getDeepActiveElement();
+            return elem.contains(activeElement);
         }
         """
         % (DEEP_ELEMENT_FROM_POINT_JS,),

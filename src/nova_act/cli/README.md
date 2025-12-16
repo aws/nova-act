@@ -56,6 +56,48 @@ act workflow run --name <auto-created-workflow-name> --payload '{"input": "test 
 
 **Note:** Quick deploy creates a persistent workflow with auto-generated name. The workflow remains in your configuration and can be managed with standard workflow commands (`list`, `show`, `delete`, etc.).
 
+## Creating A WorkflowDefinition
+
+### Using Nova Act CLI
+
+The `act workflow create --name <workflow-name>` command automatically creates a workflow definition with the provided name and the default Nova Act CLI S3 bucket (`nova-act-{account-id}-{region}`).
+
+### Using AWS CLI
+
+**Note:** You may need to update your AWS CLI to the latest version to access the `nova-act` service commands.
+
+```bash
+# Create workflow definition with S3 export configuration
+aws nova-act create-workflow-definition \
+  --name my-workflow \
+  --export-config '{
+    "s3BucketName": "my-bucket",
+    "s3KeyPrefix": "nova-act-workflows"
+  }' \
+  --region us-east-1
+```
+
+### Using AWS SDK (boto3)
+
+**Note:** This code sets up an AWS resource (WorkflowDefinition) that will later be used with the AWS Nova Act service in your actual workflow code that uses the Nova Act SDK. There is no need to recreate a workflow definition at runtime.
+
+```python
+import boto3
+
+# Create boto3 client for Nova Act workflow management
+client = boto3.client('nova-act')
+
+# Create workflow definition with S3 export configuration
+response = client.create_workflow_definition(
+    name='my-workflow',  # Replace with your workflow name
+    exportConfig={
+        's3BucketName': 'my-bucket',  # Replace with your S3 bucket
+        's3KeyPrefix': 'nova-act-workflows'
+    }
+)
+
+print(f"Created workflow: {response['name']}")
+```
 
 ## Commands
 

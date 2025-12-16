@@ -162,7 +162,7 @@ def deploy(
         raise styled_error_exception(str(e))
 
     except Exception as e:
-        raise styled_error_exception(f"Unexpected error during deployment: {str(e)}")
+        raise styled_error_exception(f"Unexpected error during deployment: {str(e)}") from e
 
 
 def _display_deployment_results(workflow_info: WorkflowInfo, region: str) -> None:

@@ -74,4 +74,4 @@ def show(name: str, region: str | None = None) -> None:
         )
         sys.exit(1)
     except Exception as e:
-        raise styled_error_exception(message=f"Unexpected error: {str(e)}")
+        raise styled_error_exception(message=f"Unexpected error: {str(e)}") from e

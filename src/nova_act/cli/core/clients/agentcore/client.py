@@ -20,6 +20,7 @@ import uuid
 from typing import Tuple
 
 from boto3 import Session
+from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from nova_act.cli.core.clients.agentcore.constants import (
@@ -29,6 +30,7 @@ from nova_act.cli.core.clients.agentcore.constants import (
     BEDROCK_AGENT_DATA_SERVICE,
     CONFLICT_ERROR,
     DEFAULT_ENDPOINT_NAME,
+    DEFAULT_READ_TIMEOUT,
     LOG_GROUP_PREFIX,
     MAX_AGENT_NAME_LENGTH,
     OTEL_LOG_SUFFIX,
@@ -62,14 +64,15 @@ logger = logging.getLogger(__name__)
 class AgentCoreClient:
     """Client for AgentCore service operations."""
 
-    def __init__(self, session: Session | None, region: str):
+    def __init__(self, session: Session | None, region: str, timeout: int = DEFAULT_READ_TIMEOUT):
         self.region = region
         self.session = session or Session()
+        config = Config(read_timeout=timeout, retries={"max_attempts": 1})
         self.control_client = self.session.client(
-            BEDROCK_AGENT_CONTROL_SERVICE, region_name=region
+            BEDROCK_AGENT_CONTROL_SERVICE, region_name=region, config=config
         )  # type: ignore[call-overload]
         self.data_client = self.session.client(
-            BEDROCK_AGENT_DATA_SERVICE, region_name=region
+            BEDROCK_AGENT_DATA_SERVICE, region_name=region, config=config
         )  # type: ignore[call-overload]
 
     def invoke_agent_runtime(self, agent_arn: str, payload: str) -> str:

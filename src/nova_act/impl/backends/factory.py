@@ -87,7 +87,7 @@ class BackendFactory:
                 [
                     "Authentication failed.",
                     "",
-                    f"Please ensure you are using a key from: {SunshineBackend.get_default_endpoints().keygen_url}",
+                    "Please ensure you are using a key from: https://nova.amazon.com/dev-apis",
                 ]
             )
             raise AuthError(_message)

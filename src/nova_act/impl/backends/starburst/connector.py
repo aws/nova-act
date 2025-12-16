@@ -176,14 +176,16 @@ class StarburstBackend(Backend[Endpoints]):
         return message
 
     @classmethod
-    def get_available_endpoints(cls) -> dict[str, Endpoints]:
-        return {
-            "prod": Endpoints(api_url="https://nova-act.us-east-1.amazonaws.com/"),
-        }
+    def resolve_endpoints(
+        cls,
+        backend_stage: str | None = None,
+        backend_api_url_override: str | None = None,
+        local_port: int | None = None,
+    ) -> Endpoints:
+        api_url = "https://nova-act.us-east-1.amazonaws.com/"
 
-    @classmethod
-    def get_default_endpoints(cls) -> Endpoints:
-        return cls.get_available_endpoints()["prod"]
+
+        return Endpoints(api_url=api_url)
 
     def validate_auth(self) -> None:
         self._validate_boto_session()

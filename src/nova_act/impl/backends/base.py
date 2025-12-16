@@ -16,7 +16,7 @@ from __future__ import annotations
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, Generic, Optional, TypeVar, cast
+from typing import Generic, Optional, TypeVar, cast
 
 from nova_act.impl.backends.starburst.types import ActErrorData
 from nova_act.impl.interpreter import NovaActInterpreter
@@ -44,7 +44,6 @@ class Endpoints:
 class ApiKeyEndpoints(Endpoints):
     keygen_url: str
     valid_api_key_length: int = 36
-
 
 
 
@@ -104,41 +103,11 @@ class Backend(ABC, Generic[T]):
         """
 
     @classmethod
+    @abstractmethod
     def resolve_endpoints(
         cls,
     ) -> T:
-
-        _endpoints: T = cls.get_default_endpoints()
-
-
-        return _endpoints
-
-    @classmethod
-    @abstractmethod
-    def get_available_endpoints(cls) -> Dict[str, T]:
-        """
-        Return a dictionary of all available endpoints for this backend.
-
-        This method must be implemented by each concrete backend to:
-        1. Return all available endpoints configurations as a stage-to-endpoints mapping
-        2. Provide a comprehensive dictionary of supported endpoints
-
-        Returns:
-            Dictionary mapping backend stage names to Endpoints objects.
-        """
-
-    @classmethod
-    @abstractmethod
-    def get_default_endpoints(cls) -> T:
-        """
-        Return the default endpoints for this backend.
-
-        This method must be implemented by each concrete backend to return
-        the default endpoints when no specific backend stage is requested.
-
-        Returns:
-            Default Endpoints object containing the URLs
-        """
+        pass
 
     @abstractmethod
     def create_session(self, workflow_run: WorkflowRun | None) -> str:

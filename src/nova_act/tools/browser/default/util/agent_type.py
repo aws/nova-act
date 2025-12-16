@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
+import time
 
 from playwright.sync_api import Page
 
@@ -49,6 +50,7 @@ def ensure_element_focus(page: Page, x: float, y: float, retries: int = 2) -> No
 
         if is_element_focused(page, x, y):
             return
+        time.sleep(0.5)
 
     raise RuntimeError(f"Failed to focus element at coordinates ({x}, {y}) after {retries} attempts")
 
