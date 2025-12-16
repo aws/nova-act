@@ -20,9 +20,10 @@ from typing import Callable
 
 import click
 from boto3 import Session
-from botocore.exceptions import ClientError, NoCredentialsError
+from botocore.exceptions import ClientError, NoCredentialsError, ReadTimeoutError
 
 from nova_act.cli.core.clients.agentcore.client import AgentCoreClient
+from nova_act.cli.core.clients.agentcore.constants import DEFAULT_READ_TIMEOUT
 from nova_act.cli.core.error_detection import (
     extract_operation_name,
     extract_permission_from_error,
@@ -156,7 +157,13 @@ def _perform_workflow_execution(
 
 
 def _execute_workflow(
-    session: Session, name: str, payload: str, region: str, account_id: str, tail_logs: bool = False
+    session: Session,
+    name: str,
+    payload: str,
+    region: str,
+    account_id: str,
+    tail_logs: bool = False,
+    timeout: int = DEFAULT_READ_TIMEOUT,
 ) -> str:
     """Execute workflow with AgentCore client."""
     state_manager = StateManager(account_id=account_id, region=region)
@@ -165,7 +172,7 @@ def _execute_workflow(
     workflow_definition_arn = workflow_info.workflow_definition_arn if workflow_info else None
 
     agent_arn = _get_agent_arn(session=session, name=name, region=region, account_id=account_id)
-    client = AgentCoreClient(session=session, region=region)
+    client = AgentCoreClient(session=session, region=region, timeout=timeout)
 
     _print_execution_logging(name=name, region=region, agent_arn=agent_arn, client=client)
 
@@ -218,7 +225,16 @@ def _create_log_callback() -> Callable[[LogEvent], None]:
 @click.option("--payload", help="JSON payload string")
 @click.option("--region", help="AWS region for deployment")
 @click.option("--tail-logs", is_flag=True, help="Stream logs in real-time (requires logs:StartLiveTail permission)")
-def run(*, name: str, payload_file: str, payload: str, region: str | None = None, tail_logs: bool = False) -> None:
+@click.option("--timeout", type=int, default=DEFAULT_READ_TIMEOUT, help="Read timeout in seconds (default: 7200)")
+def run(
+    *,
+    name: str,
+    payload_file: str,
+    payload: str,
+    region: str | None = None,
+    tail_logs: bool = False,
+    timeout: int = DEFAULT_READ_TIMEOUT,
+) -> None:
     """Execute workflow on AgentCore Runtime."""
     try:
         # Create session at command boundary
@@ -234,11 +250,21 @@ def run(*, name: str, payload_file: str, payload: str, region: str | None = None
             region=resolved_region,
             account_id=account_id,
             tail_logs=tail_logs,
+            timeout=timeout,
         )
         click.echo()
 
     except NoCredentialsError:
         _handle_credential_error()
+
+    except ReadTimeoutError:
+        message = (
+            f"Read timeout after {timeout} seconds while waiting for AgentCore runtime response.\n\n"
+            f"The workflow may still be running in AgentCore. Check the AWS console to view its status.\n\n"
+            f"To allow more time for the response, increase the timeout using the --timeout flag:\n"
+            f"  act workflow run --name {name} --timeout {timeout * 2}"
+        )
+        raise styled_error_exception(message=message)
 
     except ClientError as e:
         _handle_client_error(error=e, workflow_name=name, region=resolved_region, account_id=account_id)
@@ -247,4 +273,4 @@ def run(*, name: str, payload_file: str, payload: str, region: str | None = None
         raise styled_error_exception(message=str(e))
 
     except Exception as e:
-        raise styled_error_exception(message=f"Unexpected error during workflow execution: {str(e)}")
+        raise styled_error_exception(message=f"Unexpected error during workflow execution: {str(e)}") from e

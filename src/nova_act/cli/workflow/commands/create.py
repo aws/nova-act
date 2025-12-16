@@ -128,4 +128,4 @@ def create(
         raise styled_error_exception(str(e))
 
     except Exception as e:
-        raise styled_error_exception(f"Unexpected error during workflow creation: {str(e)}")
+        raise styled_error_exception(f"Unexpected error during workflow creation: {str(e)}") from e

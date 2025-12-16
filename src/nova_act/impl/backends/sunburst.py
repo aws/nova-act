@@ -15,7 +15,7 @@ import json
 import os
 import time
 from datetime import datetime, timezone
-from typing import Dict, Final
+from typing import Final
 
 import requests
 from strands.types.tools import ToolSpec
@@ -70,14 +70,6 @@ class SunburstBackend(Backend[ApiKeyEndpoints]):
 
 
         return ApiKeyEndpoints(api_url=api_url, keygen_url=keygen_url)
-
-    @classmethod
-    def get_available_endpoints(cls) -> Dict[str, ApiKeyEndpoints]:
-        raise NotImplementedError("Deprecated function")
-
-    @classmethod
-    def get_default_endpoints(cls) -> ApiKeyEndpoints:
-        raise NotImplementedError("Deprecated function")
 
     def create_act(
         self, workflow_run: WorkflowRun | None, session_id: str, prompt: str, tools: list[ActionType] | None = None

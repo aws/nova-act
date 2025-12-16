@@ -32,10 +32,10 @@ def _validate_workflow_exists(name: str, region: str, workflow_manager: Workflow
     try:
         workflow = workflow_manager.get_workflow(name)
         return workflow.workflow_definition_arn or "Not set"
-    except Exception:
+    except Exception as e:
         raise styled_error_exception(
             f"Workflow '{name}' not found in configuration.\n" f"Use 'act workflow list' to see available workflows."
-        )
+        ) from e
 
 
 def _validate_arn_format(arn: str) -> None:

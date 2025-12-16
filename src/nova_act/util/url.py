@@ -127,7 +127,7 @@ def verify_certificate(url: str) -> None:
     url (str): The URL to verify the certificate for.
     """
     if not isinstance(url, str) or not url:
-        raise ValueError("URL must be a non-empty string")
+        raise InvalidURL("URL must be a non-empty string")
 
     # Parse the URL
     parsed = urlparse(url)

@@ -66,4 +66,4 @@ def delete(name: str, region: str | None = None, force: bool = False) -> None:
     except (WorkflowError, ConfigurationError) as e:
         raise styled_error_exception(str(e))
     except Exception as e:
-        raise styled_error_exception(f"Unexpected error: {str(e)}")
+        raise styled_error_exception(f"Unexpected error: {str(e)}") from e

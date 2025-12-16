@@ -22,13 +22,12 @@ This module contains backend implementations for Sunshine environments:
 import json
 import time
 from datetime import datetime, timezone
-from typing import Dict
 
 import requests
 from requests import Response
 from typing_extensions import NotRequired, TypedDict
 
-from nova_act.impl.backends.base import ApiKeyEndpoints, AwlBackend
+from nova_act.impl.backends.base import ApiKeyEndpoints, AwlBackend, Endpoints
 from nova_act.impl.backends.common import (
     DEFAULT_REQUEST_CONNECT_TIMEOUT,
     DEFAULT_REQUEST_READ_TIMEOUT,
@@ -71,16 +70,18 @@ class SunshineBackend(AwlBackend[ApiKeyEndpoints]):
         return create_warning_box([message, "", f"Please ensure you are using a key from: {self.endpoints.keygen_url}"])
 
     @classmethod
-    def get_available_endpoints(cls) -> Dict[str, ApiKeyEndpoints]:
-        return {
-            "prod": ApiKeyEndpoints(
-                api_url="https://api.nova.amazon.com/agent", keygen_url="https://nova.amazon.com/dev-apis"
-            ),
-        }
+    def resolve_endpoints(
+        cls,
+        backend_stage: str | None = None,
+        backend_api_url_override: str | None = None,
+        local_port: int | None = None,
+    ) -> ApiKeyEndpoints:
+        api_url = "https://api.nova.amazon.com/agent"
+        keygen_url = "https://nova.amazon.com/dev-apis"
+        valid_api_key_length = 36
 
-    @classmethod
-    def get_default_endpoints(cls) -> ApiKeyEndpoints:
-        return cls.get_available_endpoints()["prod"]
+
+        return ApiKeyEndpoints(api_url=api_url, keygen_url=keygen_url, valid_api_key_length=valid_api_key_length)
 
     def __init__(
         self,
