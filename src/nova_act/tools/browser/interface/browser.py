@@ -11,9 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import annotations
-
 from abc import abstractmethod
+from typing import List, Optional
 
 from strands import tool
 from typing_extensions import Self, final
@@ -52,11 +51,11 @@ class BrowserActionProvider:
 
     """
 
-    def __init__(self, actuator: BrowserActuatorBase):
+    def __init__(self, actuator: "BrowserActuatorBase"):
         self.actuator = actuator
 
     @final
-    def provide(self) -> list[ActionType]:
+    def provide(self) -> List[ActionType]:
         """Provide Actions for a BrowserActuatorBase."""
         return [
             self.agent_click,
@@ -75,7 +74,7 @@ class BrowserActionProvider:
     @final
     @tool(name="agentClick")
     def agent_click(
-        self: Self, box: str, click_type: ClickType | None = None, click_options: ClickOptions | None = None
+        self: Self, box: str, click_type: Optional[ClickType] = None, click_options: Optional[ClickOptions] = None
     ) -> JSONType:
         """Clicks the center of the specified box."""
         return self.actuator.agent_click(box, click_type, click_options)
@@ -88,7 +87,7 @@ class BrowserActionProvider:
 
     @final
     @tool(name="agentScroll")
-    def agent_scroll(self: Self, direction: ScrollDirection, box: str, value: float | None = None) -> JSONType:
+    def agent_scroll(self: Self, direction: ScrollDirection, box: str, value: Optional[float] = None) -> JSONType:
         """Scrolls the element in the specified box in the specified direction.
 
         Valid directions are up, down, left, and right.
@@ -113,7 +112,7 @@ class BrowserActionProvider:
 
     @final
     @tool(name="return")
-    def _return(self: Self, value: str | None) -> JSONType:
+    def _return(self: Self, value: Optional[str]) -> JSONType:
         """Complete execution of the task and return to the user.
 
         Return can either be bare (no value) or a string literal.
@@ -160,10 +159,10 @@ class BrowserActuatorBase(ActuatorBase):
     """
 
     domain = "browser-use"
-    _action_provider: BrowserActionProvider | None = None
+    _action_provider: Optional[BrowserActionProvider] = None
 
     @final
-    def list_actions(self) -> list[ActionType]:
+    def list_actions(self) -> List[ActionType]:
         """List the valid Actions this Actuator can take."""
         if self._action_provider is None:
             self._action_provider = BrowserActionProvider(self)
@@ -173,8 +172,8 @@ class BrowserActuatorBase(ActuatorBase):
     def agent_click(
         self,
         box: str,
-        click_type: ClickType | None = None,
-        click_options: ClickOptions | None = None,
+        click_type: Optional[ClickType] = None,
+        click_options: Optional[ClickOptions] = None,
     ) -> JSONType:
         """Clicks the center of the specified box."""
 
@@ -183,7 +182,7 @@ class BrowserActuatorBase(ActuatorBase):
         """Hovers on the center of the specified box."""
 
     @abstractmethod
-    def agent_scroll(self, direction: ScrollDirection, box: str, value: float | None = None) -> JSONType:
+    def agent_scroll(self, direction: ScrollDirection, box: str, value: Optional[float] = None) -> JSONType:
         """Scrolls the element in the specified box in the specified direction.
 
         Valid directions are up, down, left, and right.
@@ -202,7 +201,7 @@ class BrowserActuatorBase(ActuatorBase):
         """Navigates to the specified URL."""
 
     @abstractmethod
-    def _return(self, value: str | None) -> JSONType:
+    def _return(self, value: Optional[str]) -> JSONType:
         """Complete execution of the task and return to the user.
 
         Return can either be bare (no value) or a string literal."""
