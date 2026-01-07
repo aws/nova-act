@@ -669,7 +669,7 @@ def _write_calls_json_file(
         _LOGGER.warning(f"Failed to write request/response data to file {json_file_path}: {e}")
 
 
-def _extract_step_traces(act: Act) -> list[ExternalTraceDict]:
+def _extract_step_traces(act: Act) -> list[ExternalTraceDict | None]:
     """
     Extract trace data from act steps.
 
@@ -679,10 +679,10 @@ def _extract_step_traces(act: Act) -> list[ExternalTraceDict]:
     Returns:
         List of trace data extracted from steps
     """
-    step_traces = []
+    step_traces: list[ExternalTraceDict | None] = []
     for step in act.steps:
         if step.trace is not None:
-            step_trace = step.trace.get("external", {})
+            step_trace = step.trace.get("external")
             step_traces.append(step_trace)
     return step_traces
 

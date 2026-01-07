@@ -19,9 +19,7 @@ from nova_act.tools.browser.default.dom_actuation.scroll_events import get_after
 from nova_act.tools.browser.default.util.bbox_parser import bounding_box_to_point
 from nova_act.tools.browser.default.util.dispatch_dom_events import dispatch_event_sequence
 from nova_act.tools.browser.default.util.element_helpers import (
-    get_element_at_point,
     is_pdf_page,
-    locate_element,
     viewport_dimensions,
 )
 from nova_act.tools.browser.interface.types.dimensions_dict import DimensionsDict
@@ -277,13 +275,8 @@ def agent_scroll(
 
     if not best_scroll_elt.opaque:
         try:
-            element_info = get_element_at_point(page, point["x"], point["y"])
-            if element_info is None:
-                return
-
-            element = locate_element(element_info, page)
             after_scroll_events = get_after_scroll_events(point)
-            dispatch_event_sequence(element, after_scroll_events)
+            dispatch_event_sequence(page, point, after_scroll_events)
         except Exception as e:
             _LOGGER.debug(f"Error dispatching after scroll events: {e}")
             # Catch all exceptions when dispatching after scroll events so react loop does not stop

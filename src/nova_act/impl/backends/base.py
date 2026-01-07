@@ -18,7 +18,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Generic, Optional, TypeVar, cast
 
-from nova_act.impl.backends.starburst.types import ActErrorData
+from nova_act.impl.backends.burst.types import ActErrorData
 from nova_act.impl.interpreter import NovaActInterpreter
 from nova_act.impl.program.base import Call, CallResult, Program
 from nova_act.tools.actuator.interface.actuator import ActionType
@@ -127,7 +127,7 @@ class Backend(ABC, Generic[T]):
         act_id: str,
         status: ActStatus,
         error: ActErrorData | None = None,
-    ) -> str:
+    ) -> None:
         """Update an act. Must be implemented by concrete backends."""
 
     @abstractmethod
@@ -137,7 +137,7 @@ class Backend(ABC, Generic[T]):
         """Create a workflow run. Must be implemented by concrete backends."""
 
     @abstractmethod
-    def update_workflow_run(self, workflow_run: WorkflowRun | None, status: WorkflowRunStatus) -> str:
+    def update_workflow_run(self, workflow_run: WorkflowRun | None, status: WorkflowRunStatus) -> None:
         """Update a workflow run. Must be implemented by concrete backends."""
 
 
@@ -251,7 +251,7 @@ class AwlBackend(Backend[T]):
         act_id: str,
         status: ActStatus,
         error: ActErrorData | None = None,
-    ) -> str:
+    ) -> None:
         """Update an act. Default implementation for non-workflow backends."""
         raise NotImplementedError(f"{self.__class__.__name__} does not support workflow operations")
 
@@ -261,6 +261,6 @@ class AwlBackend(Backend[T]):
         """Create a workflow run. Default implementation for non-workflow backends."""
         raise NotImplementedError(f"{self.__class__.__name__} does not support workflow operations")
 
-    def update_workflow_run(self, workflow_run: WorkflowRun | None, status: WorkflowRunStatus) -> str:
+    def update_workflow_run(self, workflow_run: WorkflowRun | None, status: WorkflowRunStatus) -> None:
         """Update a workflow run. Default implementation for non-workflow backends."""
         raise NotImplementedError(f"{self.__class__.__name__} does not support workflow operations")

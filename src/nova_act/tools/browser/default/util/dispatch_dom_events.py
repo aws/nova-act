@@ -11,21 +11,38 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from playwright.sync_api import Locator
+from playwright.sync_api import Page
 
 from nova_act.tools.browser.default.dom_actuation.dispatch_events_dict import DispatchEvents
+from nova_act.tools.browser.default.util.element_helpers import DEEP_ELEMENT_FROM_POINT_JS
 
 
-def dispatch_event_sequence(element: Locator, events_config: list[DispatchEvents]) -> None:
+def dispatch_event_sequence(page: Page, point: dict[str, float], events_config: list[DispatchEvents]) -> None:
     """
-    Dispatch a sequence of events to an element.
+    Dispatch a sequence of events to an element at the specified point.
 
     Args:
-        element: Playwright ElementHandle
+        page: Playwright Page
+        point: Dictionary with x and y coordinates
         events_config: List of event configurations, each containing:
                       - type: Event type (e.g., "pointermove", "click")
                       - init: Dictionary of event initialization parameters
     """
 
-    for event in events_config:
-        element.dispatch_event(event["type"], dict(event["init"]))
+    page.evaluate(
+        """
+        (args) => {
+            %s
+            const { point, eventsConfig } = args;
+            const element = deepElementFromPoint(point.x, point.y);
+            if (!element) {
+                throw new Error(`No element found at coordinates (${point.x}, ${point.y})`);
+            }
+            for (const event of eventsConfig) {
+                element.dispatchEvent(new Event(event.type, event.init));
+            }
+        }
+        """
+        % (DEEP_ELEMENT_FROM_POINT_JS,),
+        {"point": point, "eventsConfig": events_config},
+    )

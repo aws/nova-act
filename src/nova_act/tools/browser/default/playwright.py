@@ -163,7 +163,7 @@ class PlaywrightInstanceManager:
     def disable_ssl_validation_hook(self) -> None:
         """Disable SSL validation for manual browsing."""
         if self._context and self._ssl_hook_enabled:
-            self._context.unroute("**")
+            self._context.unroute_all(behavior="wait")
             self._ssl_hook_enabled = False
 
     @property
@@ -329,6 +329,7 @@ class PlaywrightInstanceManager:
 
                 context = self._launch_browser(context_options)
                 trusted_page = context.pages[0]
+
 
             self._init_browser_context(context, trusted_page)
             self._context = context

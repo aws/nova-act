@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import time
+from enum import Enum
 
 from playwright.sync_api import Locator, Page
 
@@ -66,13 +67,19 @@ def viewport_dimensions(page: Page) -> DimensionsDict:
     return {"height": viewport["height"], "width": viewport["width"]}
 
 
-def blur(element_info: ElementDict, page: Page) -> None:
-    try:
-        element = locate_element(element_info, page)
-        element.blur()
-    except Exception as e:
-        _LOGGER.debug(f"Error blurring element: {e}")
-        return
+def blur(point: dict[str, float], page: Page) -> None:
+    page.evaluate(
+        """
+        ([x, y]) => {
+            %s
+            const elem = deepElementFromPoint(document, x, y);
+            if (!elem) return null;
+            elem.blur();
+        }
+        """
+        % (DEEP_ELEMENT_FROM_POINT_JS,),
+        [point["x"], point["y"]],
+    )
 
 
 def locate_element(element_info: ElementDict, page: Page) -> Locator:
@@ -192,7 +199,15 @@ def check_if_native_dropdown(page: Page, x: float, y: float) -> bool:
     return result
 
 
-def is_element_focused(page: Page, x: float, y: float) -> bool:
+class FocusState(Enum):
+    """Represents the focus state of the page."""
+
+    NO = "NO"  # Focus is on body/documentElement (not meaningful)
+    MEANINGFUL_ELEMENT = "MEANINGFUL_ELEMENT"  # Focus is on a meaningful element but not under x,y
+    UNDER_XY = "UNDER_XY"  # Focus is under the x,y coordinates
+
+
+def is_element_focused(page: Page, x: float, y: float) -> FocusState:
     """
     Check if the element or one of its children at the given coordinates is currently focused.
 
@@ -202,14 +217,17 @@ def is_element_focused(page: Page, x: float, y: float) -> bool:
         y: Y coordinate
 
     Returns:
-        True if the element is focused, False otherwise
+        FocusState enum:
+            - UNDER_XY: Element at x,y contains the active element
+            - MEANINGFUL_ELEMENT: Active element is meaningful (not body/documentElement) but not under x,y
+            - NO: Focus is on body or documentElement (not meaningful)
     """
     if is_pdf_page(page):
         # Element focus does not work on pdfs so use a small sleep then assume success.
         time.sleep(0.1)
-        return True
+        return FocusState.MEANINGFUL_ELEMENT
 
-    result: bool = page.evaluate(
+    result: dict[str, bool] = page.evaluate(
         """
         ([x, y]) => {
             %s
@@ -243,13 +261,21 @@ def is_element_focused(page: Page, x: float, y: float) -> bool:
                 return active;
             }
             const activeElement = getDeepActiveElement();
-            return elem.contains(activeElement);
+            const isFocusedXY = elem.contains(activeElement);
+            const hasMeaningfulFocus = activeElement !== document.body && activeElement !== document.documentElement;
+            return { isFocusedXY, hasMeaningfulFocus };
         }
         """
         % (DEEP_ELEMENT_FROM_POINT_JS,),
         [x, y],
     )
-    return result
+
+    if result["isFocusedXY"]:
+        return FocusState.UNDER_XY
+    elif result["hasMeaningfulFocus"]:
+        return FocusState.MEANINGFUL_ELEMENT
+    else:
+        return FocusState.NO
 
 
 def is_pdf_page(page: Page) -> bool:

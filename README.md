@@ -91,7 +91,6 @@ Nova Act also supports authentication using IAM credentials. For details please 
 pip install nova-act
 ```
 
-
 Alternatively, you can build `nova-act`. Clone this repo, and then:
 ```sh
 pip install .

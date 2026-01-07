@@ -22,7 +22,6 @@ from nova_act.tools.browser.default.util.element_helpers import (
     DEEP_ELEMENT_FROM_POINT_JS,
     check_if_native_dropdown,
     get_element_at_point,
-    locate_element,
     viewport_dimensions,
 )
 from nova_act.tools.browser.default.util.file_upload_helpers import click_and_maybe_return_file_chooser
@@ -93,15 +92,8 @@ def maybe_blur_field(
     if click_options is None or not click_options.get("blurField"):
         return
 
-    element_info = get_element_at_point(page, point["x"], point["y"])
-    if element_info is None:
-        return
-
-    element = locate_element(element_info, page)
-
     after_click_events = get_after_click_events(point)
-
-    dispatch_event_sequence(element, after_click_events)
+    dispatch_event_sequence(page, point, after_click_events)
 
 
 def get_dropdown_options(page: Page, x: float, y: float) -> list[dict[str, str]] | None:

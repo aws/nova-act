@@ -35,8 +35,8 @@ MAX_TIMEOUT_S = 1800  # 30 mins
 MAX_PROMPT_LENGTH = 10000
 MIN_PROMPT_LENGTH = 1
 
-MIN_SCREEN_SIZE = 600
-MAX_SCREEN_SIZE = 10000
+RECOMMENDED_VIEWPORT_WIDTH = 1600
+RECOMMENDED_VIEWPORT_HEIGHT = 813
 
 MAX_PARAM_LENGTH = 2048
 
@@ -130,27 +130,29 @@ def validate_step_limit(max_steps: int | None) -> None:
         raise InvalidMaxSteps(MAX_STEP_LIMIT)
 
 
-def check_screen_resolution_in_recommended_range(screen_width: int, screen_height: int) -> None:
-    # These numbers are +/- 20% of 1920x1080
-    in_range = screen_width >= 1536 and screen_width <= 2304 and screen_height >= 864 and screen_height <= 1296
-    if not in_range:
-        raise InvalidScreenResolution(
-            "Screen resolution is not in the recommended range "
-            "of +-20% of 1920x1080 ([1536, 2304]x[864, 1296]). Agent performance might be degraded."
+def validate_viewport_dimensions(width: int, height: int, warn: bool = False) -> None:
+    """Validate the dimensions of a BrowserObservation screenshot."""
+    tolerance = 20
+    width_ok = (
+        (100 - tolerance) / 100 * RECOMMENDED_VIEWPORT_WIDTH
+        <= width
+        <= (100 + tolerance) / 100 * RECOMMENDED_VIEWPORT_WIDTH
+    )
+    height_ok = (
+        (100 - tolerance) / 100 * RECOMMENDED_VIEWPORT_HEIGHT
+        <= height
+        <= (100 + tolerance) / 100 * RECOMMENDED_VIEWPORT_HEIGHT
+    )
+    if not (width_ok and height_ok):
+        msg = (
+            f"Viewport has unsupported resolution ({width}, {height}); agent performance may be degraded. "
+            f"Recommended dimensions +/- {tolerance}% of ({RECOMMENDED_VIEWPORT_WIDTH}, {RECOMMENDED_VIEWPORT_HEIGHT})."
         )
-
-
-def validate_screen_resolution(screen_width: int, screen_height: int) -> None:
-    if not (
-        screen_width >= MIN_SCREEN_SIZE
-        and screen_width <= MAX_SCREEN_SIZE
-        and screen_height >= MIN_SCREEN_SIZE
-        and screen_height <= MAX_SCREEN_SIZE
-    ):
-        raise InvalidScreenResolution(
-            f"Invalid screen resolution. Acceptable range: [{MIN_SCREEN_SIZE}, {MAX_SCREEN_SIZE}]."
-        )
-    check_screen_resolution_in_recommended_range(screen_width=screen_width, screen_height=screen_height)
+        assert isinstance(warn, bool), "WARN_SCREEN_DIMS must be set before validating viewport dimensions."
+        if warn:
+            _LOGGER.warning(msg)
+        else:
+            raise InvalidScreenResolution(msg)
 
 
 def validate_chrome_channel(chrome_channel: str) -> None:
@@ -249,6 +251,7 @@ def validate_base_parameters(
     use_default_chrome_browser: bool,
     proxy: dict[str, str] | None = None,
     state_guardrail: GuardrailCallable | None = None,
+    ignore_screen_dims_check: bool = False,
 ) -> None:
     if not use_existing_page:
         if starting_page is None:
@@ -288,7 +291,11 @@ def validate_base_parameters(
         if user_data_dir is None:
             _LOGGER.info("No need to specify clone_user_data_dir False when not using custom user_data_dir")
 
-    validate_screen_resolution(screen_width=screen_width, screen_height=screen_height)
+    if not ignore_screen_dims_check:
+        # Fail fast if the provided screen width, height will result in invalid viewport dimensions
+        estimated_viewport_width = screen_width - 18  # account for vertical scrollbar + window borders
+        estimated_viewport_height = screen_height - 90  # account for title bar, address bar, tabs, borders
+        validate_viewport_dimensions(estimated_viewport_width, estimated_viewport_height, warn=ignore_screen_dims_check)
 
     if logs_directory:
         validate_path(logs_directory, "logs_directory", empty_directory_allowed=True)

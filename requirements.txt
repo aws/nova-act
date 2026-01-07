@@ -1,6 +1,6 @@
 cryptography
 fire
-install_playwright
+install_playwright>=0.1.0,<1.0.0
 jsonschema
 numpy<=2.2.6
 pandas
