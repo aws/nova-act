@@ -23,8 +23,9 @@ from boto3 import Session
 from botocore.config import Config
 from typing_extensions import TypedDict
 
-from nova_act.impl.backends.starburst.connector import StarburstBackend
-from nova_act.impl.backends.sunburst import DEFAULT_WORKFLOW_DEFN_NAME, SunburstBackend
+from nova_act.impl.backends.starburst.backend import StarburstBackend
+from nova_act.impl.backends.sunburst.backend import DEFAULT_WORKFLOW_DEFN_NAME, SunburstBackend
+
 from nova_act.types.api.status import WorkflowRunStatus
 from nova_act.types.errors import AuthError
 from nova_act.types.workflow_run import WorkflowRun

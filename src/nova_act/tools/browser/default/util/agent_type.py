@@ -18,6 +18,7 @@ from playwright.sync_api import Page
 
 from nova_act.tools.browser.default.util.bbox_parser import bounding_box_to_point
 from nova_act.tools.browser.default.util.element_helpers import (
+    FocusState,
     blur,
     check_if_native_dropdown,
     get_element_at_point,
@@ -45,14 +46,18 @@ def ensure_element_focus(page: Page, x: float, y: float, retries: int = 2) -> No
         y: Y coordinate
         retries: Number of attempts to focus the element (default: 2)
     """
+    focus_state = FocusState.NO
     for _ in range(retries):
         page.mouse.click(x, y)
 
-        if is_element_focused(page, x, y):
+        focus_state = is_element_focused(page, x, y)
+        if focus_state == FocusState.UNDER_XY:
             return
         time.sleep(0.5)
 
-    raise RuntimeError(f"Failed to focus element at coordinates ({x}, {y}) after {retries} attempts")
+    if focus_state == FocusState.NO:
+        raise RuntimeError(f"Failed to focus element at coordinates ({x}, {y}) after {retries} attempts")
+    # If it's focused on a meaningful element, let pass.
 
 
 def agent_type(
@@ -104,7 +109,7 @@ def agent_type(
     if check_if_native_dropdown(page, point["x"], point["y"]):
         page.mouse.click(point["x"], point["y"])
         page.keyboard.type(value)
-        blur(element_info, page)
+        blur(point, page)
         return
 
     # Handle regular text input

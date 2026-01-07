@@ -21,9 +21,9 @@ from typing import Literal, Mapping, Type, cast
 from boto3 import Session
 from playwright.sync_api import Page, Playwright
 
-from nova_act.impl.backends.starburst.connector import StarburstBackend
-from nova_act.impl.backends.starburst.types import ActErrorData
-from nova_act.impl.backends.sunburst import SunburstBackend
+from nova_act.impl.backends.burst.types import ActErrorData
+from nova_act.impl.backends.starburst.backend import StarburstBackend
+from nova_act.impl.backends.sunburst.backend import SunburstBackend
 from nova_act.impl.common import rsync_to_temp_dir
 from nova_act.impl.controller import NovaStateController
 from nova_act.impl.dispatcher import ActDispatcher
@@ -157,6 +157,7 @@ class NovaAct:
         record_video: bool = False,
         screen_width: int = DEFAULT_SCREEN_WIDTH,
         screen_height: int = DEFAULT_SCREEN_HEIGHT,
+        ignore_screen_dims_check: bool = False,
         state_guardrail: GuardrailCallable | None = None,
         stop_hooks: list[StopHook] = [],
         tty: bool = True,
@@ -190,9 +191,16 @@ class NovaAct:
             Name of the Chrome user profile. Only needed if using an existing, non-Default Chrome profile.
             Must be relative path within user_data_dir.
         screen_width: int
-            Width of the screen for the playwright instance. Within range [1536, 2304].
+            Width of the screen for the playwright instance. This sets the window size, while the dimensions of
+            screenshots taken on the page will be the slightly smaller viewport size. Note that changing the default
+            might impact agent performance.
         screen_height: int
-            Height of the screen for the playwright instance. Within range [864, 1296].
+            Height of the screen for the playwright instance. This sets the window size, while the dimensions of
+            screenshots taken on the page will be the slightly smaller viewport size. Note that changing the default
+            might impact agent performance.
+        ignore_screen_dims_check: bool
+            By default, NovaAct will fail to act if screen width/height outside of the acceptable range are provided.
+            Pass this flag to warn instead.
         headless: bool
             Whether to launch the Playwright browser in headless mode. Defaults to False. Can also be enabled with
             the `NOVA_ACT_HEADLESS` environment variable.
@@ -318,6 +326,7 @@ class NovaAct:
             use_default_chrome_browser=use_default_chrome_browser,
             proxy=proxy,
             state_guardrail=state_guardrail,
+            ignore_screen_dims_check=ignore_screen_dims_check,
         )
 
         self._session_user_data_dir_is_temp: bool = False
@@ -368,6 +377,7 @@ class NovaAct:
 
         self.screen_width = screen_width
         self.screen_height = screen_height
+        self.ignore_screen_dims_check = ignore_screen_dims_check
 
         self._stop_hooks = stop_hooks
         self._log_stop_hooks_registration()
@@ -449,6 +459,7 @@ class NovaAct:
             tools=self._tools,
             state_guardrail=state_guardrail,
         )
+
 
     def _validate_authentication(self, scripted_api_key: str | None) -> None:
         """Validate authentication configuration for NovaAct without Workflow.
@@ -964,6 +975,7 @@ class NovaAct:
             model_seed=model_seed,
             observation_delay_ms=observation_delay_ms,
             workflow_run=self._workflow_run,
+            ignore_screen_dims_check=self.ignore_screen_dims_check,
         )
         trace_log_lines(decode_awl_raw_program(f'act("{prompt}")'))
 

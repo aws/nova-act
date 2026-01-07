@@ -11,12 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""
-Type-safe wrapper for Nova Act service client.
-Handles conversion between Pydantic models and boto3 client calls.
-"""
-
-import time
 from copy import deepcopy
 from typing import Literal, TypedDict
 
@@ -25,23 +19,9 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from nova_act.__version__ import VERSION
-from nova_act.types.act_errors import (
-    ActAPIError,
-    ActBadRequestError,
-    ActClientError,
-    ActDailyQuotaExceededError,
-    ActGuardrailsError,
-    ActInternalServerError,
-    ActInvalidModelGenerationError,
-    ActRequestThrottledError,
-    ActServerError,
-)
-from nova_act.types.errors import AuthError
-from nova_act.util.logging import (
-    setup_logging,
-)
-
-from .types import (
+from nova_act.impl.backends.base import Endpoints
+from nova_act.impl.backends.burst.client import BurstClient
+from nova_act.impl.backends.burst.types import (
     CreateActRequest,
     CreateActResponse,
     CreateSessionRequest,
@@ -55,11 +35,22 @@ from .types import (
     UpdateWorkflowRunRequest,
     UpdateWorkflowRunResponse,
 )
+from nova_act.types.act_errors import (
+    ActAPIError,
+    ActBadRequestError,
+    ActClientError,
+    ActDailyQuotaExceededError,
+    ActGuardrailsError,
+    ActInternalServerError,
+    ActInvalidModelGenerationError,
+    ActRequestThrottledError,
+    ActServerError,
+)
+from nova_act.types.errors import AuthError
+from nova_act.util.logging import setup_logging
 
 _LOGGER = setup_logging(__name__)
 
-# Constants
-S_TO_MS = 1000  # Seconds to milliseconds conversion factor
 SERVICE_MODEL_DEFAULT_RETRIES = 4
 DEFAULT_USER_AGENT_EXTRA = f"NovaActSdk/{VERSION}"
 DEFAULT_BOTO_CONFIG = Config(
@@ -141,10 +132,10 @@ def _validate_user_agent_extra(config: Config) -> None:
         )
 
 
-class NovaActClient:
-    """Type-safe wrapper around boto3 nova-act client."""
+class StarburstClient(BurstClient):
+    def __init__(self, endpoints: Endpoints, boto_session: Session, boto_config: Config | None):
+        self._endpoints = endpoints
 
-    def __init__(self, boto_session: Session, boto_config: Config | None, endpoint_url: str):
         if boto_config is not None:
             config = deepcopy(boto_config)
         else:
@@ -158,9 +149,66 @@ class NovaActClient:
         # Set correct user_agent_extra
         config.user_agent_extra = DEFAULT_USER_AGENT_EXTRA  # type: ignore[attr-defined]
 
-        self._client = boto_session.client(service_name="nova-act", endpoint_url=endpoint_url, config=config)
+        self._nova_act_client = boto_session.client(
+            service_name="nova-act", endpoint_url=endpoints.api_url, config=config
+        )
 
-    def _translate_client_error(self, error: ClientError) -> Exception:
+    def create_act(self, request: CreateActRequest) -> CreateActResponse:
+        """Create an act with type-safe request/response."""
+        try:
+            params = request.model_dump(by_alias=True, exclude_none=True)
+            response = self._nova_act_client.create_act(**params)
+            return CreateActResponse.model_validate(response)
+        except ClientError as e:
+            raise type(self)._translate_client_error(e)
+
+    def create_session(self, request: CreateSessionRequest) -> CreateSessionResponse:
+        """Create a session with type-safe request/response."""
+        try:
+            params = request.model_dump(by_alias=True, exclude_none=True)
+            response = self._nova_act_client.create_session(**params)
+            return CreateSessionResponse.model_validate(response)
+        except ClientError as e:
+            raise type(self)._translate_client_error(e)
+
+    def create_workflow_run(self, request: CreateWorkflowRunRequest) -> CreateWorkflowRunResponse:
+        """Create a workflow run with type-safe request/response."""
+        try:
+            params = request.model_dump(by_alias=True, exclude_none=True)
+            response = self._nova_act_client.create_workflow_run(**params)
+            return CreateWorkflowRunResponse.model_validate(response)
+        except ClientError as e:
+            raise type(self)._translate_client_error(e)
+
+    def invoke_act_step(self, request: InvokeActStepRequest) -> InvokeActStepResponse:
+        """Invoke an act step with type-safe request/response."""
+        try:
+            params = request.model_dump(by_alias=True, exclude_none=True)
+            response = self._nova_act_client.invoke_act_step(**params)
+            return InvokeActStepResponse.model_validate(response)
+        except ClientError as e:
+            raise type(self)._translate_client_error(e)
+
+    def update_act(self, request: UpdateActRequest) -> UpdateActResponse:
+        """Update an act with type-safe request/response."""
+        try:
+            params = request.model_dump(by_alias=True, exclude_none=True)
+            response = self._nova_act_client.update_act(**params)
+            return UpdateActResponse.model_validate(response)
+        except ClientError as e:
+            raise type(self)._translate_client_error(e)
+
+    def update_workflow_run(self, request: UpdateWorkflowRunRequest) -> UpdateWorkflowRunResponse:
+        """Update a workflow run with type-safe request/response."""
+        try:
+            params = request.model_dump(by_alias=True, exclude_none=True)
+            response = self._nova_act_client.update_workflow_run(**params)
+            return UpdateWorkflowRunResponse.model_validate(response)
+        except ClientError as e:
+            raise type(self)._translate_client_error(e)
+
+    @staticmethod
+    def _translate_client_error(error: ClientError) -> Exception:
         """Translate boto3 ClientError to appropriate SDK error type."""
 
         raw_response = str(error.response)
@@ -313,154 +361,3 @@ class NovaActClient:
                 message=message,
                 raw_response=raw_response,
             )
-
-    def invoke_act_step(self, request: InvokeActStepRequest) -> InvokeActStepResponse:
-        """Invoke an act step with type-safe request/response."""
-        try:
-            # Convert Pydantic model to boto3 parameters
-            params = request.model_dump(by_alias=True, exclude_none=True)
-
-            # Log the parameters being sent for debugging
-            _LOGGER.debug(f"Invoking act step with params keys: {list(params.keys())}")
-            for key, value in params.items():
-                if key == "callResults":
-                    _LOGGER.debug(f"  {key}: {len(value)} items")
-                else:
-                    _LOGGER.debug(f"  {key}: {value}")
-
-            # Measure elapsed time
-            start_time = time.perf_counter()
-            raw_response = self._client.invoke_act_step(**params)
-            elapsed_time_ms = (time.perf_counter() - start_time) * S_TO_MS
-
-            # Add elapsed time to metadata before validation
-            enhanced_response = raw_response.copy()
-            if "ResponseMetadata" in enhanced_response:
-                enhanced_response["ResponseMetadata"]["elapsed_time_ms"] = elapsed_time_ms
-
-            # Directly deserialize to InvokeActStepResponse using Pydantic's model_validate
-            return InvokeActStepResponse.model_validate(enhanced_response)
-
-        except ClientError as e:
-            raise self._translate_client_error(e)
-
-    def create_act(self, request: CreateActRequest) -> CreateActResponse:
-        """Create an act with type-safe request/response."""
-        try:
-            # Convert Pydantic model to boto3 parameters
-            params = request.model_dump(by_alias=True, exclude_none=True)
-            _LOGGER.debug(f"CreateActRequest: {request}")
-
-            # Log the parameters being sent for debugging
-            _LOGGER.debug(f"CreateActRequest params keys: {list(params.keys())}")
-            for key, value in params.items():
-                if key == "callResults":
-                    _LOGGER.debug(f"  {key}: {len(value)} items")
-                    for i, item in enumerate(value):
-                        _LOGGER.debug(f"    callResult[{i}]: {item}")
-                else:
-                    _LOGGER.debug(f"  {key}: {value}")
-
-            # Measure elapsed time
-            start_time = time.perf_counter()
-            raw_response = self._client.create_act(**params)
-            elapsed_time_ms = (time.perf_counter() - start_time) * S_TO_MS
-
-            # Add elapsed time to metadata before validation
-            enhanced_response = raw_response.copy()
-            if "ResponseMetadata" in enhanced_response:
-                enhanced_response["ResponseMetadata"]["elapsed_time_ms"] = elapsed_time_ms
-
-            # Directly deserialize to CreateActResponse using Pydantic's model_validate
-            return CreateActResponse.model_validate(enhanced_response)
-
-        except ClientError as e:
-            raise self._translate_client_error(e)
-
-    def create_session(self, request: CreateSessionRequest) -> CreateSessionResponse:
-        """Create a session with type-safe request/response."""
-        try:
-            # Convert Pydantic model to boto3 parameters
-            params = request.model_dump(by_alias=True, exclude_none=True)
-
-            # Measure elapsed time
-            start_time = time.perf_counter()
-            raw_response = self._client.create_session(**params)
-            elapsed_time_ms = (time.perf_counter() - start_time) * S_TO_MS
-
-            # Add elapsed time to metadata before validation
-            enhanced_response = raw_response.copy()
-            if "ResponseMetadata" in enhanced_response:
-                enhanced_response["ResponseMetadata"]["elapsed_time_ms"] = elapsed_time_ms
-
-            # Directly deserialize to CreateSessionResponse using Pydantic's model_validate
-            return CreateSessionResponse.model_validate(enhanced_response)
-
-        except ClientError as e:
-            raise self._translate_client_error(e)
-
-    def update_act(self, request: UpdateActRequest) -> UpdateActResponse:
-        """Update an act with type-safe request/response."""
-        try:
-            # Convert Pydantic model to boto3 parameters
-            params = request.model_dump(by_alias=True, exclude_none=True)
-
-            # Measure elapsed time
-            start_time = time.perf_counter()
-            raw_response = self._client.update_act(**params)
-            elapsed_time_ms = (time.perf_counter() - start_time) * S_TO_MS
-
-            # Add elapsed time to metadata before validation
-            enhanced_response = raw_response.copy()
-            if "ResponseMetadata" in enhanced_response:
-                enhanced_response["ResponseMetadata"]["elapsed_time_ms"] = elapsed_time_ms
-
-            # Directly deserialize to UpdateActResponse using Pydantic's model_validate
-            return UpdateActResponse.model_validate(enhanced_response)
-
-        except ClientError as e:
-            raise self._translate_client_error(e)
-
-    def create_workflow_run(self, request: CreateWorkflowRunRequest) -> CreateWorkflowRunResponse:
-        """Create a workflow run with type-safe request/response."""
-        try:
-            # Convert Pydantic model to boto3 parameters
-            params = request.model_dump(by_alias=True, exclude_none=True)
-
-            # Measure elapsed time
-            start_time = time.perf_counter()
-            raw_response = self._client.create_workflow_run(**params)
-            elapsed_time_ms = (time.perf_counter() - start_time) * S_TO_MS
-
-            # Add elapsed time to metadata before validation
-            enhanced_response = raw_response.copy()
-            if "ResponseMetadata" in enhanced_response:
-                enhanced_response["ResponseMetadata"]["elapsed_time_ms"] = elapsed_time_ms
-
-            # Directly deserialize to CreateWorkflowRunResponse using Pydantic's model_validate
-            return CreateWorkflowRunResponse.model_validate(enhanced_response)
-
-        except ClientError as e:
-            raise self._translate_client_error(e)
-
-    def update_workflow_run(self, request: UpdateWorkflowRunRequest) -> UpdateWorkflowRunResponse:
-        """Update a workflow run with type-safe request/response."""
-        try:
-            # Convert Pydantic model to boto3 parameters
-            params = request.model_dump(by_alias=True, exclude_none=True)
-
-            # Measure elapsed time
-            start_time = time.perf_counter()
-            raw_response = self._client.update_workflow_run(**params)
-            elapsed_time_ms = (time.perf_counter() - start_time) * S_TO_MS
-
-            # Add elapsed time to metadata before validation
-            enhanced_response = raw_response.copy()
-            if "ResponseMetadata" in enhanced_response:
-                enhanced_response["ResponseMetadata"]["elapsed_time_ms"] = elapsed_time_ms
-
-            # Directly deserialize to UpdateWorkflowRunResponse using Pydantic's model_validate
-            return UpdateWorkflowRunResponse.model_validate(enhanced_response)
-
-        except ClientError as e:
-            raise self._translate_client_error(e)

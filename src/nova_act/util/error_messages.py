@@ -37,7 +37,7 @@ def get_api_key_error_message_for_workflow() -> str:
             '  Workflow(api_key="<YOUR KEY HERE>", ...) or @workflow(api_key="<YOUR KEY HERE>", ...)',
             "",
             f"To use {NOVA_ACT_AWS_SERVICE}: unset the API key environment variable:",
-            "  os.environ.pop('NOVA_ACT_API_KEY', None)",
+            "  unset NOVA_ACT_API_KEY",
         ]
     )
 

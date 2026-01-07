@@ -53,6 +53,7 @@ class SecurityOptions(BaseModel):
     """
 
     @field_validator("allowed_file_open_paths", mode="before")
+    @classmethod
     def set_allowed_file_open_paths_from_deprecated(  # type: ignore[explicit-any]
         cls, allowed_file_open_paths: list[str], info: ValidationInfo
     ) -> list[str]:

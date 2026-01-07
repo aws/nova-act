@@ -52,6 +52,7 @@ class Act:
     model_top_k: int | None = field(default=None, on_setattr=frozen)
     model_seed: int | None = field(default=None, on_setattr=frozen)
     observation_delay_ms: int | None = field(default=None, on_setattr=frozen)
+    ignore_screen_dims_check: bool = field(default=False, on_setattr=frozen)
 
 
     tools: list[ActionType] = field(factory=list)  # HITL + custom tools

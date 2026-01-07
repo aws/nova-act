@@ -55,6 +55,8 @@ class AuthError(NovaActError):
         super().__init__(message)
 
 
+
+
 class IAMAuthError(NovaActError):
     """Indicates there's an error with IAM credentials"""
 

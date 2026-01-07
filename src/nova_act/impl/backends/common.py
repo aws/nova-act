@@ -14,6 +14,8 @@
 """Common utilities shared across backend implementations."""
 
 import json
+import os
+from enum import Enum
 
 from requests import Response
 from typing_extensions import Any
@@ -113,3 +115,19 @@ def construct_step_plan_request(
         plan_request["agentRunCreate"] = agent_run_create
 
     return plan_request
+
+
+class ClientSource(str, Enum):
+    """Enumeration of supported client sources."""
+
+    SDK = "sdk"
+    EXTENSION = "extension"
+    PLAYGROUND = "playground"
+
+
+def get_client_source() -> ClientSource:
+    raw = os.environ.get("NOVA_ACT_CLIENT_SOURCE", ClientSource.SDK.value)
+    try:
+        return ClientSource(raw)
+    except ValueError:
+        raise ValueError(f"Invalid NOVA_ACT_CLIENT_SOURCE={raw}. " f"Must be one of {[c.value for c in ClientSource]}")

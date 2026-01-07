@@ -19,10 +19,12 @@ from typing import Callable
 
 from nova_act.impl.backends.factory import NovaActBackend
 from nova_act.impl.controller import ControlState, NovaStateController
+from nova_act.impl.inputs import validate_viewport_dimensions
 from nova_act.impl.program.base import Call, Program
 from nova_act.impl.program.runner import ProgramRunner, format_return_value
 from nova_act.impl.thinker import Thinker
 from nova_act.tools.actuator.interface.actuator import ActionType, ActuatorBase
+from nova_act.tools.browser.default.util.image_helpers import get_source_image_from_data_url
 from nova_act.tools.browser.interface.browser import (
     BrowserActuatorBase,
 )
@@ -248,6 +250,15 @@ class ActDispatcher:
 
                 if step_idx >= act.max_steps:
                     raise ActExceededMaxStepsError(f"Exceeded max steps {act.max_steps} without return.")
+
+                # Optionally warn for dangerous viewport dimensions in BrowserObservations
+                if observation := program_result.has_observation():  # ensure we took an observation
+                    if browser_observation := self._backend._maybe_observation(  # typeguard BrowserObservation
+                        observation.return_value
+                    ):
+                        screenshot_b64 = browser_observation["screenshotBase64"]
+                        screenshot_pil = get_source_image_from_data_url(screenshot_b64)
+                        validate_viewport_dimensions(*screenshot_pil.size, warn=act.ignore_screen_dims_check)
 
                 # Get a Program from the model
                 set_logging_session_state(SessionState.THINKING)
