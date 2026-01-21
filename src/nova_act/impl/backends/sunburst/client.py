@@ -161,7 +161,10 @@ class SunburstClient(BurstClient):
 
     @staticmethod
     def _translate_response_error(response: requests.Response) -> Exception:
-        request_id = response.headers.get("x-amzn-RequestId", "")
+
+        request_id = response.headers.get("x-amz-rid", "")
+
+
         status_code = response.status_code
 
         try:
@@ -241,7 +244,7 @@ class SunburstClient(BurstClient):
         elif status_code == requests.codes.internal_server_error:
             reason = data.get("reason")
             message = f"Internal server error: {data.get('message', '')}" + (f" Reason: {reason}" if reason else "")
-            if reason == "InvalidModelGeneration":
+            if reason in ("InvalidModelGeneration", "RequestTokenLimitExceeded"):
                 return ActInvalidModelGenerationError(
                     message=message,
                     raw_response=response.text,

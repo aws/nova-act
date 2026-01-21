@@ -43,18 +43,18 @@ def get_target_bbox_dimensions(bbox: BboxTLBR) -> DimensionsDict:
     return dimensions
 
 
-def get_scroll_element_bboxes_at(page: Page, bbox: BboxTLBR) -> list[ScrollElement] | None:
+def get_scroll_element_bboxes_at(page: Page, bbox: BboxTLBR, direction: ScrollDirection) -> list[ScrollElement] | None:
     point = bounding_box_to_point(bbox)
     # The javascript code below does the following:
     # 1. gets all html elements at the given point
     # 2. Iterates through all elements
-    # 3. Verifies if element is scrollable by attempting to scroll the element and checking
+    # 3. Verifies if element is scrollable in the axis for direction by attempting to scroll the element and checking
     # if the scroll value has changed (canScroll()).
-    # 4. Returns the first element that is scrollable, otherwise returns the dimensions of
+    # 4. Returns the nested elements that are scrollable, otherwise returns the dimensions of
     # the page.
     dimension_dicts: list[dict[str, int]] = page.evaluate(
         """
-        ([x, y]) => {
+        ([x, y, isHorizontalScroll]) => {
             const elems = document.elementsFromPoint(x, y);
             if (elems.length === 0) return null;
             function canScroll(el, scrollAxis) {
@@ -79,7 +79,11 @@ def get_scroll_element_bboxes_at(page: Page, bbox: BboxTLBR) -> list[ScrollEleme
             }
 
             function isScrollable(el) {
-                return isScrollableX(el) || isScrollableY(el);
+                if (isHorizontalScroll) {
+                    return isScrollableX(el);
+                } else {
+                    return isScrollableY(el);
+                }
             }
             function isOpaque(el) {
                 return el.tagName.toLowerCase() === 'iframe' || !!el.shadowRoot;
@@ -167,13 +171,19 @@ def get_scroll_element_bboxes_at(page: Page, bbox: BboxTLBR) -> list[ScrollEleme
                     right,
                     bottom,
                     opaque: isOpaque(el),
+                    // Good for debugging.
+                    tagName: el.tagName,
+                    className: el.className,
+                    id: el.id,
                 };
             }
             function isWindowScrollable() {
                 const doc = document.documentElement;
-                const scrollableVertically = doc.scrollHeight > window.innerHeight;
-                const scrollableHorizontally = doc.scrollWidth > window.innerWidth;
-                return scrollableVertically || scrollableHorizontally;
+                if (isHorizontalScroll) {
+                    return doc.scrollWidth > window.innerWidth;
+                } else {
+                    return doc.scrollHeight > window.innerHeight
+                }
             }
 
             const scrollableElements = [];
@@ -202,7 +212,7 @@ def get_scroll_element_bboxes_at(page: Page, bbox: BboxTLBR) -> list[ScrollEleme
             return scrollableElements;
         }
         """,
-        [point["x"], point["y"]],
+        [point["x"], point["y"], direction in ("left", "right")],
     )
 
     if dimension_dicts is None:
@@ -247,7 +257,7 @@ def agent_scroll(
     value: float | None = None,
 ) -> None:
     bbox.validate_in_viewport(**viewport_dimensions(page))
-    scroll_element_dimensions = get_scroll_element_bboxes_at(page, bbox)
+    scroll_element_dimensions = get_scroll_element_bboxes_at(page, bbox, direction)
     if scroll_element_dimensions is None:
         # Not possible to actuate.
         return

@@ -24,6 +24,7 @@ from urllib.parse import urlparse
 from PIL import Image, ImageDraw
 from typing_extensions import TypedDict
 
+from nova_act.types.act_errors import ActInvalidModelGenerationError
 from nova_act.types.act_metadata import ActMetadata, _format_duration
 from nova_act.types.act_result import ActResult
 from nova_act.types.api.step import StepObjectInput, StepObjectOutput
@@ -473,6 +474,17 @@ def _add_bbox_to_image(image: str, response: str) -> str:
     if not bbox_match:
         return image
     top, left, bottom, right = map(int, bbox_match.groups())
+
+    # Validate bounding box coordinates - PIL requires x1 >= x0 and y1 >= y0
+    if right < left or bottom < top:
+        raise ActInvalidModelGenerationError(
+            message=(
+                f"Invalid bounding box coordinates in response: "
+                f"top={top}, left={left}, bottom={bottom}, right={right}. "
+                f"Expected right >= left and bottom >= top."
+            ),
+            raw_response=response,
+        )
 
     # Strip the data prefix in the base64 image.
     image_match = _IMAGE_PREFIX_MATCHER.match(image)

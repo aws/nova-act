@@ -39,7 +39,7 @@ def send_act_telemetry(
         return
 
     headers = {
-        "Authorization": f"ApiKey {nova_act_api_key}",
+        "Authorization": f"Bearer {nova_act_api_key}",
         "Content-Type": "application/json",
         "X-Api-Key": f"{nova_act_api_key}",
     }
@@ -75,7 +75,8 @@ def send_act_telemetry(
     }
 
     try:
-        response = requests.post(endpoint + "/telemetry", json=payload, headers=headers)
+        suffix = "/telemetry" if endpoint.endswith("/agent") else "/agent/telemetry"
+        response = requests.post(url=endpoint + suffix, json=payload, headers=headers)
         if response.status_code != 200:
             _LOGGER.debug("Failed to send act telemetry: %s", response.text)
     except Exception as e:
@@ -95,7 +96,7 @@ def send_environment_telemetry(
         return
 
     headers = {
-        "Authorization": f"ApiKey {nova_act_api_key}",
+        "Authorization": f"Bearer {nova_act_api_key}",
         "Content-Type": "application/json",
         "X-Api-Key": f"{nova_act_api_key}",
     }
@@ -118,7 +119,8 @@ def send_environment_telemetry(
     }
 
     try:
-        response = requests.post(endpoint + "/telemetry", json=payload, headers=headers)
+        suffix = "/telemetry" if endpoint.endswith("/agent") else "/agent/telemetry"
+        response = requests.post(url=endpoint + suffix, json=payload, headers=headers)
         if response.status_code != 200:
             _LOGGER.debug("Failed to send environment telemetry: %s", response.text)
     except Exception as e:

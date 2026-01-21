@@ -36,7 +36,6 @@ def assert_json_response(  # type: ignore[explicit-any]
     """Assert that a response contains valid JSON."""
     status_code = response.status_code
     message = f"Received Invalid JSON response from {response.url}"
-    raw_response = response.text
 
     try:
         response = response.json()
@@ -49,21 +48,18 @@ def assert_json_response(  # type: ignore[explicit-any]
                 request_id=request_id,
                 status_code=status_code,
                 message=message,
-                raw_response=raw_response,
             )
         elif 400 <= status_code < 500:
             raise ActBadRequestError(
                 request_id=request_id,
                 status_code=status_code,
                 message=message,
-                raw_response=raw_response,
             )
         else:
             raise ActInternalServerError(
                 request_id=request_id,
                 status_code=status_code,
                 message=message,
-                raw_response=raw_response,
             )
 
     if not isinstance(response, dict):
@@ -71,7 +67,6 @@ def assert_json_response(  # type: ignore[explicit-any]
             request_id=request_id,
             status_code=status_code,
             message=message,
-            raw_response=raw_response,
         )
 
     return response

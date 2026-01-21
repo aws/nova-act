@@ -315,8 +315,8 @@ class StarburstClient(BurstClient):
             )
 
         elif error_code == "InternalServerException":
-            # Check if this is an InvalidModelGeneration error
-            if error_reason == "InvalidModelGeneration":
+            # Check if this is an InvalidModelGeneration or RequestTokenLimitExceeded error
+            if error_reason in ("InvalidModelGeneration", "RequestTokenLimitExceeded"):
                 return ActInvalidModelGenerationError(
                     message=str(error_message),
                     raw_response=raw_response,

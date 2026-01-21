@@ -7,7 +7,7 @@ Amazon Nova Act is available as a new AWS service to build and manage fleets of 
 (Preview) Nova Act also integrates with external tools through API calls, remote MCP, or agentic frameworks, such as Strands Agents.
 
 
-> #### ⚠️ Notice: Support for Nova Act SDK versions prior to 3.0 will end on January 21, 2026.
+> #### ⚠️ Important: Nova Act SDK versions older than 3.0 are no longer supported. Users must upgrade to the latest version to receive security updates and new features.
 
 > Please follow the upgrade instructions below:
 
@@ -35,6 +35,7 @@ Amazon Nova Act is available as a new AWS service to build and manage fleets of 
 * [Captchas](#captchas)
 * [Search on a website](#search-on-a-website)
 * [File upload and download](#file-upload-and-download)
+* [Working with Browser Dialogs](#working-with-browser-dialogs)
 * [Working with dates](#picking-dates)
 * [Setting the browser user agent](#setting-the-browser-user-agent)
 * [Using a proxy](#using-a-proxy)
@@ -528,6 +529,30 @@ with NovaAct(
 
 Refer to [this sample](./src/nova_act/samples/booking_with_data_from_tool.py) for a working example.
 
+Users may also provide tools from an MCP server by leveraging a [Strands MCP Client](https://strandsagents.com/latest/documentation/docs/user-guide/concepts/tools/mcp-tools/):
+
+```python
+from mcp import StdioServerParameters, stdio_client
+from nova_act import NovaAct
+from strands.tools.mcp import MCPClient
+
+with MCPClient(
+    lambda: stdio_client(
+        StdioServerParameters(command="uvx", args=["awslabs.aws-documentation-mcp-server@latest"])
+    )
+) as aws_docs_client:
+    with NovaAct(
+        starting_page="https://aws.amazon.com/", tools=aws_docs_client.list_tools_sync(),
+    ) as nova:
+        print(
+            nova.act_get(
+                "Use the 'search_documentation' tool to tell me about Amazon Bedrock and how to use it with Python."
+                "Ignore the web browser; do not click, scroll, type, etc."
+            )
+        )
+
+```
+
 ### Handling ActErrors
 
 Once the `NovaAct` client is started, it might encounter errors during the `act()` execution. All of these error types are included in the [`nova_act.types.act_errors` module](./src/nova_act/types/act_errors.py), and are organized as follows:
@@ -757,6 +782,27 @@ with NovaAct(..., security_options=SecurityOptions(allowed_file_upload_paths=["/
 > **Important security note**:
 >
 > Pick `allowed_file_upload_paths` narrowly to minimize NovaAct's access to your filesystem to avoid data exfiltration by malicious sites or web content.
+
+### Working with Browser Dialogs
+
+Playwright automatically dismisses browser native dialogs such as [alert](https://developer.mozilla.org/en-US/docs/Web/API/Window/alert), [confirm](https://developer.mozilla.org/en-US/docs/Web/API/Window/confirm), and [prompt](https://developer.mozilla.org/en-US/docs/Web/API/Window/prompt) by default. To handle them manually, register a dialog handler before Nova Act performs the action that triggers the dialog. For example:
+
+```python
+def handle_dialog(dialog):
+    """Handle dialog by printing its message and accepting it."""
+    print(f"Dialog message: {dialog.message}")
+    dialog.accept()  # Accept and dismiss the dialog
+    # dialog.dismiss()  # Or dismiss/cancel the dialog
+
+# Register the handler
+nova.page.on("dialog", handle_dialog)
+# Trigger the dialog
+nova.act("Do something that results in a dialog")
+# Unregister the handler
+nova.page.remove_listener("dialog", handle_dialog)
+```
+
+For more details, see the [Playwright documentation](https://playwright.dev/python/docs/dialogs#alert-confirm-prompt-dialogs).
 
 ### Picking dates
 

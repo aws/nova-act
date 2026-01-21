@@ -18,13 +18,11 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Generic, Optional, TypeVar, cast
 
-from nova_act.impl.backends.burst.types import ActErrorData
 from nova_act.impl.interpreter import NovaActInterpreter
 from nova_act.impl.program.base import Call, CallResult, Program
 from nova_act.tools.actuator.interface.actuator import ActionType
 from nova_act.tools.browser.interface.browser import BrowserObservation
 from nova_act.types.act_errors import ActInvalidModelGenerationError
-from nova_act.types.api.status import ActStatus, WorkflowRunStatus
 from nova_act.types.errors import InterpreterError
 from nova_act.types.json_type import JSONType
 from nova_act.types.state.act import Act
@@ -37,7 +35,6 @@ T = TypeVar("T", bound="Endpoints")
 @dataclass
 class Endpoints:
     api_url: str
-
 
 
 @dataclass
@@ -118,27 +115,6 @@ class Backend(ABC, Generic[T]):
         self, workflow_run: WorkflowRun, session_id: str, prompt: str, tools: list[ActionType] | None = None
     ) -> str:
         """Create an act. Must be implemented by concrete backends."""
-
-    @abstractmethod
-    def update_act(
-        self,
-        workflow_run: WorkflowRun | None,
-        session_id: str,
-        act_id: str,
-        status: ActStatus,
-        error: ActErrorData | None = None,
-    ) -> None:
-        """Update an act. Must be implemented by concrete backends."""
-
-    @abstractmethod
-    def create_workflow_run(
-        self, workflow_definition_name: str, log_group_name: str | None = None, model_id: str = "default"
-    ) -> WorkflowRun:
-        """Create a workflow run. Must be implemented by concrete backends."""
-
-    @abstractmethod
-    def update_workflow_run(self, workflow_run: WorkflowRun | None, status: WorkflowRunStatus) -> None:
-        """Update a workflow run. Must be implemented by concrete backends."""
 
 
 class AwlBackend(Backend[T]):
@@ -243,24 +219,3 @@ class AwlBackend(Backend[T]):
     ) -> str:
         """Create an act. Default implementation for non-workflow backends."""
         return str(uuid.uuid4())
-
-    def update_act(
-        self,
-        workflow_run: WorkflowRun | None,
-        session_id: str,
-        act_id: str,
-        status: ActStatus,
-        error: ActErrorData | None = None,
-    ) -> None:
-        """Update an act. Default implementation for non-workflow backends."""
-        raise NotImplementedError(f"{self.__class__.__name__} does not support workflow operations")
-
-    def create_workflow_run(
-        self, workflow_definition_name: str, log_group_name: str | None = None, model_id: str = "default"
-    ) -> WorkflowRun:
-        """Create a workflow run. Default implementation for non-workflow backends."""
-        raise NotImplementedError(f"{self.__class__.__name__} does not support workflow operations")
-
-    def update_workflow_run(self, workflow_run: WorkflowRun | None, status: WorkflowRunStatus) -> None:
-        """Update a workflow run. Default implementation for non-workflow backends."""
-        raise NotImplementedError(f"{self.__class__.__name__} does not support workflow operations")

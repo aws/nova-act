@@ -78,7 +78,6 @@ class StarburstBackend(BurstBackend[Endpoints]):
         cls,
         backend_stage: str | None = None,
         backend_api_url_override: str | None = None,
-        local_port: int | None = None,
     ) -> Endpoints:
         api_url = "https://nova-act.us-east-1.amazonaws.com/"
 
