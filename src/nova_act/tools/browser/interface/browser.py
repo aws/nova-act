@@ -11,8 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import annotations
-
 from abc import abstractmethod
 
 from strands import tool
@@ -52,7 +50,7 @@ class BrowserActionProvider:
 
     """
 
-    def __init__(self, actuator: BrowserActuatorBase):
+    def __init__(self, actuator: "BrowserActuatorBase"):
         self.actuator = actuator
 
     @final

@@ -197,9 +197,8 @@ class ActGuardrailsError(ActClientError):
 
 @set_default_message(
     "We have quota limits to ensure sufficient capacity for all users. If you need dedicated "
-    "quota for a more ambitious project, please request a limit increase by filling out "
-    "https://amazonexteu.qualtrics.com/jfe/form/SV_3V3pUMJFeMWpq1o. "
-    "We're excited to see what you build!"
+    "quota for a more ambitious project, please migrate your workflow to the Nova Act AWS Service "
+    "(https://aws.amazon.com/nova/act/)."
 )
 class ActRateLimitExceededError(ActClientError):
     """Indicates a request for an Act session was throttled."""

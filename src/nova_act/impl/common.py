@@ -52,7 +52,8 @@ def should_install_chromium_dependencies() -> bool:
     if os_release.get("NAME", "") == "Amazon Linux":
         if os_release.get("VERSION", "") == "2023":
             return False
-        raise UnsupportedOperatingSystem("NovaAct does not support Amazon Linux below version 2023")
+        else:
+            raise UnsupportedOperatingSystem("NovaAct does not support Amazon Linux below version 2023")
 
     return True
 

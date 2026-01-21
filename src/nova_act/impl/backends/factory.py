@@ -17,7 +17,6 @@ from typing import Optional, TypeVar, Union
 from nova_act.impl.backends.base import Endpoints
 from nova_act.impl.backends.starburst.backend import StarburstBackend
 from nova_act.impl.backends.sunburst.backend import SunburstBackend
-from nova_act.impl.backends.sunshine import SunshineBackend
 from nova_act.types.errors import AuthError
 from nova_act.types.workflow import Workflow
 from nova_act.util.logging import create_warning_box, make_trace_logger
@@ -31,7 +30,6 @@ T = TypeVar("T", bound=Endpoints)
 NovaActBackend = Union[
     StarburstBackend,
     SunburstBackend,
-    SunshineBackend,
 ]
 
 
