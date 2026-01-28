@@ -15,7 +15,7 @@ import json
 import time
 from abc import abstractmethod
 from datetime import datetime, timezone
-from typing import TypeVar
+from typing import Literal, TypeVar
 
 from strands.types.tools import ToolSpec
 
@@ -32,13 +32,15 @@ from nova_act.impl.backends.burst.types import (
     UpdateActRequest,
     UpdateWorkflowRunRequest,
 )
-from nova_act.impl.program.base import Call
+from nova_act.impl.program.base import Call as SdkCall
 from nova_act.impl.program.base import CallResult as SdkCallResult
-from nova_act.impl.program.base import Program
+from nova_act.impl.program.base import Program as SdkProgram
 from nova_act.tools.actuator.interface.actuator import ActionType
 from nova_act.tools.browser.interface.browser import BrowserObservation
 from nova_act.tools.compatibility import safe_tool_spec
+from nova_act.types.act_result import ActGetResult
 from nova_act.types.api.status import ActStatus, WorkflowRunStatus
+from nova_act.types.errors import NovaActError
 from nova_act.types.state.act import Act
 from nova_act.types.state.step import ModelInput, ModelOutput, StepWithProgram
 from nova_act.types.workflow_run import WorkflowRun
@@ -132,6 +134,12 @@ class BurstBackend(Backend[T]):
             workflow_run_id=response.workflow_run_id,
         )
 
+    def send_act_telemetry(self, act: Act, success: ActGetResult | None, error: NovaActError | None) -> None:
+        self._client.send_act_telemetry(act=act, success=success, error=error)
+
+    def send_environment_telemetry(self, session_id: str, actuator_type: Literal["custom", "playwright"]) -> None:
+        self._client.send_environment_telemetry(session_id=session_id, actuator_type=actuator_type)
+
     def step(
         self, act: Act, call_results: list[SdkCallResult], tool_map: dict[str, ActionType] = {}
     ) -> StepWithProgram:
@@ -156,7 +164,7 @@ class BurstBackend(Backend[T]):
             initiate_act_result = SdkCallResult(
                 # intiatiateAct is a special call we inject to make the first step request
                 # compatible with Starburst backend, and its id is same as its name.
-                call=Call(name="initiateAct", id="initiateAct", kwargs={}),
+                call=SdkCall(name="initiateAct", id="initiateAct", kwargs={}),
                 return_value={},
                 error=None,
             )
@@ -180,7 +188,7 @@ class BurstBackend(Backend[T]):
         elapsed_time = time.perf_counter() - start_time
 
         awl_program = type(self)._calls_to_awl_program(response.calls)
-        program = Program(calls=[call.to_sdk_call() for call in response.calls])
+        program = SdkProgram(calls=[call.to_sdk_call() for call in response.calls])
 
         return StepWithProgram(
             model_input=ModelInput(

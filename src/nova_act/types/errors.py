@@ -125,5 +125,13 @@ class InterpreterError(NovaActError):
     """Indicates an error encountered while interpreting model output."""
 
 
+class UnknownToolError(InterpreterError):
+    """Indicates a tool referenced by the model is not available."""
+
+
+class InvalidToolArgumentsError(InterpreterError):
+    """Indicates a tool call failed validation against its schema."""
+
+
 class InvalidTrajectoryReplay(NovaActError):
     """Indicates a Trajectory is being replayed on an invalid environment."""

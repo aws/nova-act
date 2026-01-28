@@ -35,6 +35,7 @@ from nova_act.impl.backends.burst.types import (
     UpdateWorkflowRunRequest,
     UpdateWorkflowRunResponse,
 )
+from nova_act.impl.backends.common import get_client_source
 from nova_act.types.act_errors import (
     ActAPIError,
     ActBadRequestError,
@@ -135,6 +136,7 @@ def _validate_user_agent_extra(config: Config) -> None:
 class StarburstClient(BurstClient):
     def __init__(self, endpoints: Endpoints, boto_session: Session, boto_config: Config | None):
         self._endpoints = endpoints
+        self._client_source = get_client_source().value
 
         if boto_config is not None:
             config = deepcopy(boto_config)
@@ -152,6 +154,15 @@ class StarburstClient(BurstClient):
         self._nova_act_client = boto_session.client(
             service_name="nova-act", endpoint_url=endpoints.api_url, config=config
         )
+
+        # Add event handler to inject X-Client-Source header
+        self._nova_act_client.meta.events.register("before-call", self._add_client_source_header)
+
+    def _add_client_source_header(self, params: dict[str, object], **kwargs: object) -> None:
+        """Add X-Client-Source header to all requests."""
+        if "headers" not in params:
+            params["headers"] = {}
+        params["headers"]["X-Client-Source"] = self._client_source  # type: ignore[index]
 
     def create_act(self, request: CreateActRequest) -> CreateActResponse:
         """Create an act with type-safe request/response."""

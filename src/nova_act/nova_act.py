@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import os
+import platform
 import shutil
 import tempfile
 from typing import Literal, Mapping, Type, cast
@@ -36,7 +37,6 @@ from nova_act.impl.inputs import (
     validate_timeout,
 )
 from nova_act.impl.run_info_compiler import RunInfoCompiler
-from nova_act.impl.telemetry import send_act_telemetry, send_environment_telemetry
 from nova_act.tools.actuator.interface.actuator import ActionType
 from nova_act.tools.browser.default.default_nova_local_browser_actuator import (
     DefaultNovaLocalBrowserActuator,
@@ -291,24 +291,23 @@ class NovaAct:
 
         _chrome_channel = str(chrome_channel or os.environ.get("NOVA_ACT_CHROME_CHANNEL", "chrome"))
         _headless = headless or bool(os.environ.get("NOVA_ACT_HEADLESS"))
+        if (
+            not _headless
+            and cdp_endpoint_url is None
+            and platform.system() == "Linux"
+            and not (bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")))
+        ):
+            _LOGGER.warning("Running on Linux without X display, forcing headless")
+            _headless = True
 
         self._nova_act_api_key = nova_act_api_key or os.environ.get("NOVA_ACT_API_KEY")
 
         self._validate_authentication(scripted_api_key=nova_act_api_key)
 
-        self._backend = BackendFactory.create_backend(
+        self._backend, self._workflow = BackendFactory.create_backend(
             api_key=self._nova_act_api_key,
             workflow=self._workflow,
         )
-
-        # For SunburstBackend without an explicit workflow, create a default one
-        # This centralizes workflow_run creation/update in Workflow.__enter__/__exit__
-        if isinstance(self._backend, SunburstBackend) and self._workflow is None:
-            self._workflow = Workflow(
-                model_id="nova-act-latest",
-                nova_act_api_key=self._nova_act_api_key,
-            )
-            self._workflow._managed = True
 
         validate_base_parameters(
             starting_page=self._starting_page,
@@ -690,9 +689,7 @@ class NovaAct:
             actuator_type: Literal["custom", "playwright"]
             actuator_type = "playwright" if isinstance(self._actuator, DefaultNovaLocalBrowserActuator) else "custom"
 
-            send_environment_telemetry(
-                endpoint=self._backend.endpoints.api_url,
-                nova_act_api_key=self._nova_act_api_key,
+            self._backend.send_environment_telemetry(
                 session_id=self._session_id,
                 actuator_type=actuator_type,
             )
@@ -1004,9 +1001,7 @@ class NovaAct:
             error = ActError(metadata=act.metadata, message=f"{type(e).__name__}: {e}")
             raise error from e
         finally:
-            send_act_telemetry(
-                endpoint=self._backend.endpoints.api_url,
-                nova_act_api_key=self._nova_act_api_key,
+            self._backend.send_act_telemetry(
                 act=act,
                 success=result,
                 error=error,

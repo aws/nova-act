@@ -16,14 +16,20 @@ from __future__ import annotations
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Generic, Optional, TypeVar, cast
+from typing import Generic, Literal, Optional, TypeVar, cast
 
 from nova_act.impl.interpreter import NovaActInterpreter
 from nova_act.impl.program.base import Call, CallResult, Program
 from nova_act.tools.actuator.interface.actuator import ActionType
 from nova_act.tools.browser.interface.browser import BrowserObservation
-from nova_act.types.act_errors import ActInvalidModelGenerationError
-from nova_act.types.errors import InterpreterError
+from nova_act.types.act_errors import ActInvalidModelGenerationError, ActInvalidToolError, ActInvalidToolSchemaError
+from nova_act.types.act_result import ActGetResult
+from nova_act.types.errors import (
+    InterpreterError,
+    InvalidToolArgumentsError,
+    NovaActError,
+    UnknownToolError,
+)
 from nova_act.types.json_type import JSONType
 from nova_act.types.state.act import Act
 from nova_act.types.state.step import Step, StepWithProgram
@@ -116,6 +122,12 @@ class Backend(ABC, Generic[T]):
     ) -> str:
         """Create an act. Must be implemented by concrete backends."""
 
+    def send_act_telemetry(self, act: Act, success: ActGetResult | None, error: NovaActError | None) -> None:
+        """Send telemetry for an act. By default, do not send any."""
+
+    def send_environment_telemetry(self, session_id: str, actuator_type: Literal["custom", "playwright"]) -> None:
+        """Send environment telemetry. By default, do not send any."""
+
 
 class AwlBackend(Backend[T]):
     """Legacy Backends which pass AWL + AST."""
@@ -161,6 +173,18 @@ class AwlBackend(Backend[T]):
         # Interpret a program from the AST
         try:
             base_program = NovaActInterpreter.interpret_ast(step_object.model_output.program_ast, tool_map)
+        except UnknownToolError as e:
+            raise ActInvalidToolError(
+                message=str(e),
+                metadata=act.metadata,
+                raw_response=step_object.model_output.awl_raw_program,
+            )
+        except InvalidToolArgumentsError as e:
+            raise ActInvalidToolSchemaError(
+                message=str(e),
+                metadata=act.metadata,
+                raw_response=step_object.model_output.awl_raw_program,
+            )
         except (InterpreterError, ValueError) as e:
             # Interpreter received invalid Statements, action type or arguments from model
             raise ActInvalidModelGenerationError(

@@ -149,6 +149,7 @@ class ClientInfo(BaseModel):
 
 class CommonField:
     ACT_ID: str = Field(alias="actId", pattern=Pattern.UUID)
+
     CLIENT_TOKEN: str | None = Field(
         None,
         alias="clientToken",
@@ -156,14 +157,17 @@ class CommonField:
         min_length=33,
         pattern="^[a-zA-Z0-9](-*[a-zA-Z0-9]){0,256}$",
     )
+
     SESSION_ID = Field(alias="sessionId", pattern=Pattern.UUID)
+
     WORKFLOW_DEFINITION_NAME: str = Field(
         alias="workflowDefinitionName",
         max_length=40,
         min_length=1,
         pattern="^[a-zA-Z0-9_-]{1,40}$",
     )
-    WORKFLOW_RUN_ID: str = Field(alias="workflowRunId", pattern="^[a-zA-Z0-9-_]{1,40}$")
+
+    WORKFLOW_RUN_ID: str = Field(alias="workflowRunId", pattern=Pattern.UUID)
 
 
 class CreateActRequest(BaseModel):

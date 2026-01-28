@@ -12,9 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
+import platform
+import sys
+from typing import Literal
 
 import requests
 
+from nova_act.__version__ import VERSION
 from nova_act.impl.backends.base import ApiKeyEndpoints
 from nova_act.impl.backends.burst.client import BurstClient
 from nova_act.impl.backends.burst.types import (
@@ -44,6 +48,12 @@ from nova_act.types.act_errors import (
     ActRequestThrottledError,
     ActServerError,
 )
+from nova_act.types.act_result import ActGetResult
+from nova_act.types.errors import NovaActError
+from nova_act.types.state.act import Act
+from nova_act.util.logging import setup_logging
+
+_LOGGER = setup_logging(__name__)
 
 
 class SunburstClient(BurstClient):
@@ -114,6 +124,88 @@ class SunburstClient(BurstClient):
 
         data = response.json()
         return InvokeActStepResponse.model_validate(data)
+
+    def send_act_telemetry(self, act: Act, success: ActGetResult | None, error: NovaActError | None) -> None:
+        """Send telemetry for an act."""
+
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+            "X-Api-Key": f"{self._api_key}",
+        }
+
+        latency = -1.0
+        if act.end_time is not None:
+            latency = act.end_time - act.start_time
+
+        if error:
+            result = {
+                "result_type": "ERROR",
+                "result_error": {
+                    "type": error.__class__.__name__,
+                    "message": error.message if hasattr(error, "message") and error.message else "",
+                },
+            }
+        elif success:
+            result = {
+                "result_type": "SUCCESS",
+                "result_success": {"response": success.response if success.response else ""},
+            }
+        else:
+            return
+
+        payload = {
+            "act": {
+                "actId": act.id,
+                "latency": latency,
+                "sessionId": act.session_id,
+                **result,
+            },
+            "type": "ACT",
+        }
+
+        try:
+            url = self._endpoints.api_url + "/agent/telemetry"
+            response = requests.post(url=url, json=payload, headers=headers)
+            if response.status_code != 200:
+                _LOGGER.debug("Failed to send act telemetry: %s", response.text)
+        except Exception as e:
+            # Swallow any exceptions
+            _LOGGER.debug("Error sending act telemetry: %s", e)
+
+    def send_environment_telemetry(self, session_id: str, actuator_type: Literal["custom", "playwright"]) -> None:
+        """Do not send telemetry for this backend."""
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+            "X-Api-Key": f"{self._api_key}",
+        }
+
+        python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+
+        system_name = platform.system().lower() or "unknown"
+        system_release = platform.release().lower() or "unknown"
+        system = f"{system_name}/{system_release}"
+
+        payload = {
+            "environment": {
+                "actuatorType": actuator_type,
+                "pythonVersion": python_version,
+                "sessionId": session_id,
+                "sdkVersion": VERSION,
+                "system": system,
+            },
+            "type": "ENVIRONMENT",
+        }
+
+        try:
+            url = self._endpoints.api_url + "/agent/telemetry"
+            response = requests.post(url=url, json=payload, headers=headers)
+            if response.status_code != 200:
+                _LOGGER.debug("Failed to send environment telemetry: %s", response.text)
+        except Exception as e:
+            # Swallow any exceptions
+            _LOGGER.debug("Error sending environment telemetry: %s", e)
 
     def update_act(self, request: UpdateActRequest) -> UpdateActResponse:
         url = (
