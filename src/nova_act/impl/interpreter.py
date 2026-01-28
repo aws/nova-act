@@ -19,7 +19,7 @@ from typing_extensions import Any
 from nova_act.impl.program.base import Call, Program
 from nova_act.tools.actuator.interface.actuator import ActionType
 from nova_act.types.api.step import Statement
-from nova_act.types.errors import InterpreterError
+from nova_act.types.errors import InterpreterError, InvalidToolArgumentsError, UnknownToolError
 from nova_act.types.json_type import JSONType
 from nova_act.util.argument_preparation import prepare_kwargs_for_actuation_calls
 from nova_act.util.decode_string import safe_string

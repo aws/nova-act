@@ -17,7 +17,7 @@ import functools
 import os
 from contextvars import ContextVar
 from types import MappingProxyType
-from typing import Any, Callable, Literal, Type, Union
+from typing import Any, Callable, Type, Union
 
 from boto3 import Session
 from botocore.config import Config
@@ -25,7 +25,6 @@ from typing_extensions import TypedDict
 
 from nova_act.impl.backends.starburst.backend import StarburstBackend
 from nova_act.impl.backends.sunburst.backend import DEFAULT_WORKFLOW_DEFN_NAME, SunburstBackend
-
 from nova_act.types.api.status import WorkflowRunStatus
 from nova_act.types.errors import AuthError
 from nova_act.types.workflow_run import WorkflowRun
@@ -35,8 +34,6 @@ from nova_act.util.error_messages import (
     get_no_authentication_error,
 )
 from nova_act.util.logging import make_trace_logger, setup_logging
-
-ModelId = Literal["nova-act-latest"]
 
 # Type alias for backends used in Workflow
 WorkflowBackend = Union[
@@ -87,7 +84,7 @@ def set_current_workflow(workflow: Workflow | None) -> None:
 
 
 def workflow(  # type: ignore[explicit-any]
-    model_id: ModelId,
+    model_id: str,
     boto_session_kwargs: BotoSessionKwargs | None = None,
     workflow_definition_name: str | None = None,
     boto_config: Config | None = None,
@@ -109,7 +106,8 @@ def workflow(  # type: ignore[explicit-any]
     a default boto3 Session will be created with us-east-1 region.
 
     Args:
-        model_id: The model ID to use (e.g., "nova-act-latest").
+        model_id: The model ID to use (e.g., "nova-act-latest"). For valid values of `model_id`, see
+            https://docs.aws.amazon.com/nova-act/latest/userguide/model-version-selection.html.
         boto_session_kwargs: Optional kwargs to pass to boto3.Session() for AWS authentication.
             If not provided and no API Key is given, credentials will be automatically loaded
             from environment variables, or default to {"region_name": "us-east-1"}.
@@ -199,7 +197,7 @@ class Workflow:
 
     def __init__(
         self,
-        model_id: ModelId,
+        model_id: str,
         boto_session_kwargs: BotoSessionKwargs | None = None,
         workflow_definition_name: str | None = None,
         boto_config: Config | None = None,
@@ -209,7 +207,8 @@ class Workflow:
         """Initialize a Workflow instance.
 
         Args:
-            model_id: The model ID to use (e.g., "nova-act-latest").
+            model_id: The model ID to use (e.g., "nova-act-latest"). For valid values of `model_id`, see
+                https://docs.aws.amazon.com/nova-act/latest/userguide/model-version-selection.html.
             boto_session_kwargs: Optional kwargs to pass to boto3.Session() for AWS authentication.
                 If not provided and no API Key is given, credentials will be automatically loaded
                 from environment variables (AWS_PROFILE, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
@@ -292,9 +291,10 @@ class Workflow:
                 raise AuthError(get_no_authentication_error())
 
         if nova_act_api_key is None:
-            boto_session: Session = Session(**(boto_session_kwargs or DEFAULT_BOTO_SESSION_KWARGS))
             if workflow_definition_name is None:
                 raise ValueError("workflow_definition_name is required in Workflow definition")
+
+            boto_session: Session = Session(**(boto_session_kwargs or DEFAULT_BOTO_SESSION_KWARGS))
             self._workflow_definition_name = workflow_definition_name
             self._backend = StarburstBackend(
                 boto_session=boto_session,

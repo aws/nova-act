@@ -102,6 +102,16 @@ class ActInvalidModelGenerationError(ActAgentError):
         self.raw_response = raw_response
 
 
+@set_default_message("The requested tool does not exist.")
+class ActInvalidToolError(ActInvalidModelGenerationError):
+    """Indicates the model attempted to call an unknown tool."""
+
+
+@set_default_message("Tool arguments did not match the expected schema.")
+class ActInvalidToolSchemaError(ActInvalidModelGenerationError):
+    """Indicates a tool call failed validation against the tool schema."""
+
+
 
 
 @set_default_message("The requested action was not possible")

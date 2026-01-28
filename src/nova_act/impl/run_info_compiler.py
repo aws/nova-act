@@ -464,6 +464,12 @@ class StepExtractionOutput:
     metadata: ActMetadata
 
 
+def _save_image_as_jpeg_base64(pil_image: Image.Image, image_bytes_io: io.BytesIO) -> str:
+    """Save PIL image as JPEG and return base64-encoded data URI."""
+    pil_image.save(image_bytes_io, format="JPEG")
+    return "data:image/jpeg;base64," + base64.b64encode(image_bytes_io.getvalue()).decode("utf-8")
+
+
 def _add_bbox_to_image(image: str, response: str) -> str:
     if not image:
         return image
@@ -496,10 +502,9 @@ def _add_bbox_to_image(image: str, response: str) -> str:
     draw = ImageDraw.Draw(pil_image)
     draw.rectangle((left, top, right, bottom), outline="red", width=3)
     image_bytes_io = io.BytesIO()
-    pil_image.save(image_bytes_io, format="JPEG")
 
     # Return the modified image with the data prefix.
-    return "data:image/jpeg;base64," + base64.b64encode(image_bytes_io.getvalue()).decode("utf-8")
+    return _save_image_as_jpeg_base64(pil_image, image_bytes_io)
 
 
 def sanitize_url(url: str) -> str:
