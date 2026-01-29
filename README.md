@@ -113,7 +113,7 @@ playwright install chrome
 ```python
 from nova_act import NovaAct
 
-with NovaAct(starting_page=“https://nova.amazon.com/act/gym/next-dot/search") as nova:
+with NovaAct(starting_page="https://nova.amazon.com/act/gym/next-dot/search") as nova:
     nova.act("Find flights from Boston to Wolf on Feb 22nd")
 ```
 
