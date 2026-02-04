@@ -18,3 +18,4 @@ This module contains reusable constants used throughout the SDK.
 
 NOVA_ACT_FREE_VERSION = "Nova Act Free Version"
 NOVA_ACT_AWS_SERVICE = "Nova Act AWS Service"
+NOVA_ACT_KEYGEN_URL = "https://nova.amazon.com/act?tab=dev_tools"

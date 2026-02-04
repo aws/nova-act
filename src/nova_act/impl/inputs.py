@@ -98,7 +98,8 @@ def validate_prompt(prompt: str) -> None:
 
     if not (MIN_PROMPT_LENGTH <= len(prompt) <= MAX_PROMPT_LENGTH):
         raise InvalidInputLength(
-            f"Prompt length must be between 1 and 10000 characters inclusive. Current length: {len(prompt)}"
+            f"Prompt length must be between {MIN_PROMPT_LENGTH} and {MAX_PROMPT_LENGTH} characters inclusive. "
+            f"Current length: {len(prompt)}"
         )
 
 

@@ -18,7 +18,7 @@ conditions are encountered. Messages are formatted as boxed warnings for better 
 
 """
 
-from nova_act.util.constants import NOVA_ACT_AWS_SERVICE, NOVA_ACT_FREE_VERSION
+from nova_act.util.constants import NOVA_ACT_AWS_SERVICE, NOVA_ACT_FREE_VERSION, NOVA_ACT_KEYGEN_URL
 from nova_act.util.logging import create_warning_box
 
 
@@ -42,8 +42,11 @@ def get_api_key_error_message_for_workflow() -> str:
     )
 
 
-def get_no_authentication_error() -> str:
+def get_no_authentication_error(keygen_url: str = NOVA_ACT_KEYGEN_URL) -> str:
     """Get the error message when no authentication credentials are found.
+
+    Args:
+        keygen_url: URL where users can obtain an API key.
 
     Returns:
         A formatted error message string.
@@ -54,7 +57,7 @@ def get_no_authentication_error() -> str:
             "",
             "The NovaAct SDK supports two forms of authentication:",
             f"1. API Key for {NOVA_ACT_FREE_VERSION}, which can be obtained at",
-            "   https://nova.amazon.com/act",
+            f"   {keygen_url}",
             f"2. AWS Authentication for {NOVA_ACT_AWS_SERVICE}, which uses standard",
             "   boto Session credentials",
             "",
@@ -63,9 +66,12 @@ def get_no_authentication_error() -> str:
     )
 
 
-def get_missing_workflow_definition_error() -> str:
+def get_missing_workflow_definition_error(keygen_url: str = NOVA_ACT_KEYGEN_URL) -> str:
     """Get the error message when AWS credentials are set but NOVA_ACT_API_KEY is not and
     user is trying to run a non-workflow example.
+
+    Args:
+        keygen_url: URL where users can obtain an API key.
 
     Returns:
         A formatted error message string.
@@ -79,7 +85,7 @@ def get_missing_workflow_definition_error() -> str:
             "",
             f"To use (1) {NOVA_ACT_FREE_VERSION}, set the NOVA_ACT_API_KEY environment variable",
             'or pass in explicitly using NovaAct(nova_act_api_key="<YOUR KEY HERE>", ...)',
-            "To generate an API Key go to https://nova.amazon.com/act?tab=dev_tools",
+            f"To generate an API Key go to {keygen_url}",
             "",
             f"To use (2) {NOVA_ACT_AWS_SERVICE}, you must use a Workflow construct. For example:",
             "",

@@ -47,17 +47,17 @@ def populate_json_schema_response(result: ActResult, schema: Mapping[str, JSONTy
             metadata=result.metadata,
         )
     try:
-        if schema != STRING_SCHEMA:
-            parsed_response = json.loads(response)
-        else:
-            parsed_response = response
+        parsed_response = json.loads(response)
         jsonschema.validate(instance=parsed_response, schema=schema)
     except json.JSONDecodeError:
+        # Accept raw unquoted strings for STRING_SCHEMA only
+        parsed_response = response if schema == STRING_SCHEMA else None
+        matches_schema = schema == STRING_SCHEMA
         return ActGetResult(
             response=response,
-            parsed_response=None,
+            parsed_response=parsed_response,
             valid_json=False,
-            matches_schema=False,
+            matches_schema=matches_schema,
             metadata=result.metadata,
         )
     except jsonschema.ValidationError:

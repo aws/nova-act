@@ -21,6 +21,13 @@ COPY . .
 
 # Create non-root user for security
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+
+# Install Playwright browsers and copy to appuser's home
+RUN python -m playwright install --with-deps chromium && \
+    mkdir -p /home/appuser/.cache && \
+    cp -r /root/.cache/ms-playwright /home/appuser/.cache/ && \
+    chown -R appuser:appuser /home/appuser/.cache
+
 USER appuser
 
 # Expose AgentCore standard port
@@ -30,6 +37,7 @@ EXPOSE 8080
 ENV PYTHONPATH=/app
 ENV AWS_DEFAULT_REGION=us-east-1
 ENV ENTRY_POINT={{entry_point}}
+ENV NOVA_ACT_SKIP_PLAYWRIGHT_INSTALL=1
 
 # Start the application
 CMD ["python", "-m", "agentcore_handler"]

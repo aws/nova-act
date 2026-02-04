@@ -43,7 +43,7 @@ class ModelOutput:
         try:
             plan_response_json = json.loads(plan_response)
         except json.JSONDecodeError:
-            raise ValueError("actuationPlanResponse is not JSON-Type.")
+            raise ValueError(f"actuationPlanResponse is not JSON-Type: {plan_response}")
 
         if "rawProgramBody" not in plan_response_json:
             raise ValueError("actuationPlanResponse is missing rawProgramBody.")
@@ -53,7 +53,7 @@ class ModelOutput:
         try:
             program_ast: list[Statement] = plan_response_json["program"]["body"][0]["body"]["body"]
         except (IndexError, KeyError, TypeError):
-            raise LookupError("actuationPlanResponse is missing program body.")
+            raise LookupError(f"actuationPlanResponse is missing program body: {plan_response_json}")
 
         return cls(awl_raw_program=awl_raw_program, request_id=request_id, program_ast=program_ast)
 

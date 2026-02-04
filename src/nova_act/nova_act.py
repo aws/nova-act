@@ -72,6 +72,7 @@ from nova_act.types.json_type import JSONType
 from nova_act.types.state.act import Act
 from nova_act.types.workflow import Workflow, get_current_workflow
 from nova_act.types.workflow_run import WorkflowRun
+from nova_act.util.constants import NOVA_ACT_KEYGEN_URL
 from nova_act.util.decode_string import decode_awl_raw_program
 from nova_act.util.error_messages import get_missing_workflow_definition_error, get_no_authentication_error
 from nova_act.util.event_handler import EventHandler
@@ -92,6 +93,7 @@ from nova_act.util.url import validate_url
 
 DEFAULT_SCREEN_WIDTH = 1600
 DEFAULT_SCREEN_HEIGHT = 900
+MAX_ACT_TRACE_LEN = 1000
 
 _LOGGER = setup_logging(__name__)
 _TRACE_LOGGER = make_trace_logger()
@@ -489,13 +491,15 @@ class NovaAct:
         if has_workflow:
             return
 
+        keygen_url: str = NOVA_ACT_KEYGEN_URL
+
         # No authentication credentials at all
         if not has_api_key and not has_aws_credentials:
-            raise AuthError(get_no_authentication_error())
+            raise AuthError(get_no_authentication_error(keygen_url))
 
         # AWS credentials require a Workflow construct
         if has_aws_credentials and not has_api_key:
-            raise ValueError(get_missing_workflow_definition_error())
+            raise ValueError(get_missing_workflow_definition_error(keygen_url))
 
         # Warn when API key takes precedence over AWS credentials
         if has_env_api_key and has_aws_credentials:
@@ -974,7 +978,11 @@ class NovaAct:
             workflow_run=self._workflow_run,
             ignore_screen_dims_check=self.ignore_screen_dims_check,
         )
-        trace_log_lines(decode_awl_raw_program(f'act("{prompt}")'))
+        if len(prompt) > MAX_ACT_TRACE_LEN:
+            prompt_trace = f"...{prompt[:MAX_ACT_TRACE_LEN-3]}"
+        else:
+            prompt_trace = prompt
+        trace_log_lines(decode_awl_raw_program(f'act("{prompt_trace}")'))
 
         self._event_handler.set_act(act)
         self._event_handler.send_event(type=EventType.LOG, log_level=LogType.INFO, data=f'act("{prompt}")')
