@@ -92,13 +92,21 @@ def setup_logging(module_name: str) -> logging.Logger:
     return logger
 
 
+_trace_logger: logging.Logger | None = None
+
+
 def make_trace_logger() -> logging.Logger:
-    logger = logging.Logger("trace", level=get_log_level())
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter("%(message)s")
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    return logger
+    global _trace_logger
+    if _trace_logger is None:
+        _trace_logger = logging.getLogger("nova_act.trace")
+        _trace_logger.setLevel(get_log_level())
+        if not _trace_logger.handlers:
+            handler = logging.StreamHandler()
+            formatter = logging.Formatter("%(message)s")
+            handler.setFormatter(formatter)
+            _trace_logger.addHandler(handler)
+        _trace_logger.propagate = False
+    return _trace_logger
 
 
 def trace_log_lines(message: str, level: int = logging.INFO) -> None:

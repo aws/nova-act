@@ -61,8 +61,6 @@ from nova_act.util.logging import (
 _LOGGER = setup_logging(__name__)
 _TRACE_LOGGER = make_trace_logger()
 
-DEFAULT_ENDPOINT_NAME = "alpha-sunshine"
-
 
 def _handle_act_fail(
     f: Callable[[ActDispatcher, Act], ActGetResult],
