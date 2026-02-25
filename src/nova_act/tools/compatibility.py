@@ -16,7 +16,7 @@
 from typing import TYPE_CHECKING, Union, cast
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, JsonValue, ValidationError
 from strands.tools.mcp import MCPAgentTool
 from strands.tools.mcp.mcp_types import MCPToolResult
 from strands.types.tools import JSONSchema, ToolResult, ToolSpec
@@ -24,7 +24,6 @@ from typing_extensions import Self
 
 from nova_act.types.act_errors import ActMCPError
 from nova_act.types.errors import ValidationFailed
-from nova_act.types.json_type import JSONType
 from nova_act.util.logging import setup_logging
 
 if TYPE_CHECKING:
@@ -57,7 +56,7 @@ def callable_tool(tool: Union["ActionType", MCPAgentTool]) -> "ActionType":
     """Abstraction around DecoratedFunctionTools and MCPAgentTools"""
     if isinstance(tool, MCPAgentTool):
 
-        def mcp_tool(**kwargs: dict[str, JSONType]) -> JSONType:
+        def mcp_tool(**kwargs: dict[str, JsonValue]) -> JsonValue:
             """Call an MCP tool and handle output."""
             # Call the tool
             mcp_tool_result: MCPToolResult = tool.mcp_client.call_tool_sync(
@@ -72,7 +71,7 @@ def callable_tool(tool: Union["ActionType", MCPAgentTool]) -> "ActionType":
 
             # Return the result
             try:
-                return cast(JSONType, mcp_tool_result["structuredContent"]["result"])
+                return cast(JsonValue, mcp_tool_result["structuredContent"]["result"])
             except LookupError:  # pragma: no cover
                 _LOGGER.warning(
                     f"MCP Tool '{tool.tool_name}' returned result without structured content. "
@@ -102,7 +101,7 @@ class NovaToolSpec(BaseModel):
     """The unique name of the tool."""
     description: str = Field(min_length=TOOL_DESCRIPTION_MIN_LENGTH, max_length=TOOL_DESCRIPTION_MAX_LENGTH)
     """A human-readable description of what the tool does."""
-    input_schema: JSONSchema[str, JSONType] = Field(alias="inputSchema")
+    input_schema: JSONSchema[str, JsonValue] = Field(alias="inputSchema")
     """JSON Schema defining the expected input parameters."""
 
     @classmethod

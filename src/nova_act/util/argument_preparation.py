@@ -17,11 +17,12 @@ Shared utility functions for preparing arguments for actuation calls.
 
 from typing import Dict, List
 
-from nova_act.types.json_type import JSONType
+from pydantic import JsonValue
+
 from nova_act.util.decode_string import safe_string
 
 
-def apply_safe_string(args: JSONType) -> JSONType:
+def apply_safe_string(args: JsonValue) -> JsonValue:
     if isinstance(args, dict):
         # Recursively convert dictionary keys and values to JSON-safe strings
         return {k: apply_safe_string(v) for k, v in args.items()}
@@ -36,7 +37,7 @@ def apply_safe_string(args: JSONType) -> JSONType:
         return args
 
 
-def prepare_kwargs_for_actuation_calls(tool_name: str, args: List[JSONType]) -> Dict[str, JSONType]:
+def prepare_kwargs_for_actuation_calls(tool_name: str, args: List[JsonValue]) -> Dict[str, JsonValue]:
     """
     Prepare kwargs for actuation calls based on tool name and arguments.
 

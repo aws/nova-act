@@ -21,6 +21,7 @@ from typing import Literal, Mapping, Type, cast
 
 from boto3 import Session
 from playwright.sync_api import Page, Playwright
+from pydantic import JsonValue
 
 from nova_act.impl.backends.burst.types import ActErrorData
 from nova_act.impl.backends.starburst.backend import StarburstBackend
@@ -68,7 +69,6 @@ from nova_act.types.events import EventType, LogType
 from nova_act.types.features import PreviewFeatures, SecurityOptions
 from nova_act.types.guardrail import GuardrailCallable
 from nova_act.types.hooks import StopHook
-from nova_act.types.json_type import JSONType
 from nova_act.types.state.act import Act
 from nova_act.types.workflow import Workflow, get_current_workflow
 from nova_act.types.workflow_run import WorkflowRun
@@ -448,16 +448,23 @@ class NovaAct:
             )
             self._actuator = actuator
 
-        self._tools: list[ActionType] = tools or []
+        # Get human input callbacks
         self._human_input_callbacks = human_input_callbacks or self._get_default_human_input_callbacks()
 
+        self._server_tools: list[ActionType] = list(tools or [])
+
+
+        if not isinstance(self._human_input_callbacks, DefaultHumanInputCallbacks):
+            self._server_tools += self._human_input_callbacks.as_tools()
+
+        self._client_tools = self._actuator.list_actions() + self._human_input_callbacks.as_tools() + (tools or [])
+
         self._dispatcher = ActDispatcher(
-            actuator=self._actuator,
             backend=self._backend,
             event_handler=self._event_handler,
             controller=self._controller,
             human_input_callbacks=self._human_input_callbacks,
-            tools=self._tools,
+            tools=self._client_tools,
             state_guardrail=state_guardrail,
         )
 
@@ -818,7 +825,7 @@ class NovaAct:
         model_top_k: int | None = None,
         model_seed: int | None = None,
         observation_delay_ms: int | None = None,
-        schema: Mapping[str, JSONType] | None = None,
+        schema: Mapping[str, JsonValue] | None = None,
     ) -> ActResult:
         """Actuate on the web browser using natural language.
 
@@ -868,7 +875,7 @@ class NovaAct:
     def act_get(
         self,
         prompt: str,
-        schema: Mapping[str, JSONType] = STRING_SCHEMA,
+        schema: Mapping[str, JsonValue] = STRING_SCHEMA,
         *,
         timeout: int | None = None,
         max_steps: int | None = None,
@@ -938,7 +945,7 @@ class NovaAct:
         prompt: str,
         timeout: int | None,
         max_steps: int | None,
-        schema: Mapping[str, JSONType] | None,
+        schema: Mapping[str, JsonValue] | None,
         model_temperature: float | None,
         model_top_k: int | None,
         model_seed: int | None,
@@ -957,14 +964,8 @@ class NovaAct:
             prompt = add_schema_to_prompt(prompt, schema)
 
 
-        tools: list[ActionType] | None = None
-        tools = self._tools.copy()
-        if not isinstance(self._human_input_callbacks, DefaultHumanInputCallbacks):
-            tools += self._human_input_callbacks.as_tools()
-
         assert self._session_id is not None, "Session ID should not be None when client is started"
-        act_id = self._backend.create_act(self._workflow_run, self._session_id, prompt, tools)
-
+        act_id = self._backend.create_act(self._workflow_run, self._session_id, prompt, self._server_tools.copy())
         act = Act(
             id=act_id,
             prompt=prompt,
@@ -991,6 +992,7 @@ class NovaAct:
 
         error: NovaActError | None = None
         result: ActGetResult | None = None
+
 
         try:
             result = self.dispatcher.dispatch(act)

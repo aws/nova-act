@@ -15,6 +15,8 @@ import json
 import logging
 from typing import Protocol, cast
 
+from pydantic import JsonValue
+
 from nova_act.impl.program.base import CallResult, CompiledProgram, ProgramResult
 from nova_act.impl.thinker import get_current_thinker
 from nova_act.tools.browser.interface.browser import BrowserObservation
@@ -30,12 +32,11 @@ from nova_act.types.act_errors import (
 from nova_act.types.errors import InterpreterError
 from nova_act.types.events import EventType
 from nova_act.types.guardrail import GuardrailCallable, GuardrailDecision, GuardrailInputState
-from nova_act.types.json_type import JSONType
 from nova_act.util.event_handler import EventHandler
 from nova_act.util.logging import SessionState, set_logging_session_state, trace_log_lines
 
 
-def format_return_value(return_value: JSONType) -> str:
+def format_return_value(return_value: JsonValue) -> str:
     if isinstance(return_value, str):
         return return_value
     else:

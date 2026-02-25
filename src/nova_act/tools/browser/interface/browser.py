@@ -13,6 +13,7 @@
 # limitations under the License.
 from abc import abstractmethod
 
+from pydantic import JsonValue
 from strands import tool
 from typing_extensions import Self, final
 
@@ -20,7 +21,6 @@ from nova_act.tools.actuator.interface.actuator import ActionType, ActuatorBase
 from nova_act.tools.browser.interface.types.click_types import ClickOptions, ClickType
 from nova_act.tools.browser.interface.types.scroll_types import ScrollDirection
 from nova_act.types.api.step import Observation
-from nova_act.types.json_type import JSONType
 
 
 class BrowserObservation(Observation):
@@ -74,19 +74,19 @@ class BrowserActionProvider:
     @tool(name="agentClick")
     def agent_click(
         self: Self, box: str, click_type: ClickType | None = None, click_options: ClickOptions | None = None
-    ) -> JSONType:
+    ) -> JsonValue:
         """Clicks the center of the specified box."""
         return self.actuator.agent_click(box, click_type, click_options)
 
     @final
     @tool(name="agentHover")
-    def agent_hover(self: Self, box: str) -> JSONType:
+    def agent_hover(self: Self, box: str) -> JsonValue:
         """Hovers on the center of the specified box."""
         return self.actuator.agent_hover(box)
 
     @final
     @tool(name="agentScroll")
-    def agent_scroll(self: Self, direction: ScrollDirection, box: str, value: float | None = None) -> JSONType:
+    def agent_scroll(self: Self, direction: ScrollDirection, box: str, value: float | None = None) -> JsonValue:
         """Scrolls the element in the specified box in the specified direction.
 
         Valid directions are up, down, left, and right.
@@ -95,7 +95,7 @@ class BrowserActionProvider:
 
     @final
     @tool(name="agentType")
-    def agent_type(self: Self, value: str, box: str, pressEnter: bool = False) -> JSONType:
+    def agent_type(self: Self, value: str, box: str, pressEnter: bool = False) -> JsonValue:
         """Types the specified value into the element at the center of the
         specified box.
 
@@ -105,13 +105,13 @@ class BrowserActionProvider:
 
     @final
     @tool(name="goToUrl")
-    def go_to_url(self: Self, url: str) -> JSONType:
+    def go_to_url(self: Self, url: str) -> JsonValue:
         """Navigates to the specifed URL."""
         return self.actuator.go_to_url(url)
 
     @final
     @tool(name="return")
-    def _return(self: Self, value: str | None) -> JSONType:
+    def _return(self: Self, value: str | None) -> JsonValue:
         """Complete execution of the task and return to the user.
 
         Return can either be bare (no value) or a string literal.
@@ -120,25 +120,25 @@ class BrowserActionProvider:
 
     @final
     @tool(name="think")
-    def think(self: Self, value: str) -> JSONType:
+    def think(self: Self, value: str) -> JsonValue:
         """Has no effect on the environment. Should be used for reasoning about the next action."""
         return self.actuator.think(value)
 
     @final
     @tool(name="throw")
-    def throw_agent_error(self: Self, value: str) -> JSONType:
+    def throw_agent_error(self: Self, value: str) -> JsonValue:
         """Used when the task requested by the user is not possible."""
         return self.actuator.throw_agent_error(value)
 
     @final
     @tool(name="wait")
-    def wait(self: Self, seconds: float) -> JSONType:
+    def wait(self: Self, seconds: float) -> JsonValue:
         """Pauses execution for the specified number of seconds."""
         return self.actuator.wait(seconds)
 
     @final
     @tool(name="waitForPageToSettle")
-    def wait_for_page_to_settle(self: Self) -> JSONType:
+    def wait_for_page_to_settle(self: Self) -> JsonValue:
         """Ensure the browser page is ready for the next Action."""
         return self.actuator.wait_for_page_to_settle()
 
@@ -173,22 +173,22 @@ class BrowserActuatorBase(ActuatorBase):
         box: str,
         click_type: ClickType | None = None,
         click_options: ClickOptions | None = None,
-    ) -> JSONType:
+    ) -> JsonValue:
         """Clicks the center of the specified box."""
 
     @abstractmethod
-    def agent_hover(self, box: str) -> JSONType:
+    def agent_hover(self, box: str) -> JsonValue:
         """Hovers on the center of the specified box."""
 
     @abstractmethod
-    def agent_scroll(self, direction: ScrollDirection, box: str, value: float | None = None) -> JSONType:
+    def agent_scroll(self, direction: ScrollDirection, box: str, value: float | None = None) -> JsonValue:
         """Scrolls the element in the specified box in the specified direction.
 
         Valid directions are up, down, left, and right.
         """
 
     @abstractmethod
-    def agent_type(self, value: str, box: str, pressEnter: bool = False) -> JSONType:
+    def agent_type(self, value: str, box: str, pressEnter: bool = False) -> JsonValue:
         """Types the specified value into the element at the center of the
         specified box.
 
@@ -196,29 +196,29 @@ class BrowserActuatorBase(ActuatorBase):
         """
 
     @abstractmethod
-    def go_to_url(self, url: str) -> JSONType:
+    def go_to_url(self, url: str) -> JsonValue:
         """Navigates to the specified URL."""
 
     @abstractmethod
-    def _return(self, value: str | None) -> JSONType:
+    def _return(self, value: str | None) -> JsonValue:
         """Complete execution of the task and return to the user.
 
         Return can either be bare (no value) or a string literal."""
 
     @abstractmethod
-    def think(self, value: str) -> JSONType:
+    def think(self, value: str) -> JsonValue:
         """Has no effect on the environment. Should be used for reasoning about the next action."""
 
     @abstractmethod
-    def throw_agent_error(self, value: str) -> JSONType:
+    def throw_agent_error(self, value: str) -> JsonValue:
         """Used when the task requested by the user is not possible."""
 
     @abstractmethod
-    def wait(self, seconds: float) -> JSONType:
+    def wait(self, seconds: float) -> JsonValue:
         """Pauses execution for the specified number of seconds."""
 
     @abstractmethod
-    def wait_for_page_to_settle(self) -> JSONType:
+    def wait_for_page_to_settle(self) -> JsonValue:
         """Ensure the browser page is ready for the next Action."""
 
     @abstractmethod

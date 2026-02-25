@@ -843,7 +843,7 @@ nova = NovaAct(
 )
 ```
 
-> **Note:** Proxy configuration is not supported when connecting to a CDP endpoint or when using the default Chrome browser (`use_default_chrome_browser=True`).
+> **Note:** If connecting to a CDP endpoint, the code that launches the browser and manages the lifecycle is responsible for configuring the proxy. These configuration params only apply if NovaAct is creating and launching the browser.
 
 
 ### Logging

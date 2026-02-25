@@ -23,11 +23,8 @@ from nova_act.impl.inputs import validate_viewport_dimensions
 from nova_act.impl.program.base import Call, Program
 from nova_act.impl.program.runner import ProgramRunner, format_return_value
 from nova_act.impl.thinker import Thinker
-from nova_act.tools.actuator.interface.actuator import ActionType, ActuatorBase
+from nova_act.tools.actuator.interface.actuator import ActionType
 from nova_act.tools.browser.default.util.image_helpers import get_source_image_from_data_url
-from nova_act.tools.browser.interface.browser import (
-    BrowserActuatorBase,
-)
 from nova_act.tools.browser.interface.types.agent_redirect_error import (
     AgentRedirectError,
 )
@@ -42,7 +39,7 @@ from nova_act.types.act_errors import (
 )
 from nova_act.types.act_metadata import ActMetadata
 from nova_act.types.act_result import ActGetResult
-from nova_act.types.errors import ClientNotStarted, ValidationFailed
+from nova_act.types.errors import ClientNotStarted
 from nova_act.types.events import EventType, LogType
 from nova_act.types.guardrail import GuardrailCallable
 from nova_act.types.state.act import Act
@@ -163,11 +160,8 @@ def _log_time_worked(metadata: ActMetadata) -> None:
 
 
 class ActDispatcher:
-    _actuator: BrowserActuatorBase
-
     def __init__(
         self,
-        actuator: ActuatorBase | None,
         backend: NovaActBackend,
         controller: NovaStateController,
         event_handler: EventHandler,
@@ -175,13 +169,9 @@ class ActDispatcher:
         tools: list[ActionType] | None = None,
         state_guardrail: GuardrailCallable | None = None,
     ):
-        if not isinstance(actuator, BrowserActuatorBase):
-            raise ValidationFailed("actuator must be an instance of BrowserActuatorBase")
-        self._actuator = actuator
         self._backend = backend
-        self._tools = actuator.list_actions().copy()
+        self._tools = (tools or []).copy()
         self._human_input_callbacks = human_input_callbacks
-        self._tools += (tools or []) + human_input_callbacks.as_tools()
         self._tool_map = {tool.tool_name: tool for tool in self._tools}
 
         self._canceled = False
@@ -215,7 +205,6 @@ class ActDispatcher:
 
         if self._backend is None:
             raise ClientNotStarted("Run start() to start the client before accessing the Playwright Page.")
-
 
         step_object = None
         step_idx = 0

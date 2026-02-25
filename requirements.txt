@@ -1,5 +1,5 @@
 Deprecated
-bedrock-agentcore
+bedrock-agentcore>=1.2.0
 boto3>=1.42.1
 boto3-stubs
 cryptography
