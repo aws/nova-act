@@ -14,13 +14,13 @@
 from uuid import uuid4
 
 import jsonschema
+from pydantic import JsonValue
 from typing_extensions import Any
 
 from nova_act.impl.program.base import Call, Program
 from nova_act.tools.actuator.interface.actuator import ActionType
 from nova_act.types.api.step import Statement
 from nova_act.types.errors import InterpreterError, InvalidToolArgumentsError, UnknownToolError
-from nova_act.types.json_type import JSONType
 from nova_act.util.argument_preparation import prepare_kwargs_for_actuation_calls
 from nova_act.util.decode_string import safe_string
 
@@ -79,7 +79,7 @@ class NovaActInterpreter:
             fn_name = expr["func"]["var"]
             call_args = expr["args"]
             args = [NovaActInterpreter._extract_arg_value(arg) for arg in call_args]
-            kwargs: dict[str, JSONType]
+            kwargs: dict[str, JsonValue]
 
             # Use shared argument preparation logic for standard actuation calls
             if fn_name in ["agentClick", "agentHover", "agentType", "agentScroll", "goToUrl", "wait"]:
@@ -150,7 +150,7 @@ class NovaActInterpreter:
         return None
 
     @staticmethod
-    def _validated_call(tool: ActionType, call_id: str, kwargs: dict[str, JSONType]) -> Call:
+    def _validated_call(tool: ActionType, call_id: str, kwargs: dict[str, JsonValue]) -> Call:
         try:
             jsonschema.validate(
                 instance=kwargs,

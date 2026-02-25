@@ -13,12 +13,11 @@
 # limitations under the License.
 from dataclasses import dataclass, field
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, JsonValue
 
 from nova_act.tools.actuator.interface.actuator import ActionType
 from nova_act.tools.compatibility import callable_tool
 from nova_act.types.act_errors import ActToolError
-from nova_act.types.json_type import JSONType
 
 
 class FrozenBaseModel(BaseModel):
@@ -27,7 +26,7 @@ class FrozenBaseModel(BaseModel):
 
 class Call(FrozenBaseModel):
     name: str
-    kwargs: dict[str, JSONType]
+    kwargs: dict[str, JsonValue]
     id: str
     is_tool: bool = False
 
@@ -41,7 +40,7 @@ class CompiledCall:
 @dataclass(frozen=True)
 class CallResult:
     call: Call
-    return_value: JSONType
+    return_value: JsonValue
     error: Exception | None
 
 

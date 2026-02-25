@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import json
+from typing import Literal, TypedDict
 
 from playwright.sync_api import Page
 
@@ -19,15 +20,18 @@ from nova_act.tools.browser.default.dom_actuation.click_events import get_after_
 from nova_act.tools.browser.default.util.bbox_parser import bounding_box_to_point
 from nova_act.tools.browser.default.util.dispatch_dom_events import dispatch_event_sequence
 from nova_act.tools.browser.default.util.element_helpers import (
-    DEEP_ELEMENT_FROM_POINT_JS,
     check_if_native_dropdown,
     get_element_at_point,
+    recurse_through_iframes,
     viewport_dimensions,
 )
 from nova_act.tools.browser.default.util.file_upload_helpers import click_and_maybe_return_file_chooser
 from nova_act.tools.browser.interface.types.agent_redirect_error import AgentRedirectError
 from nova_act.tools.browser.interface.types.click_types import ClickOptions, ClickType
 from nova_act.types.api.step import BboxTLBR
+from nova_act.util.logging import setup_logging
+
+_LOGGER = setup_logging(__name__)
 
 NATIVE_DROPDOWN_REDIRECT_MESSAGE = (
     "This dropdown cannot be clicked. Use agentType(<value>, <same bbox>), with one of these values: "
@@ -96,52 +100,67 @@ def maybe_blur_field(
     dispatch_event_sequence(page, point, after_click_events)
 
 
-def get_dropdown_options(page: Page, x: float, y: float) -> list[dict[str, str]] | None:
+class DropdownOption(TypedDict):
+    """An option from a dropdown menu."""
+
+    value: str
+    label: str
+
+
+def get_dropdown_options(page: Page, x: float, y: float) -> list[DropdownOption] | None:
     """Get options from a select element."""
 
-    # Use evaluate to extract options
-    options: list[dict[str, str]] | None = page.evaluate(
+    class _OptionsResult(TypedDict):
+        """Typeguard for injected JS."""
+
+        type_: Literal["options"]
+        value: list[DropdownOption]
+
+    result = recurse_through_iframes(
+        page,
+        x,
+        y,
         """
-        ([x, y]) => {
-            %s
-            function shadowInclusiveParent(el) {
-                if (!el) return null;
-                if (el.parentElement) return el.parentElement;
-                const root = el.getRootNode();
-                if (root && root instanceof ShadowRoot) {
-                    return root.host || null;
-                }
-                return null;
+        function shadowInclusiveParent(el) {
+            if (!el) return null;
+            if (el.parentElement) return el.parentElement;
+            const root = el.getRootNode();
+            if (root && root instanceof ShadowRoot) {
+                return root.host || null;
             }
+            return null;
+        }
 
-            function findNearestSelect(el) {
-                let current = el;
-                while (current) {
-                    if (current.tagName && current.tagName.toLowerCase() === "select") {
-                        return current;
-                    }
-                    current = shadowInclusiveParent(current);
+        function findNearestSelect(el) {
+            let current = el;
+            while (current) {
+                if (current.tagName && current.tagName.toLowerCase() === "select") {
+                    return current;
                 }
-                return null;
+                current = shadowInclusiveParent(current);
             }
+            return null;
+        }
 
-            const hitElement = deepElementFromPoint(document, x, y);
-            if (!hitElement) return null;
+        const selectElement = findNearestSelect(elem);
+        if (!selectElement || !selectElement.options) return null;
 
-            const selectElement = findNearestSelect(hitElement);
-            if (!selectElement || !selectElement.options) return null;
-
-            return Array.from(selectElement.options).map(option => ({
+        return {
+            type_: 'options',
+            value: Array.from(selectElement.options).map(option => ({
                 value: option.label,
                 label: option.label,
-            }));
-        }
-    """
-        % (DEEP_ELEMENT_FROM_POINT_JS,),
-        [x, y],
+            }))
+        };
+        """,
+        _OptionsResult,
     )
 
-    return options
+    if not isinstance(result, dict) or result.get("type_") != "options":
+        _LOGGER.warning(f"Could not extract dropdown options from element at point {(x, y)}.")
+        return None
+
+    return result["value"]
 
 
 def handle_special_elements(page: Page, x: float, y: float) -> None:

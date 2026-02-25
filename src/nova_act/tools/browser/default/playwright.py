@@ -13,6 +13,7 @@
 # limitations under the License.
 import os
 import subprocess
+import sys
 import time
 from typing import Any
 
@@ -42,6 +43,11 @@ _LOGGER = setup_logging(__name__)
 _DEFAULT_USER_AGENT_SUFFIX = " Agent-NovaAct/0.9"
 _MACOS_LOCAL_CHROME_PATH = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 _CDP_PORT = 9222
+
+
+def detect_interactive_mode() -> bool:
+    """Detect if running in interactive Python interpreter."""
+    return hasattr(sys, "ps1")
 
 
 class PlaywrightInstanceManager:
@@ -90,6 +96,7 @@ class PlaywrightInstanceManager:
         self._modifier_key = "ControlOrMeta"
         self._safe_site_validation_error: InvalidURL | InvalidCertificate | None = None
         self._ssl_hook_enabled = False
+        self._is_interactive = detect_interactive_mode()
 
     @property
     def started(self) -> bool:
@@ -162,7 +169,7 @@ class PlaywrightInstanceManager:
 
     def disable_ssl_validation_hook(self) -> None:
         """Disable SSL validation for manual browsing."""
-        if self._context and self._ssl_hook_enabled:
+        if self._context and self._ssl_hook_enabled and self._is_interactive:
             self._context.unroute_all(behavior="wait")
             self._ssl_hook_enabled = False
 
@@ -360,8 +367,16 @@ class PlaywrightInstanceManager:
                         except OSError as e:
                             _LOGGER.error(f"An Unexpected error occured when renaming {video_path}: {e}")
 
-        if self._owns_context and self._context is not None:
-            self._context.close()
+        if self._owns_context and self._context is not None and not self._owns_playwright:
+            try:
+                self._context.close()
+            except Exception as e:
+                _LOGGER.error(f"Error closing context: {e}")
+                try:
+                    if hasattr(self._context, "browser") and self._context.browser:
+                        self._context.browser.close()
+                except Exception:
+                    pass
 
         if self._launched_default_chrome_popen is not None:
             self._launched_default_chrome_popen.terminate()

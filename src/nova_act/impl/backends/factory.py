@@ -50,6 +50,7 @@ class BackendFactory:
         if workflow is not None:
             return BackendFactory.BackendResult(workflow.backend, workflow)
 
+
         BackendFactory._validate_auth(
             api_key,
         )

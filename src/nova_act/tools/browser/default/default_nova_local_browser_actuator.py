@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Literal
 
 from playwright.sync_api import Page
+from pydantic import JsonValue
 
 from nova_act.tools.browser.default.playwright import PlaywrightInstanceManager
 from nova_act.tools.browser.default.playwright_instance_options import PlaywrightInstanceOptions
@@ -42,7 +43,6 @@ from nova_act.types.errors import (
     InvalidURL,
 )
 from nova_act.types.guardrail import GuardrailCallable
-from nova_act.types.json_type import JSONType
 from nova_act.util.common_js_expressions import Expressions
 
 MAX_PAGE_EVALUATE_RETRIES = 3
@@ -109,21 +109,21 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
         box: str,
         click_type: Literal["left", "left-double", "right"] | None = None,
         click_options: ClickOptions | None = None,
-    ) -> JSONType:
+    ) -> JsonValue:
         """Clicks the center of the specified box."""
         bbox = parse_bbox_string(box)
         agent_click(bbox, self._playwright_manager.main_page, click_type or "left", click_options)
         return None
 
     @_check_ssl_error
-    def agent_hover(self, box: str) -> JSONType:
+    def agent_hover(self, box: str) -> JsonValue:
         """Hovers on the center of the specified box."""
         bbox = parse_bbox_string(box)
         agent_hover(bbox, self._playwright_manager.main_page)
         return None
 
     @_check_ssl_error
-    def agent_scroll(self, direction: ScrollDirection, box: str, value: float | None = None) -> JSONType:
+    def agent_scroll(self, direction: ScrollDirection, box: str, value: float | None = None) -> JsonValue:
         """Scrolls the element in the specified box in the specified direction.
 
         Valid directions are up, down, left, and right.
@@ -133,7 +133,7 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
         return None
 
     @_check_ssl_error
-    def agent_type(self, value: str, box: str, pressEnter: bool = False) -> JSONType:
+    def agent_type(self, value: str, box: str, pressEnter: bool = False) -> JsonValue:
         """Types the specified value into the element at the center of the
         specified box.
 
@@ -151,7 +151,7 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
         return None
 
     @_check_ssl_error
-    def go_to_url(self, url: str) -> JSONType:
+    def go_to_url(self, url: str) -> JsonValue:
         """Navigates to the specified URL."""
 
         try:
@@ -165,22 +165,22 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
             raise ValueError(str(e)) from e
         return None
 
-    def _return(self, value: str | None) -> JSONType:
+    def _return(self, value: str | None) -> JsonValue:
         """Complete execution of the task and return to the user.
 
         Return can either be bare (no value) or a string literal."""
         return value
 
-    def think(self, value: str) -> JSONType:
+    def think(self, value: str) -> JsonValue:
         """Has no effect on the environment. Should be used for reasoning about the next action."""
         pass
 
-    def throw_agent_error(self, value: str) -> JSONType:
+    def throw_agent_error(self, value: str) -> JsonValue:
         """Used when the task requested by the user is not possible."""
         return value
 
     @_check_ssl_error
-    def wait(self, seconds: float) -> JSONType:
+    def wait(self, seconds: float) -> JsonValue:
         """Pauses execution for the specified number of seconds."""
         if seconds < 0:
             raise ValueError("Seconds must be non-negative")
@@ -191,7 +191,7 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
         return None
 
     @_check_ssl_error
-    def wait_for_page_to_settle(self) -> JSONType:
+    def wait_for_page_to_settle(self) -> JsonValue:
         """Ensure the browser page is ready for the next Action."""
         wait_for_page_to_settle(self._playwright_manager.main_page, WAIT_FOR_PAGE_TO_SETTLE_CONFIG)
         return None

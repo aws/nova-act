@@ -13,6 +13,7 @@
 # limitations under the License.
 import time
 from enum import Enum
+from typing import Literal, TypedDict, TypeVar, cast
 
 from playwright.sync_api import Locator, Page
 
@@ -106,9 +107,113 @@ def locate_element(element_info: ElementDict, page: Page) -> Locator:
     raise ValueError(f"Element not found: {element_info}")
 
 
+_T = TypeVar("_T")
+"""Dynamic type for recurse_through_iframes inner_js return."""
+
+
+def recurse_through_iframes(page: Page, x: float, y: float, inner_js: str, return_type: type[_T]) -> _T | None:
+    """
+    Starting from the main frame, drill through any iframes at the given
+    viewport coordinates until we reach a frame where the element at (x, y)
+    is NOT an iframe.
+
+    The coordinate system works as follows:
+    - The initial (x, y) are viewport coordinates relative to the main page.
+    - Each iframe is positioned somewhere within its parent frame. When we
+      drill into an iframe, we need to convert the coordinates from the
+      parent's coordinate space to the iframe's coordinate space.
+    - We do this by subtracting the iframe's top-left corner (rect.x, rect.y)
+      from the current coordinates. For example, if the iframe starts at
+      (100, 200) in the parent, and we're looking for the point (150, 250),
+      then inside the iframe that point is at (50, 50).
+
+    Args:
+        page: Playwright page object
+        x: X viewport coordinate
+        y: Y viewport coordinate
+        inner_js: JS code to execute once we've found a non-iframe element.
+                  It has access to `elem` (the element found by deepElementFromPoint)
+                  and `x`, `y` (the coordinates in the current frame's space).
+                  Should return an object with `type_` set to something other
+                  than 'iframe', or null.
+        return_type: phantom type parameter to provide return type of inner_js
+
+    Returns:
+        The result of evaluating inner_js in the deepest reachable frame,
+        or None if no element was found or an iframe couldn't be accessed.
+    """
+    current_frame = page.main_frame
+    current_x, current_y = x, y
+
+    while True:
+        result = current_frame.evaluate(
+            """
+            ([x, y]) => {
+                %s
+
+                const elem = deepElementFromPoint(document, x, y);
+                if (!elem) return null;
+
+                // If the element is an iframe, we can't necessarily access its
+                // contents from JavaScript (cross-origin policy), so we return
+                // the iframe's metadata and let Python drill in via Playwright.
+                if (elem.tagName === 'IFRAME') {
+                    const r = elem.getBoundingClientRect();
+                    return {
+                        type_: 'iframe',
+                        name: elem.getAttribute('name') || '',
+                        // We need the iframe's position in the current frame so
+                        // we can convert coordinates to the iframe's local space.
+                        rect: {x: r.x, y: r.y, width: r.width, height: r.height}
+                    };
+                }
+
+                // Not an iframe — run the caller's custom JS logic.
+                %s
+            }
+            """
+            % (DEEP_ELEMENT_FROM_POINT_JS, inner_js),
+            [current_x, current_y],
+        )
+
+        if not isinstance(result, dict):
+            # If we did not get a `dict` back from Page.evaluate, then
+            # we did not successfully find an element.
+            return None
+
+        if result.get("type_") != "iframe":
+            # We've reached a non-iframe element; return the result from
+            # the caller's custom JS. We cast to their provided type.
+            return cast(_T, result)
+
+        # The element at this point is an iframe. We need to:
+        # 1. Convert coordinates from the current frame's space to the
+        #    iframe's local space by subtracting the iframe's position.
+        rect = result["rect"]
+        current_x -= rect["x"]
+        current_y -= rect["y"]
+
+        # 2. Find the matching Playwright Frame object so we can evaluate
+        #    JavaScript inside the iframe (even if it's cross-origin).
+        iframe_name = result["name"]
+        target_frame = None
+        for child_frame in current_frame.child_frames:
+            if iframe_name and child_frame.name == iframe_name:
+                target_frame = child_frame
+                break
+
+        if target_frame is None:
+            _LOGGER.warning("Found iframe but could not access its child frame.")
+            return None
+
+        _LOGGER.debug(f"Drilling into iframe: {iframe_name[:80]}...")
+        current_frame = target_frame
+
+
 def get_element_at_point(page: Page, x: float, y: float) -> ElementDict | None:
     """
-    Get the HTML element at the specified x,y coordinates.
+    Get the HTML element at the specified x,y coordinates,
+    drilling into iframes (including cross-origin) as needed.
 
     Args:
         page: Playwright page object
@@ -118,39 +223,44 @@ def get_element_at_point(page: Page, x: float, y: float) -> ElementDict | None:
     Returns:
         Dictionary containing element information or None if no element found
     """
-    # Execute JavaScript to get the element at the specified point
-    element_info: ElementDict = page.evaluate(
+
+    class _ElementResult(TypedDict):
+        """TypeGuard for injected JS."""
+
+        type_: Literal["element"]
+        value: ElementDict
+
+    result = recurse_through_iframes(
+        page,
+        x,
+        y,
         """
-        ([x, y]) => {
-            %s
-            const elem = deepElementFromPoint(document, x, y);
-            if (!elem) return null;
-
-            const attributes = {};
-            if (elem.attributes) {
-                for (const attr of elem.attributes) {
-                    attributes[attr.name] = attr.value;
-                }
+        const attributes = {};
+        if (elem.attributes) {
+            for (const attr of elem.attributes) {
+                attributes[attr.name] = attr.value;
             }
+        }
 
-            return {
+        return {
+            type_: 'element',
+            value: {
                 tagName: elem.tagName,
                 id: elem.id,
                 className: elem.className,
                 textContent: elem.textContent,
                 attributes: attributes
-            };
-        }
-        """
-        % (DEEP_ELEMENT_FROM_POINT_JS,),
-        [x, y],
+            }
+        };
+        """,
+        _ElementResult,
     )
 
-    if element_info is None:
+    if not isinstance(result, dict) or result.get("type_") != "element":
         _LOGGER.warning(f"Could not find element at point {(x, y)}.")
-        return
+        return None
 
-    return element_info
+    return result["value"]
 
 
 def check_if_native_dropdown(page: Page, x: float, y: float) -> bool:

@@ -15,8 +15,9 @@ from __future__ import annotations
 
 import dataclasses
 
+from pydantic import JsonValue
+
 from nova_act.types.act_metadata import ActMetadata
-from nova_act.types.json_type import JSONType
 
 """
 Successful outcome of act()
@@ -63,7 +64,7 @@ class ActGetResult(ActResult):
     """A result from act_get()."""
 
     response: str | None = None
-    parsed_response: JSONType | None = None
+    parsed_response: JsonValue | None = None
     valid_json: bool | None = None
     matches_schema: bool | None = None
 

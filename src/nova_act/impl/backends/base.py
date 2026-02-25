@@ -18,6 +18,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Generic, Literal, Optional, TypeVar, cast
 
+from pydantic import JsonValue
+
 from nova_act.impl.interpreter import NovaActInterpreter
 from nova_act.impl.program.base import Call, CallResult, Program
 from nova_act.tools.actuator.interface.actuator import ActionType
@@ -30,7 +32,6 @@ from nova_act.types.errors import (
     NovaActError,
     UnknownToolError,
 )
-from nova_act.types.json_type import JSONType
 from nova_act.types.state.act import Act
 from nova_act.types.state.step import Step, StepWithProgram
 from nova_act.types.workflow_run import WorkflowRun
@@ -61,7 +62,7 @@ class Backend(ABC, Generic[T]):
         self.validate_auth()
 
     @staticmethod
-    def _maybe_observation(observation: JSONType) -> BrowserObservation:
+    def _maybe_observation(observation: JsonValue) -> BrowserObservation:
         # TODO: get rid of BrowserObservation TypedDict && enforce stricter type check with isinstance
         return cast(BrowserObservation, observation)
 

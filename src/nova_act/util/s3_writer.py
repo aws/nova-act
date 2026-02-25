@@ -19,6 +19,7 @@ from mypy_boto3_s3.service_resource import Bucket
 
 from nova_act import NovaAct
 from nova_act.types.hooks import StopHook
+from nova_act.util.os_path import safe_relative_path
 from nova_act.util.s3_writer_errors import S3WriterBucketNotFoundError, S3WriterError, S3WriterPermissionError
 
 
@@ -190,7 +191,7 @@ class S3Writer(StopHook):
             for file in files:
                 local_path = os.path.join(root, file)
                 # Calculate relative path for S3 key
-                relative_path = os.path.relpath(local_path, nova_act.get_session_logs_directory())
+                relative_path = safe_relative_path(local_path, nova_act.get_session_logs_directory())
 
                 # Construct S3 key using the prefix exactly as provided
                 s3_key = self._construct_s3_key(nova_act.get_session_id(), relative_path)

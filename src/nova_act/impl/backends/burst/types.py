@@ -16,14 +16,13 @@ from __future__ import annotations
 import json
 from typing import TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
 from strands.types.tools import ToolSpec
 
 from nova_act.__version__ import VERSION
 from nova_act.impl.program.base import Call as SdkCall
 from nova_act.impl.program.base import CallResult as SdkCallResult
 from nova_act.types.api.status import ActStatus, WorkflowRunStatus
-from nova_act.types.json_type import JSONType
 from nova_act.util.argument_preparation import prepare_kwargs_for_actuation_calls
 from nova_act.util.logging import setup_logging
 
@@ -64,7 +63,7 @@ class Call(BaseModel):
     model_config = ConfigDict(validate_by_alias=True, validate_by_name=True)
 
     call_id: str = Field(alias="callId", max_length=100, min_length=1)
-    input: list[JSONType] | dict[str, JSONType]
+    input: list[JsonValue] | dict[str, JsonValue]
     name: str
 
     def to_sdk_call(self) -> SdkCall:

@@ -11,11 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Union  # noqa: F401
+import os
 
-from typing_extensions import TypeAliasType
+from nova_act.types.errors import InvalidPath
 
-JSONType = TypeAliasType(
-    "JSONType",
-    "Union[dict[str, JSONType], list[JSONType], str, int, float, bool, None]",
-)
+
+def safe_relative_path(path: str, base_dir: str) -> str:
+    """Get a relative path while blocking path traversal attempts."""
+    # Resolve and normalize paths
+    abs_path = os.path.abspath(os.path.join(base_dir, path))
+    abs_base = os.path.abspath(base_dir)
+
+    # Ensure the path is within the base directory
+    if not abs_path.startswith(abs_base + os.sep):
+        raise InvalidPath(f"Path traversal attempt detected: {path}")
+
+    return os.path.relpath(abs_path, abs_base)
