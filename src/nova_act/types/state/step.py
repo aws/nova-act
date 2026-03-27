@@ -17,7 +17,7 @@ import json
 from dataclasses import dataclass, fields
 from datetime import datetime
 
-from nova_act.impl.program.base import Program
+from nova_act.impl.program.base import CallResult, Program
 from nova_act.types.api.step import Statement
 from nova_act.types.api.trace import TraceDict
 
@@ -28,6 +28,7 @@ class ModelInput:
     prompt: str
     active_url: str
     simplified_dom: str
+    call_results: list[CallResult] | None = None
 
 
 @dataclass(frozen=True)

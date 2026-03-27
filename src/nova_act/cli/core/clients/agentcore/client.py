@@ -57,6 +57,7 @@ from nova_act.cli.core.exceptions import (
     DeploymentError,
     ValidationError,
 )
+from nova_act.cli.workflow.utils.arn import extract_agent_id_from_arn
 
 logger = logging.getLogger(__name__)
 
@@ -172,7 +173,7 @@ class AgentCoreClient:
         """Handle conflict when creating agent runtime."""
         if self._is_already_exists_error(error):
             return self._update_existing_runtime(sanitized_name=sanitized_name, config=config)
-        raise DeploymentError(f"Failed to create agent runtime: {str(error)}")
+        raise DeploymentError(f"Failed to create agent runtime: {str(error)}") from error
 
     def _is_already_exists_error(self, error: ClientError) -> bool:
         """Check if error indicates resource already exists."""
@@ -222,20 +223,25 @@ class AgentCoreClient:
         try:
             json.loads(payload)
         except json.JSONDecodeError as e:
-            raise ValidationError(f"Invalid JSON payload: {e}")
+            raise ValidationError(f"Invalid JSON payload: {e}") from e
 
-    def _extract_agent_id_from_arn(self, agent_arn: str) -> str:
-        """Extract agent ID from AgentCore ARN."""
-        return agent_arn.split("/")[-1]
+    def delete_agent_runtime(self, agent_runtime_arn: str) -> None:
+        """Delete an AgentCore Runtime by ARN."""
+        agent_id = extract_agent_id_from_arn(agent_runtime_arn)
+        try:
+            self.control_client.delete_agent_runtime(agentRuntimeId=agent_id)
+            logger.info(f"Deleted agent runtime: {agent_id}")
+        except ClientError as e:
+            raise DeploymentError(f"Failed to delete agent runtime: {str(e)}") from e
 
     def get_runtime_log_group(self, agent_arn: str) -> str:
         """Get CloudWatch runtime log group path for an agent."""
-        agent_id = self._extract_agent_id_from_arn(agent_arn)
+        agent_id = extract_agent_id_from_arn(agent_arn)
         return f"{LOG_GROUP_PREFIX}{agent_id}-{DEFAULT_ENDPOINT_NAME}"
 
     def get_otel_log_group(self, agent_arn: str) -> str:
         """Get CloudWatch OTEL log group path for an agent."""
-        agent_id = self._extract_agent_id_from_arn(agent_arn)
+        agent_id = extract_agent_id_from_arn(agent_arn)
         return f"{LOG_GROUP_PREFIX}{agent_id}-{DEFAULT_ENDPOINT_NAME}{OTEL_LOG_SUFFIX}"
 
     def get_agent_log_groups(self, agent_arn: str) -> Tuple[str, str]:

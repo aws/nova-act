@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Sequence, TypeAlias
+from typing import Any, Callable, TypeAlias
 
 from deprecated import deprecated
 from strands import tool
@@ -61,6 +61,20 @@ class ActuatorBase(ABC):
     def stop(self, **kwargs: Any) -> None:  # type: ignore[explicit-any]
         """Clean up when done."""
 
+    def lock_context(self) -> None:
+        """Lock the context for actuator control.
+
+        Enables actuator hooks and automation. Called automatically by the
+        actuator on subsequent actions, but can be called explicitly if needed.
+        """
+
+    def unlock_context(self) -> None:
+        """Unlock the context to allow external processes (e.g., HITL) to operate.
+
+        Temporarily suspends actuator hooks and automation that could interfere
+        with manual or external control of the underlying context.
+        """
+
     @property
     @abstractmethod
     def started(self, **kwargs: Any) -> bool:  # type: ignore[explicit-any]
@@ -69,7 +83,7 @@ class ActuatorBase(ABC):
         """
 
     @abstractmethod
-    def list_actions(self) -> Sequence[ActionType]:
+    def list_actions(self) -> list[ActionType]:
         """List the valid Actions this Actuator can take."""
 
     def asdict(self) -> dict[str, str | list[ToolSpec]]:

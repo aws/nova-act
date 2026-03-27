@@ -13,8 +13,8 @@
 # limitations under the License.
 """AgentCore-specific workflow validation utilities for entry point and source validation."""
 
+import ast
 import logging
-import re
 from pathlib import Path
 
 from nova_act.cli.core.error_detection import (
@@ -24,10 +24,6 @@ from nova_act.cli.core.error_detection import (
 from nova_act.cli.core.exceptions import ConfigurationError
 
 logger = logging.getLogger(__name__)
-
-# Validation patterns
-_MAIN_FUNCTION_PATTERN = r"def\s+main\s*\([^)]*\w[^)]*\)"
-_MAIN_FUNCTION_SIMPLE_PATTERN = "def main("
 
 # File extensions and names
 _PYTHON_FILE_EXTENSION = ".py"
@@ -86,16 +82,23 @@ class AgentCoreSourceValidator:
         validate_entry_point_file(str(entry_point_path))
 
     def _validate_main_function(self) -> None:
-        """Validate main() function exists and accepts parameters."""
+        """Validate main() function exists and accepts parameters using AST analysis."""
         entry_point_path = self.source_path / self.entry_point
 
         try:
-            content = self._read_file_content(entry_point_path)
+            content = entry_point_path.read_text(encoding="utf-8")
         except Exception as e:
-            raise ConfigurationError(f"Cannot read entry point file {entry_point_path}: {e}")
+            raise ConfigurationError(f"Cannot read entry point file {entry_point_path}: {e}") from e
 
-        self._check_main_function_exists(content)
-        self._check_main_function_parameters(content)
+        main_node = self._find_top_level_main(content, entry_point_path)
+
+        if main_node is None:
+            message = get_entry_point_missing_main_message(entry_point_path=entry_point_path)
+            raise ConfigurationError(message)
+
+        if len(main_node.args.args) == 0:
+            message = get_entry_point_missing_parameter_message(entry_point_path=entry_point_path)
+            raise ConfigurationError(message)
 
         logger.info(f"Entry point validation passed: {entry_point_path}")
 
@@ -119,20 +122,26 @@ class AgentCoreSourceValidator:
                 f"Multiple Python files found, please specify --entry-point: {', '.join(py_file_names)}"
             )
 
-    def _read_file_content(self, file_path: Path) -> str:
-        """Read file content with proper encoding."""
-        return file_path.read_text(encoding="utf-8")
+    def _find_top_level_main(
+        self, content: str, entry_point_path: Path
+    ) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
+        """Find a top-level main() function definition using AST analysis.
 
-    def _check_main_function_exists(self, content: str) -> None:
-        """Check if main function exists in content."""
-        if _MAIN_FUNCTION_SIMPLE_PATTERN not in content:
-            entry_point_path = self.source_path / self.entry_point
-            message = get_entry_point_missing_main_message(entry_point_path=entry_point_path)
-            raise ConfigurationError(message)
+        Only examines top-level nodes (not nested functions). Handles both
+        sync and async function definitions.
 
-    def _check_main_function_parameters(self, content: str) -> None:
-        """Check if main function accepts parameters."""
-        if not re.search(pattern=_MAIN_FUNCTION_PATTERN, string=content):
-            entry_point_path = self.source_path / self.entry_point
-            message = get_entry_point_missing_parameter_message(entry_point_path=entry_point_path)
-            raise ConfigurationError(message)
+        Returns:
+            The AST node for main() if found, None otherwise.
+
+        Raises:
+            ConfigurationError: If the source file contains invalid Python syntax.
+        """
+        try:
+            tree = ast.parse(content)
+        except SyntaxError as e:
+            raise ConfigurationError(f"Cannot parse entry point file {entry_point_path}: {e}") from e
+
+        for node in ast.iter_child_nodes(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "main":
+                return node
+        return None

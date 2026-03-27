@@ -196,6 +196,7 @@ class BurstBackend(Backend[T]):
                 prompt=act.prompt,
                 active_url=observation["activeURL"],
                 simplified_dom=observation["simplifiedDOM"],
+                call_results=call_results,
             ),
             model_output=ModelOutput(
                 awl_raw_program=awl_program or "ERROR: Could not decode model output.",

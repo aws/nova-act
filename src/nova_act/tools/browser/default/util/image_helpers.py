@@ -166,3 +166,93 @@ def compare_images(image1_data_url: str, image2_data_url: str, threshold: int = 
         raise RuntimeError(f"Unable to compare images: {str(e)}")
 
 
+def crop_image_with_box(image_data: Union[str, Image.Image], box_string: str, increase_size: int = 0) -> Image.Image:
+    """
+    Crops an image using coordinates specified in a box string.
+
+    Args:
+        image_data: Either a data URL string or a PIL Image object
+        box_string: A string containing box coordinates in the format "<box>top, left, bottom, right</box>"
+        increase_size: Percentage by which to increase the box size (e.g., 10 means 10% larger)
+
+    Returns:
+        A cropped PIL Image object
+
+    Raises:
+        ValueError: If the box string format is invalid
+        RuntimeError: If the image cannot be cropped
+    """
+    try:
+        # Parse the box coordinates
+        bbox = parse_bbox_string(box_string)
+
+        # Convert data URL to PIL Image if needed
+        if isinstance(image_data, str):
+            image = get_source_image_from_data_url(image_data)
+        else:
+            image = image_data
+        top, left, bottom, right = int(bbox.top), int(bbox.left), int(bbox.bottom), int(bbox.right)
+
+        # Calculate the width and height of the box
+        box_width = right - left
+        box_height = bottom - top
+
+        # Calculate the amount to increase in each direction
+        # Purposefully increase height using the box_width and increase width using box_height
+        height_increase = int(box_width * (increase_size / 100))
+        width_increase = int(box_height * (increase_size / 100))
+
+        # Adjust the box coordinates
+        new_left = max(0, left - width_increase)
+        new_top = max(0, top - height_increase)
+        new_right = min(image.width, right + width_increase)
+        new_bottom = min(image.height, bottom + height_increase)
+
+        # Validate that the crop box is within the image dimensions
+        width, height = image.size
+        if new_left >= width or new_top >= height or new_right > width or new_bottom > height:
+            raise ValueError(
+                f"Crop box ({new_top}, {new_left}, {new_bottom}, {new_right}) "
+                f"exceeds image dimensions ({width}x{height})"
+            )
+
+        # Crop the image using the adjusted box coordinates
+        cropped_image = image.crop((new_left, new_top, new_right, new_bottom))
+
+        return cropped_image
+
+    except ValueError:
+        # Re-raise ValueError for invalid box format or coordinates
+        raise
+    except Exception as e:
+        # Wrap other exceptions in RuntimeError
+        raise RuntimeError(f"Unable to crop image: {str(e)}")
+
+
+def crop_image_with_box_to_data_url(
+    image_data: Union[str, Image.Image],
+    box_string: str,
+    format_type: str = "JPEG",
+    quality: int = 100,
+) -> str:
+    """
+    Crops an image using coordinates specified in a box string and returns it as a data URL.
+
+    Args:
+        image_data: Either a data URL string or a PIL Image object
+        box_string: A string containing box coordinates in the format "<box>top, left, bottom, right</box>"
+        format_type: The format of the output image (JPEG, PNG, etc.)
+        quality: The quality of the output image (0-100), only applies to JPEG format
+
+    Returns:
+        A data URL of the cropped image, base64 encoded
+
+    Raises:
+        ValueError: If the box string format is invalid
+        RuntimeError: If the image cannot be cropped
+    """
+    # Crop the image
+    cropped_image = crop_image_with_box(image_data, box_string)
+
+    # Convert the cropped image to a data URL
+    return convert_image_to_data_url(cropped_image, format_type, quality)

@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from typing import Literal, cast
 from uuid import uuid4
 
 import jsonschema
@@ -21,7 +22,7 @@ from nova_act.impl.program.base import Call, Program
 from nova_act.tools.actuator.interface.actuator import ActionType
 from nova_act.types.api.step import Statement
 from nova_act.types.errors import InterpreterError, InvalidToolArgumentsError, UnknownToolError
-from nova_act.util.argument_preparation import prepare_kwargs_for_actuation_calls
+from nova_act.util.argument_preparation import apply_safe_string, prepare_kwargs_for_actuation_calls
 from nova_act.util.decode_string import safe_string
 
 
@@ -30,6 +31,7 @@ class NovaActInterpreter:
     Parse and actuate
     Returns True iff Agent is done, False otherwise
     """
+
 
     @staticmethod
     def interpret_ast(statements: list[Statement], tool_map: dict[str, ActionType]) -> Program:

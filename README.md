@@ -113,7 +113,7 @@ playwright install chrome
 ```python
 from nova_act import NovaAct
 
-with NovaAct(starting_page=“https://nova.amazon.com/act/gym/next-dot/search") as nova:
+with NovaAct(starting_page="https://nova.amazon.com/act/gym/next-dot/search") as nova:
     nova.act("Find flights from Boston to Wolf on Feb 22nd")
 ```
 
@@ -122,8 +122,6 @@ The SDK will (1) open Chrome, (2) perform the task as described in the prompt, a
 Refer to the section [Initializing NovaAct](#initializing-novaact) to learn about other runtime options that can be passed into NovaAct.
 
 ### Interactive mode
-
-_**NOTE**: NovaAct does not yet support `ipython`; for now, use your standard Python shell._
 
 Using interactive Python is a nice way to experiment:
 
@@ -139,6 +137,21 @@ Type "help", "copyright", "credits" or "license" for more information.
 
 Please don't interact with the browser when an `act()` is running because the underlying model will not know what you've changed!
 > Note: When using interactive mode, `ctrl+x` can exit the agent action leaving the browser intact for another `act()` call. `ctrl+c` does not do this -- it will exit the browser and require a `NovaAct` restart.
+
+### Async mode
+
+Nova Act provides an async implementation for use with `asyncio`. Import `NovaAct` from `nova_act.asyncio` and use `async with` and `await`:
+
+```python
+import asyncio
+from nova_act.asyncio import NovaAct
+
+async def main():
+    async with NovaAct(starting_page="https://nova.amazon.com/act/gym/next-dot/search") as nova:
+        await nova.act("Find flights from Boston to Wolf on Feb 22nd")
+
+asyncio.run(main())
+```
 
 ### Samples
 
@@ -553,6 +566,28 @@ with MCPClient(
 
 ```
 
+#### Advanced: Tools Requiring Browser Control
+
+If your custom tool needs to interact with the browser directly (similar to HITL tools), you can mark it with `requires_unlocked_actuator_context = True`. This temporarily suspends the actuator's internal hooks during tool execution, allowing external processes to control the browser.
+
+```python
+from nova_act import NovaAct, tool
+
+@tool
+def my_browser_control_tool(message: str) -> str:
+    """Tool that needs direct browser access."""
+    # ... interact with browser externally
+    return "done"
+
+# Mark the tool as requiring unlocked context
+my_browser_control_tool.requires_unlocked_actuator_context = True
+
+with NovaAct(starting_page=..., tools=[my_browser_control_tool]) as nova:
+    nova.act("Use my_browser_control_tool to do something")
+```
+
+The actuator automatically re-locks the context on the next agent action.
+
 ### Handling ActErrors
 
 Once the `NovaAct` client is started, it might encounter errors during the `act()` execution. All of these error types are included in the [`nova_act.types.act_errors` module](./src/nova_act/types/act_errors.py), and are organized as follows:
@@ -941,7 +976,7 @@ When the NovaAct session ends, all session files will be automatically uploaded 
 > **Use `nova.go_to_url` instead of `nova.page.goto`**
 
 The Playwright Page's `goto()` method has a default timeout of 30 seconds, which may cause failures for slow-loading websites. If the page does not finish loading within this time, `goto()` will raise a `TimeoutError`, potentially interrupting your workflow. Additionally, goto() does not always work well with act, as Playwright may consider the page ready before it has fully loaded.
-To address these issues, we have implemented a new function, `go_to_url()`, which provides more reliable navigation. You can use it by calling: `nova.go_to_url(url)` after `nova.start()`. You can also use the `go_to_url_timeout` parameter on `NovaAct` initialization to modify the default max wait time in seconds for the start page load and subsequent `got_to_url()` calls.
+To address these issues, we have implemented a new function, `go_to_url()`, which provides more reliable navigation. You can use it by calling: `nova.go_to_url(url)` after `nova.start()`. You can also use the `go_to_url_timeout` parameter on `NovaAct` initialization to modify the default max wait time in seconds for the start page load and subsequent `go_to_url()` calls.
 
 ### Viewing a session that is running in headless mode
 
@@ -982,6 +1017,7 @@ For example:
 * Screen size constraints;
   * Nova Act is optimized for resolutions between `864×1296` and `1536×2304`; and
   * Performance may degrade outside this range
+  * You can adjust the screen dimensions using `screen_width` and `screen_height` parameters (e.g., `screen_width=1920, screen_height=1080`)
 
 Learn more in the AWS AI Service Card for Amazon Nova Act.
 

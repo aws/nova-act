@@ -14,6 +14,7 @@
 """AgentCore deployment service for workflow infrastructure orchestration."""
 
 import logging
+import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -21,13 +22,14 @@ from boto3 import Session
 
 from nova_act.cli.core.clients.agentcore.client import AgentCoreClient
 from nova_act.cli.core.clients.agentcore.types import AgentRuntimeConfig
-from nova_act.cli.core.clients.ecr.client import ECRClient
+from nova_act.cli.core.constants import BUILD_DIR_PREFIX
 from nova_act.cli.core.exceptions import DeploymentError
 from nova_act.cli.core.logging import log_api_key_status
 from nova_act.cli.core.types import AgentCoreDeployment
 from nova_act.cli.workflow.services.agentcore.iam_role import AgentCoreRoleCreator
-from nova_act.cli.workflow.services.agentcore.image_builder import AgentCoreImageBuilder
+from nova_act.cli.workflow.services.agentcore.image_builder import BuildContextPreparer
 from nova_act.cli.workflow.services.agentcore.source_validator import AgentCoreSourceValidator
+from nova_act.cli.workflow.utils.build_strategy import ImageBuilder
 from nova_act.cli.workflow.utils.tags import generate_workflow_tags
 
 logger = logging.getLogger(__name__)
@@ -43,10 +45,10 @@ class AgentCoreDeploymentService:
         execution_role_arn: str | None,
         region: str,
         account_id: str,
+        image_builder: ImageBuilder,
         source_dir: str | None = None,
         entry_point: str | None = None,
         ecr_repo: str | None = None,
-        no_build: bool = False,
         skip_entrypoint_validation: bool = False,
         build_dir: str | None = None,
         overwrite_build_dir: bool = False,
@@ -56,10 +58,10 @@ class AgentCoreDeploymentService:
         self.execution_role_arn = execution_role_arn
         self.region = region
         self.account_id = account_id
+        self.image_builder = image_builder
         self.source_dir = source_dir
         self.entry_point = entry_point
         self.ecr_repo = ecr_repo
-        self.no_build = no_build
         self.skip_entrypoint_validation = skip_entrypoint_validation
         self.build_dir = build_dir
         self.overwrite_build_dir = overwrite_build_dir
@@ -73,13 +75,9 @@ class AgentCoreDeploymentService:
         role_arn = self._ensure_execution_role()
         logger.info("Execution role ready")
 
-        logger.info("Building workflow container image...")
-        image_tag = self._build_workflow_image()
-        logger.info(f"Container image built: {image_tag}")
-
-        logger.info("Pushing image to ECR...")
-        image_uri = self._push_image_to_ecr(image_tag)
-        logger.info("Image pushed to ECR")
+        logger.info("Building and pushing workflow container image...")
+        image_tag, image_uri = self._build_and_push_image()
+        logger.info(f"Image ready: {image_uri}")
 
         logger.info("Creating AgentCore runtime...")
         agent_arn = self._create_agentcore_runtime(image_uri=image_uri, role_arn=role_arn)
@@ -96,36 +94,41 @@ class AgentCoreDeploymentService:
         )
         validator.validate()
 
-    def _build_workflow_image(self) -> str:
-        """Build container image or return existing tag."""
-        if self.no_build:
-            return self._generate_image_tag()
+    def _build_and_push_image(self) -> tuple[str, str]:
+        """Build and push container image using the configured strategy.
 
-        return self._execute_image_build()
-
-    def _execute_image_build(self) -> str:
-        """Execute the actual image building process."""
-        workflow_path = self.source_dir or "."
-        image_name = self._generate_image_tag()
+        Returns:
+            Tuple of (image_tag, image_uri).
+        """
+        image_tag = self._generate_image_tag()
 
         if self.entry_point is None:
             raise ValueError("entry_point is required for building workflow image")
 
-        image_builder = AgentCoreImageBuilder(
-            image_tag=image_name,
+        workflow_path = self.source_dir or "."
+
+        # Prepare build context (AgentCore-specific: Dockerfile template processing)
+        context_builder = BuildContextPreparer(
+            image_tag=image_tag,
             project_path=workflow_path,
             entry_point=self.entry_point,
+            region=self.region,
             build_dir=Path(self.build_dir) if self.build_dir else None,
             force=self.overwrite_build_dir,
         )
-        return image_builder.build_workflow_image()
+        build_dir = context_builder.prepare_build_context()
 
-    def _push_image_to_ecr(self, image_tag: str) -> str:
-        """Push image to ECR and return full URI."""
-        ecr_client = ECRClient(session=self.session, region=self.region)
-        ecr_uri = ecr_client._ensure_default_repository()
-        unique_tag = ecr_client.generate_unique_tag(self.agent_name)
-        return ecr_client.push_image(local_image_tag=image_tag, ecr_uri=ecr_uri, target_tag=unique_tag)
+        try:
+            # Build and push via strategy
+            result = self.image_builder.build_and_push(
+                build_dir=build_dir, image_tag=image_tag, agent_name=self.agent_name
+            )
+            return image_tag, result.image_uri
+        finally:
+            # Cleanup temp build dir if we created it
+            if not self.build_dir and build_dir and BUILD_DIR_PREFIX in build_dir.name:
+                logger.info(f"Cleaning up temporary build directory: {build_dir}")
+                shutil.rmtree(build_dir, ignore_errors=True)
 
     def _create_agentcore_runtime(self, image_uri: str, role_arn: str) -> str:
         """Create AgentCore runtime with configuration."""
@@ -164,4 +167,4 @@ class AgentCoreDeploymentService:
                 f"2. Use a role/user with IAM permissions to create roles (iam:CreateRole, iam:AttachRolePolicy)\n"
                 f"3. Ask your administrator to create the role and provide the ARN"
             )
-            raise DeploymentError(error_msg)
+            raise DeploymentError(error_msg) from e

@@ -67,7 +67,7 @@ class ECRClient:
                 return False
             raise ImageBuildError(f"Failed to check repository existence: {e}")
 
-    def _ensure_default_repository(self) -> str:
+    def ensure_default_repository(self) -> str:
         """Ensure default repository exists."""
         try:
             response = self.ecr_client.describe_repositories(repositoryNames=[DEFAULT_ECR_REPO_NAME])
@@ -97,7 +97,7 @@ class ECRClient:
         self._login_to_ecr()
         self._tag_image(local_image_tag=local_image_tag, full_ecr_uri=full_ecr_uri)
         self._push_image(full_ecr_uri=full_ecr_uri)
-        self._log_push_success(full_ecr_uri=full_ecr_uri)
+        logger.info(f"Pushed image to ECR: {full_ecr_uri}")
 
         return full_ecr_uri
 
@@ -135,7 +135,3 @@ class ECRClient:
     def build_image_uri(self, ecr_uri: str, tag: str) -> str:
         """Build complete image URI from ECR URI and tag."""
         return f"{ecr_uri}:{tag}"
-
-    def _log_push_success(self, full_ecr_uri: str) -> None:
-        """Log successful image push."""
-        logger.info(f"Pushed image to ECR: {full_ecr_uri}")

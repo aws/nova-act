@@ -57,6 +57,8 @@ class HumanInputCallbacksProvider:
         self._human_input_callbacks = human_input_callbacks
         # Use null object pattern - always have a tracker (null or real)
         self._wait_time_tracker: HumanWaitTimeTracker | _NullWaitTimeTracker = _NullWaitTimeTracker()
+        # Cache tools to ensure stable object identity for attribute setting
+        self._cached_tools: list[ActionType] | None = None
 
     def set_wait_time_tracker(self, tracker: HumanWaitTimeTracker) -> None:
         """Set the wait time tracker for this act execution.
@@ -123,7 +125,14 @@ class HumanInputCallbacksProvider:
     @final
     def provide(self) -> list[ActionType]:
         """Provide tools for a HumanInputCallbackProvider."""
-        return [self.ui_takeover, self.approve]
+        # Cache tools to ensure stable object identity (strands creates new objects each access)
+        if self._cached_tools is None:
+            tools = [self.ui_takeover, self.approve]
+            # Mark HITL tools as requiring unlocked actuator context
+            for human_tool in tools:
+                human_tool.requires_unlocked_actuator_context = True  # type: ignore[attr-defined]
+            self._cached_tools = tools
+        return self._cached_tools
 
 
 class ApprovalResponse(Enum):

@@ -13,19 +13,20 @@
 # limitations under the License.
 """Show command for Nova Act CLI workflows."""
 
+from __future__ import annotations
+
 import sys
+from typing import TYPE_CHECKING
 
 import click
-from boto3 import Session
 
 from nova_act.cli.core.exceptions import WorkflowError
-from nova_act.cli.core.identity import auto_detect_account_id
-from nova_act.cli.core.region import get_default_region
 from nova_act.cli.core.styling import command, header, secondary, styled_error_exception, value
-from nova_act.cli.core.types import WorkflowInfo
 from nova_act.cli.workflow.utils.arn import extract_workflow_definition_name_from_arn
 from nova_act.cli.workflow.utils.console import build_nova_act_workflow_console_url
-from nova_act.cli.workflow.workflow_manager import WorkflowManager
+
+if TYPE_CHECKING:
+    from nova_act.cli.core.types import WorkflowInfo
 
 
 def _display_workflow_info(workflow_info: WorkflowInfo, region: str) -> None:
@@ -58,6 +59,13 @@ def _display_workflow_info(workflow_info: WorkflowInfo, region: str) -> None:
 def show(name: str, region: str | None = None) -> None:
     """Show detailed information about a workflow."""
     try:
+        # Lazy-import heavy dependencies at call site
+        from boto3 import Session
+
+        from nova_act.cli.core.identity import auto_detect_account_id
+        from nova_act.cli.core.region import get_default_region
+        from nova_act.cli.workflow.workflow_manager import WorkflowManager
+
         # Create session at command boundary
         session = Session()
 

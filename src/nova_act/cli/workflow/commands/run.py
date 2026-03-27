@@ -13,29 +13,18 @@
 # limitations under the License.
 """Run command for Nova Act CLI."""
 
+from __future__ import annotations
+
 import json
 import time
 from datetime import datetime, timezone
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 import click
-from boto3 import Session
-from botocore.exceptions import ClientError, NoCredentialsError, ReadTimeoutError
 
-from nova_act.cli.core.clients.agentcore.client import AgentCoreClient
 from nova_act.cli.core.clients.agentcore.constants import DEFAULT_READ_TIMEOUT
-from nova_act.cli.core.error_detection import (
-    extract_operation_name,
-    extract_permission_from_error,
-    get_credential_error_message,
-    get_permission_error_message,
-    is_permission_error,
-)
-from nova_act.cli.core.exceptions import ConfigurationError, RuntimeError, ValidationError
-from nova_act.cli.core.identity import auto_detect_account_id
+from nova_act.cli.core.exceptions import ConfigurationError, ExecutionError, ValidationError
 from nova_act.cli.core.logging import get_follow_command, get_live_tail_command, get_since_command
-from nova_act.cli.core.region import get_default_region
-from nova_act.cli.core.state_manager import StateManager
 from nova_act.cli.core.styling import (
     header,
     secondary,
@@ -44,30 +33,32 @@ from nova_act.cli.core.styling import (
     value,
     warning,
 )
+from nova_act.cli.workflow.commands.error_handlers import handle_client_error, handle_credential_error
 from nova_act.cli.workflow.utils.arn import extract_workflow_definition_name_from_arn
 from nova_act.cli.workflow.utils.console import build_nova_act_workflow_console_url
-from nova_act.cli.workflow.utils.log_tailer import LogEvent, LogTailer
+
+if TYPE_CHECKING:
+    from boto3 import Session
+
+    from nova_act.cli.core.clients.agentcore.client import AgentCoreClient
+    from nova_act.cli.workflow.utils.log_tailer import LogEvent, LogTailer
 
 
-def _handle_credential_error() -> None:
-    """Handle AWS credential errors."""
-    raise styled_error_exception(get_credential_error_message())
+def _inject_workflow_name(payload: str, workflow_name: str) -> str:
+    """Inject NOVA_ACT_WORKFLOW_NAME into payload if not already present.
 
-
-def _handle_client_error(error: ClientError, workflow_name: str, region: str, account_id: str) -> None:
-    """Handle AWS ClientError with permission detection."""
-    if is_permission_error(error=error):
-        operation = extract_operation_name(error=error)
-        permission = extract_permission_from_error(error=error)
-        message = get_permission_error_message(
-            operation=operation,
-            workflow_name=workflow_name,
-            region=region,
-            account_id=account_id,
-            permission=permission,
-        )
-        raise styled_error_exception(message=message)
-    raise styled_error_exception(message=f"AWS error during workflow execution: {str(error)}")
+    User-specified NOVA_ACT_WORKFLOW_NAME takes precedence and is never overridden.
+    If payload is not a JSON object, returns it unchanged.
+    """
+    try:
+        payload_dict = json.loads(s=payload)
+    except json.JSONDecodeError:
+        return payload
+    if not isinstance(payload_dict, dict):
+        return payload
+    if "NOVA_ACT_WORKFLOW_NAME" not in payload_dict:
+        payload_dict["NOVA_ACT_WORKFLOW_NAME"] = workflow_name
+    return json.dumps(obj=payload_dict)
 
 
 def _resolve_payload(payload_file: str, payload: str) -> str:
@@ -96,6 +87,8 @@ def _resolve_payload(payload_file: str, payload: str) -> str:
 
 def _get_agent_arn(session: Session, name: str, region: str, account_id: str) -> str:
     """Get agent ARN for workflow from configuration."""
+    from nova_act.cli.core.state_manager import StateManager
+
     state_manager = StateManager(account_id=account_id, region=region)
     state = state_manager.get_region_state()
 
@@ -166,6 +159,9 @@ def _execute_workflow(
     timeout: int = DEFAULT_READ_TIMEOUT,
 ) -> str:
     """Execute workflow with AgentCore client."""
+    from nova_act.cli.core.clients.agentcore.client import AgentCoreClient
+    from nova_act.cli.core.state_manager import StateManager
+
     state_manager = StateManager(account_id=account_id, region=region)
     state = state_manager.get_region_state()
     workflow_info = state.workflows.get(name)
@@ -200,6 +196,8 @@ def _execute_workflow(
 
 def _start_log_tailing(session: Session, client: AgentCoreClient, agent_arn: str, region: str) -> LogTailer:
     """Start log tailing for the given agent."""
+    from nova_act.cli.workflow.utils.log_tailer import LogTailer
+
     runtime_log_group, _ = client.get_agent_log_groups(agent_arn=agent_arn)
     tailer = LogTailer(session=session, region=region, log_group=runtime_log_group)
     tailer.start(callback=_create_log_callback())
@@ -210,6 +208,7 @@ def _start_log_tailing(session: Session, client: AgentCoreClient, agent_arn: str
 
 def _create_log_callback() -> Callable[[LogEvent], None]:
     """Create callback function for log events."""
+    from nova_act.cli.workflow.utils.log_tailer import LogEvent
 
     def log_callback(log_event: LogEvent) -> None:
         timestamp = datetime.fromtimestamp(log_event.timestamp / 1000, tz=timezone.utc)
@@ -237,12 +236,20 @@ def run(
 ) -> None:
     """Execute workflow on AgentCore Runtime."""
     try:
+        # Lazy-import heavy dependencies at call site
+        from boto3 import Session
+        from botocore.exceptions import ClientError, NoCredentialsError, ReadTimeoutError
+
+        from nova_act.cli.core.identity import auto_detect_account_id
+        from nova_act.cli.core.region import get_default_region
+
         # Create session at command boundary
         session = Session()
 
         resolved_region = region or get_default_region()
         account_id = auto_detect_account_id(session=session, region=resolved_region)
         resolved_payload = _resolve_payload(payload_file=payload_file, payload=payload)
+        resolved_payload = _inject_workflow_name(payload=resolved_payload, workflow_name=name)
         _execute_workflow(
             session=session,
             name=name,
@@ -255,7 +262,7 @@ def run(
         click.echo()
 
     except NoCredentialsError:
-        _handle_credential_error()
+        handle_credential_error()
 
     except ReadTimeoutError:
         message = (
@@ -267,9 +274,11 @@ def run(
         raise styled_error_exception(message=message)
 
     except ClientError as e:
-        _handle_client_error(error=e, workflow_name=name, region=resolved_region, account_id=account_id)
+        handle_client_error(
+            error=e, workflow_name=name, region=resolved_region, account_id=account_id, context="workflow execution"
+        )
 
-    except (ValidationError, RuntimeError, ConfigurationError) as e:
+    except (ValidationError, ExecutionError, ConfigurationError) as e:
         raise styled_error_exception(message=str(e))
 
     except Exception as e:

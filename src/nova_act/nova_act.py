@@ -38,7 +38,7 @@ from nova_act.impl.inputs import (
     validate_timeout,
 )
 from nova_act.impl.run_info_compiler import RunInfoCompiler
-from nova_act.tools.actuator.interface.actuator import ActionType
+from nova_act.tools.actuator.interface.actuator import ActionType, ActuatorBase
 from nova_act.tools.browser.default.default_nova_local_browser_actuator import (
     DefaultNovaLocalBrowserActuator,
 )
@@ -86,6 +86,7 @@ from nova_act.util.logging import (
     get_session_id_prefix,
     make_trace_logger,
     set_logging_session,
+    set_session_logs_directory,
     setup_logging,
     trace_log_lines,
 )
@@ -145,7 +146,7 @@ class NovaAct:
         cdp_use_existing_page: bool = False,
         chrome_channel: str | None = None,
         clone_user_data_dir: bool = True,
-        actuator: ManagedActuatorType | BrowserActuatorBase = DefaultNovaLocalBrowserActuator,
+        actuator: ManagedActuatorType | ActuatorBase = DefaultNovaLocalBrowserActuator,
         go_to_url_timeout: int | None = None,
         headless: bool = False,
         ignore_https_errors: bool = False,
@@ -169,6 +170,7 @@ class NovaAct:
         human_input_callbacks: HumanInputCallbacksBase | None = None,
         tools: list[ActionType] | None = None,
         workflow: Workflow | None = None,
+        replayable: bool = False,
     ):
         """Initialize a client object.
 
@@ -260,6 +262,9 @@ class NovaAct:
             made.
         tools: list[ActionType] | None = None,
             A list of client provided tools.
+        replayable: bool
+            When enabled, stores Act trajectory information during memory so that it may be serialized
+            and replayed. Defaults to False. Can also be enabled with NOVA_ACT_REPLAYABLE environment variable.
         """
         self._workflow_run: WorkflowRun | None = None
 
@@ -268,6 +273,7 @@ class NovaAct:
             security_options = SecurityOptions()
 
 
+        self._replayable = replayable or "NOVA_ACT_REPLAYABLE" in os.environ
         self._workflow: Workflow | None = None
         self._set_workflow(workflow)
 
@@ -304,7 +310,10 @@ class NovaAct:
 
         self._nova_act_api_key = nova_act_api_key or os.environ.get("NOVA_ACT_API_KEY")
 
-        self._validate_authentication(scripted_api_key=nova_act_api_key)
+        is_local = False
+
+        if not is_local:
+            self._validate_authentication(scripted_api_key=nova_act_api_key)
 
         self._backend, self._workflow = BackendFactory.create_backend(
             api_key=self._nova_act_api_key,
@@ -416,13 +425,14 @@ class NovaAct:
         self._cdp_endpoint_url = cdp_endpoint_url
         self._allowed_file_open_paths = security_options.allowed_file_open_paths
 
-        self._actuator: BrowserActuatorBase
+        self._actuator: ActuatorBase
         self._dispatcher: ActDispatcher
 
         self._event_callback = None
 
         self._event_handler = EventHandler(self._event_callback)
         self._controller = NovaStateController(self._tty)
+
 
         if isinstance(actuator, type):
             if issubclass(actuator, DefaultNovaLocalBrowserActuator):
@@ -433,9 +443,11 @@ class NovaAct:
                         " and I/O formats may impact model performance"
                     )
                 _LOGGER.debug(f"Using a DefaultNovaLocalBrowserActuator: {actuator.__name__}")
+                _save_dom = self._replayable
                 self._actuator = actuator(
                     playwright_options=playwright_options,
                     state_guardrail=state_guardrail,
+                    save_dom=_save_dom,
                 )
             else:
                 raise ValidationFailed(
@@ -466,6 +478,7 @@ class NovaAct:
             human_input_callbacks=self._human_input_callbacks,
             tools=self._client_tools,
             state_guardrail=state_guardrail,
+            actuator=self._actuator,
         )
 
 
@@ -617,11 +630,15 @@ class NovaAct:
 
     def go_to_url(self, url: str) -> None:
         """Navigates to the specified URL and waits for the page to settle."""
-
         validate_url(url, allowed_file_open_paths=self._allowed_file_open_paths, state_guardrail=self._state_guardrail)
 
         if not self.started or self._session_id is None:
             raise ClientNotStarted("Run start() to start the client before running go_to_url")
+
+        if not isinstance(self._actuator, BrowserActuatorBase):
+            raise ValidationFailed(
+                "The 'go_to_url(...)' method is only available if the provided actuator is of type BrowserActuatorBase"
+            )
 
         self._actuator.go_to_url(url)
         self._actuator.wait_for_page_to_settle()
@@ -696,6 +713,8 @@ class NovaAct:
 
             set_logging_session(self._session_id)
             self._session_logs_directory = self._init_session_logs_directory(self._logs_directory, self._session_id)
+            if self._session_logs_directory:
+                set_session_logs_directory(self._session_logs_directory)
 
             actuator_type: Literal["custom", "playwright"]
             actuator_type = "playwright" if isinstance(self._actuator, DefaultNovaLocalBrowserActuator) else "custom"
@@ -965,7 +984,7 @@ class NovaAct:
 
 
         assert self._session_id is not None, "Session ID should not be None when client is started"
-        act_id = self._backend.create_act(self._workflow_run, self._session_id, prompt, self._server_tools.copy())
+        act_id = self._backend.create_act(self._workflow_run, self._session_id, prompt, self._server_tools)
         act = Act(
             id=act_id,
             prompt=prompt,
@@ -978,6 +997,7 @@ class NovaAct:
             observation_delay_ms=observation_delay_ms,
             workflow_run=self._workflow_run,
             ignore_screen_dims_check=self.ignore_screen_dims_check,
+            replayable=self._replayable,
         )
         if len(prompt) > MAX_ACT_TRACE_LEN:
             prompt_trace = f"...{prompt[:MAX_ACT_TRACE_LEN-3]}"

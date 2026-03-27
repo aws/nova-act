@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import base64
-import dataclasses
 import html
 import io
 import json
@@ -22,15 +21,18 @@ import secrets
 from urllib.parse import urlparse
 
 from PIL import Image, ImageDraw
-from typing_extensions import TypedDict
 
+from nova_act.__version__ import VERSION
+from nova_act.impl.program.base import CallResult
+from nova_act.impl.trajectory.types import Trajectory, TrajectoryMetadata, TrajectoryStep
 from nova_act.types.act_errors import ActInvalidModelGenerationError
 from nova_act.types.act_metadata import ActMetadata, _format_duration
 from nova_act.types.act_result import ActResult
-from nova_act.types.api.step import StepObjectInput, StepObjectOutput
 from nova_act.types.api.trace import ExternalTraceDict
 from nova_act.types.errors import ValidationFailed
 from nova_act.types.state.act import Act
+from nova_act.types.state.step import StepWithProgram
+from nova_act.types.workflow_run import WorkflowRun
 from nova_act.util.logging import setup_logging
 
 HTML_TEMPLATE = """<!DOCTYPE html>
@@ -444,26 +446,6 @@ _IMAGE_PREFIX_MATCHER = re.compile(r"^data:image/[^;]+;base64,(.+)$")
 _LOGGER = setup_logging(__name__)
 
 
-class EmptyRequest(TypedDict):
-    """An empty request."""
-
-
-class StepInfo(TypedDict):
-    """Information on a /step request/response."""
-
-    request: StepObjectInput | EmptyRequest
-    response: StepObjectOutput | None
-    screenshotWithBbox: str | None
-
-
-@dataclasses.dataclass
-class StepExtractionOutput:
-    """Output structure for step extraction."""
-
-    steps: list[StepInfo]
-    metadata: ActMetadata
-
-
 def _save_image_as_jpeg_base64(pil_image: Image.Image, image_bytes_io: io.BytesIO) -> str:
     """Save PIL image as JPEG and return base64-encoded data URI."""
     pil_image.save(image_bytes_io, format="JPEG")
@@ -520,8 +502,71 @@ def sanitize_url(url: str) -> str:
     return url
 
 
+def _get_tool_call_results(call_results: list[CallResult] | None) -> list[CallResult]:
+    """Filter call_results to only tool calls (excludes internal calls like takeObservation).
+
+    Used by both the HTML report and JSON log paths. The JSON path further serializes these
+    to plain dicts because CallResult contains a Pydantic BaseModel (Call) and Exception,
+    neither of which are JSON-serializable by default.
+    """
+    if not call_results:
+        return []
+    return [cr for cr in call_results if cr.call.is_tool]
+
+
+def _format_call_results_html(call_results: list[CallResult] | None) -> str:
+    """Format tool call results as an HTML block for the step report."""
+    if not call_results:
+        return ""
+
+    items = []
+    for cr in call_results:
+        name = html.escape(cr.call.name)
+        # Format kwargs compactly
+        kwargs_parts = []
+        for k, v in cr.call.kwargs.items():
+            v_str = html.escape(str(v))
+            if len(v_str) > 2048:
+                v_str = v_str[:2045] + "..."
+            kwargs_parts.append(f'<span style="color:#666;">{html.escape(k)}=</span>"{v_str}"')
+        kwargs_html = ", ".join(kwargs_parts)
+
+        if cr.error:
+            result_html = f'<span style="color:#d32f2f;">ERROR: {html.escape(str(cr.error))}</span>'
+        elif cr.return_value is not None:
+            rv_str = html.escape(str(cr.return_value))
+            if len(rv_str) > 2048:
+                rv_str = rv_str[:2045] + "..."
+            result_html = f'<div style="white-space:pre-wrap;word-wrap:break-word;margin-top:4px;">{rv_str}</div>'
+        else:
+            result_html = '<span style="color:#999;">None</span>'
+
+        items.append(f"""
+            <div style="background:#f4f4f4;border-left:3px solid #4caf50;
+                border-radius:4px;padding:8px 10px;margin-bottom:6px;">
+                <div style="font-weight:bold;font-size:13px;margin-bottom:4px;">
+                    <span style="color:#1565c0;">{name}</span>({kwargs_html})
+                </div>
+                <div style="font-size:13px;color:#333;">
+                    <span style="font-weight:bold;color:#666;">↳ </span>{result_html}
+                </div>
+            </div>""")
+
+    return f"""
+        <div style="grid-column:1/-1;">
+            <div style="margin-bottom:4px;font-weight:bold;">Tool Results</div>
+            {"".join(items)}
+        </div>"""
+
+
 def format_run_info(
-    steps: int, url: str, time: str, image: str, response: str, server_time_s: float | None = None
+    steps: int,
+    url: str,
+    time: str,
+    image: str,
+    response: str,
+    server_time_s: float | None = None,
+    call_results: list[CallResult] | None = None,
 ) -> str:
     image = _add_bbox_to_image(image, response)
 
@@ -543,6 +588,8 @@ def format_run_info(
                 </div>
             </div>"""
 
+    call_results_html = _format_call_results_html(call_results)
+
     return f"""
        <div class="run-step-container">
             <div class="step-header">
@@ -557,6 +604,7 @@ def format_run_info(
                         background-color: lightblue;
                         width: 100%;">
                     <pre style="height: fit-content;">{escaped_response}</pre>
+                    {call_results_html}
                     <div>
                         <div style="margin-bottom: 4px;font-weight: bold;">Timestamp</div>
                         <div>{escaped_time}</div>
@@ -596,96 +644,6 @@ def _write_html_file(session_logs_directory: str, file_name_prefix: str, html_co
         return ""
 
 
-def _extract_step_info(act: Act, result: ActResult | None = None) -> StepExtractionOutput:
-    """
-    Extract request/response data from act steps with time worked.
-
-    Args:
-        act: Act object containing steps
-        result: ActResult object containing metadata (optional)
-
-    Returns:
-        Dictionary with steps list and metadata including time worked
-    """
-    step_info_list = []
-    for step in act.steps:
-        request: StepObjectInput | EmptyRequest = {}
-        screenshot_with_bbox = None
-        if step.model_input:
-            request = StepObjectInput(
-                screenshot=step.model_input.image,
-                prompt=step.model_input.prompt,
-                metadata={"activeURL": step.model_input.active_url},
-            )
-            screenshot_with_bbox = _add_bbox_to_image(
-                step.model_input.image, step.model_output.awl_raw_program if step.model_output else ""
-            )
-        step_data = StepInfo(
-            request=request,
-            response=(
-                StepObjectOutput(
-                    program=step.model_output.program_ast,
-                    rawProgramBody=step.model_output.awl_raw_program,
-                    requestId=step.model_output.request_id,
-                )
-                if step.model_output
-                else None
-            ),
-            screenshotWithBbox=screenshot_with_bbox,
-        )
-        step_info_list.append(step_data)
-
-    # Create wrapper with metadata using ActMetadata
-    metadata = ActMetadata(
-        session_id=act.session_id,
-        act_id=act.id,
-        num_steps_executed=len(act.steps),
-        start_time=act.start_time,
-        end_time=act.end_time,
-        prompt=act.prompt,
-        step_server_times_s=[],
-        time_worked_s=result.metadata.time_worked_s if result else None,
-        human_wait_time_s=result.metadata.human_wait_time_s if result else 0.0,
-    )
-
-    output = StepExtractionOutput(
-        steps=step_info_list,
-        metadata=metadata,
-    )
-
-    return output
-
-
-def _write_calls_json_file(
-    session_logs_directory: str, file_name_prefix: str, act: Act, result: ActResult | None = None
-) -> None:
-    """
-    Write request/response calls to a JSON file.
-
-    Args:
-        session_logs_directory: Directory to write the file to
-        file_name_prefix: Prefix for the file name
-        act: Act object containing steps
-        result: ActResult object containing metadata (optional)
-    """
-    try:
-        request_response_file_name = f"{file_name_prefix}_calls.json"
-        json_file_path = os.path.join(session_logs_directory, request_response_file_name)
-
-        step_info = _extract_step_info(act, result)
-
-        output_dict = dataclasses.asdict(step_info)
-        # Convert to dict and filter out None time_worked_s and zero human_wait_time_s
-        if output_dict["metadata"]["time_worked_s"] is None:
-            del output_dict["metadata"]["time_worked_s"]
-            del output_dict["metadata"]["human_wait_time_s"]
-
-        with open(json_file_path, "w", encoding="utf-8") as f:
-            json.dump(output_dict, f, indent=2)
-    except OSError as e:
-        _LOGGER.warning(f"Failed to write request/response data to file {json_file_path}: {e}")
-
-
 def _extract_step_traces(act: Act) -> list[ExternalTraceDict | None]:
     """
     Extract trace data from act steps.
@@ -723,6 +681,40 @@ def _write_traces_json_file(session_logs_directory: str, file_name_prefix: str, 
                 json.dump(step_traces, f, indent=2)
     except OSError as e:
         _LOGGER.warning(f"Failed to write trace data to file {json_file_path}: {e}")
+
+
+def dump_trajectory_string(steps: list[StepWithProgram], metadata: ActMetadata, workflow: WorkflowRun | None) -> str:
+    """Build a trajectory JSON string from act steps and metadata."""
+    if not steps:
+        raise ValueError("Cannot serialize an empty trajectory.")
+    trajectory_steps: list[TrajectoryStep] = [
+        TrajectoryStep(
+            active_url=step.model_input.active_url,
+            image=step.model_input.image,
+            simplified_dom=step.model_input.simplified_dom,
+            program=step.program,
+        )
+        for step in steps
+    ]
+    trajectory_metadata = TrajectoryMetadata(
+        session_id=metadata.session_id,
+        act_id=metadata.act_id,
+        num_steps_executed=metadata.num_steps_executed,
+        start_time=metadata.start_time,
+        end_time=metadata.end_time,
+        prompt=metadata.prompt,
+        step_server_times_s=metadata.step_server_times_s,
+        time_worked_s=metadata.time_worked_s,
+        human_wait_time_s=metadata.human_wait_time_s,
+        workflow_definition_name=workflow.workflow_definition_name if workflow else None,
+        workflow_run_id=workflow.workflow_run_id if workflow else None,
+    )
+    return Trajectory(
+        sdk_version=VERSION,
+        prompt=metadata.prompt,
+        steps=trajectory_steps,
+        metadata=trajectory_metadata,
+    ).model_dump_json()
 
 
 class RunInfoCompiler:
@@ -772,6 +764,8 @@ class RunInfoCompiler:
 
         run_info = ""
         for i, step in enumerate(act.steps):
+            tool_results = _get_tool_call_results(step.model_input.call_results)
+            step_call_results: list[CallResult] | None = tool_results or None
             run_info += format_run_info(
                 steps=i + 1,
                 url=step.model_input.active_url,
@@ -779,6 +773,7 @@ class RunInfoCompiler:
                 image=step.model_input.image,
                 response=step.model_output.awl_raw_program,
                 server_time_s=step.server_time_s,
+                call_results=step_call_results,
             )
         if result is not None:
             # Escape any HTML which might be in serialized ActResult string to avoid risk
@@ -823,9 +818,10 @@ class RunInfoCompiler:
 
         Args:
             act: Act object containing steps
+            result: Optional ActResult from the act execution
 
         Returns:
-            Path to the written HTML file
+            The HTML file path.
         """
         # Add prompt to the name
         prompt_filename_snippet = self._safe_filename(act.prompt, 30)
@@ -841,13 +837,17 @@ class RunInfoCompiler:
             html_content=html_content,
         )
 
-        # Write request/response calls JSON file
-        _write_calls_json_file(
-            session_logs_directory=self._session_logs_directory,
-            file_name_prefix=file_name_prefix,
-            act=act,
-            result=result,
-        )
+        # Write trajectory JSON file
+        if result is not None and result.metadata and result.metadata.trajectory_file_path and act.steps:
+            try:
+                metadata = result.metadata
+                trajectory_file_path = metadata.trajectory_file_path
+                if trajectory_file_path is not None:
+                    trajectory_json = dump_trajectory_string(act.steps, metadata, act.workflow_run)
+                    with open(trajectory_file_path, "w", encoding="utf-8") as f:
+                        f.write(trajectory_json)
+            except (OSError, ValueError) as e:
+                _LOGGER.warning(f"Failed to write trajectory to file: {e}")
 
         # Write trace JSON file
         _write_traces_json_file(

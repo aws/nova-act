@@ -23,7 +23,7 @@ from nova_act.impl.inputs import validate_viewport_dimensions
 from nova_act.impl.program.base import Call, Program
 from nova_act.impl.program.runner import ProgramRunner, format_return_value
 from nova_act.impl.thinker import Thinker
-from nova_act.tools.actuator.interface.actuator import ActionType
+from nova_act.tools.actuator.interface.actuator import ActionType, ActuatorBase
 from nova_act.tools.browser.default.util.image_helpers import get_source_image_from_data_url
 from nova_act.tools.browser.interface.types.agent_redirect_error import (
     AgentRedirectError,
@@ -37,7 +37,7 @@ from nova_act.types.act_errors import (
     ActExecutionError,
     ActTimeoutError,
 )
-from nova_act.types.act_metadata import ActMetadata
+from nova_act.types.act_metadata import ActMetadata, build_trajectory_file_path
 from nova_act.types.act_result import ActGetResult
 from nova_act.types.errors import ClientNotStarted
 from nova_act.types.events import EventType, LogType
@@ -49,6 +49,7 @@ from nova_act.util.human_wait_time_tracker import HumanWaitTimeTracker
 from nova_act.util.logging import (
     SessionState,
     get_session_id_prefix,
+    get_session_logs_directory,
     make_trace_logger,
     set_logging_session_state,
     setup_logging,
@@ -77,6 +78,14 @@ def _handle_act_fail(
                 human_wait_time = self._wait_time_tracker.get_total_wait_time_s()
                 time_worked = _calculate_time_worked(act.start_time, act.end_time, human_wait_time)
 
+                # Build trajectory path directly to avoid depending on
+                # act.metadata (which recomputes from current session state
+                # and could return a stale or mismatched path).
+                session_logs_dir = get_session_logs_directory()
+                trajectory_path = (
+                    build_trajectory_file_path(session_logs_dir, act.id, act.prompt) if session_logs_dir else None
+                )
+
                 # Create metadata with time worked for the error
                 e.metadata = ActMetadata(
                     session_id=act.session_id,
@@ -88,6 +97,7 @@ def _handle_act_fail(
                     prompt=act.prompt,
                     time_worked_s=time_worked,
                     human_wait_time_s=human_wait_time,
+                    trajectory_file_path=trajectory_path,
                 )
             else:
                 e.metadata = e.metadata or act.metadata
@@ -168,11 +178,13 @@ class ActDispatcher:
         human_input_callbacks: HumanInputCallbacksBase,
         tools: list[ActionType] | None = None,
         state_guardrail: GuardrailCallable | None = None,
+        actuator: ActuatorBase | None = None,
     ):
         self._backend = backend
         self._tools = (tools or []).copy()
         self._human_input_callbacks = human_input_callbacks
         self._tool_map = {tool.tool_name: tool for tool in self._tools}
+        self._actuator = actuator
 
         self._canceled = False
         self._event_handler = event_handler
@@ -180,6 +192,7 @@ class ActDispatcher:
         self._program_runner = ProgramRunner(
             self._event_handler,
             state_guardrail,
+            actuator=actuator,
         )
 
         # Create wait time tracker and inject into human input callbacks provider

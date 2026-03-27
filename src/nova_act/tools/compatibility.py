@@ -13,6 +13,7 @@
 # limitations under the License.
 """Safeguards for tools provided to Act service + model."""
 
+import copy
 from typing import TYPE_CHECKING, Union, cast
 from uuid import uuid4
 
@@ -90,6 +91,8 @@ def safe_tool_spec(tool_spec: ToolSpec) -> ToolSpec:
         return NovaToolSpec.from_strands(tool_spec).to_strands()
     except ValidationError as e:
         raise ValidationFailed(f"Received invalid ToolSpec from user-provided tool: {e.json()}") from e
+
+
 
 
 class NovaToolSpec(BaseModel):

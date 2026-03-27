@@ -1,0 +1,277 @@
+# Copyright 2025 Amazon Inc
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+from abc import abstractmethod
+
+from pydantic import JsonValue
+from strands import tool
+from typing_extensions import Self, final
+
+from nova_act.asyncio.tools.actuator.interface.actuator import ActionType, ActuatorBase
+from nova_act.tools.browser.interface.types.click_types import ClickOptions, ClickType
+from nova_act.tools.browser.interface.types.scroll_types import ScrollDirection
+from nova_act.types.api.step import Observation
+
+AGENT_CLICK_DESCRIPTION = "Clicks the center of the specified box."
+GO_TO_URL_DESCRIPTION = (
+    "Navigates to the specified URL. Use this only if the user explicitly asks you to visit a URL they provided."
+)
+AGENT_HOVER_DESCRIPTION = "Hovers the center of the specified box."
+AGENT_TYPE_DESCRIPTION = (
+    "Types the specified value into the element at the center of the specified box. "
+    "If desired, press enter after typing the string."
+)
+AGENT_SCROLL_DESCRIPTION = (
+    "Scrolls the element in the specified box in the specified direction. "
+    "Valid directions are up, down, left, and right."
+)
+
+
+class BrowserObservation(Observation):
+    """An Observation of a Browser Page.
+
+    Required fields:
+        activeURL: str
+        browserDimensions: BrowserDimensions
+        idToBboxMap: dict[int, BboxTLWH]
+        simplifiedDOM: str
+        timestamp_ms: int
+        userAgent: str
+        screenshotBase64: str
+
+    """
+
+    screenshotBase64: str
+
+
+class BrowserActionProvider:
+    """Provide the list of Actions for a BrowserActuatorBase implementation.
+
+    Provides two utilities:
+    1. Ensures that function signatures / descriptions are never modified during override
+       and exactly match the model's expected format.
+    2. Ensures the list of provided Actions exactly matches the model's expectation.
+
+    """
+
+    def __init__(self, actuator: "BrowserActuatorBase"):
+        self.actuator = actuator
+
+    @final
+    def provide(self) -> list[ActionType]:
+        """Provide Actions for a BrowserActuatorBase."""
+        return [
+            self.agent_click,
+            self.agent_hover,
+            self.agent_scroll,
+            self.agent_type,
+            self.go_to_url,
+            self._return,
+            self.think,
+            self.throw_agent_error,
+            self.wait,
+            self.wait_for_page_to_settle,
+            self.take_observation,
+        ]
+
+    @final
+    @tool(name="agentClick", description=AGENT_CLICK_DESCRIPTION)
+    async def agent_click(
+        self: Self, box: str, click_type: ClickType | None = None, click_options: ClickOptions | None = None
+    ) -> JsonValue:
+        """
+        Request parameters for clicking.
+
+        Args:
+            box: Bounding box string for the target UI element, formatted as "left,top,right,bottom".
+                Each coordinate must be an integer in [0, 1000], normalized to the current screenshot
+                (0 = left/top edge, 1000 = right/bottom edge). Require left <= right and top <= bottom.
+                You must include "<bbox>...</bbox>" wrappers.
+                Use "-1,-1,-1,-1" only as an explicit invalid/unknown sentinel.
+        """
+        return await self.actuator.agent_click(box, click_type, click_options)
+
+    @final
+    @tool(name="agentHover", description=AGENT_HOVER_DESCRIPTION)
+    async def agent_hover(self: Self, box: str) -> JsonValue:
+        """
+        Request parameters for hover.
+
+        Args:
+            box: Bounding box string for the target UI element, formatted as "left,top,right,bottom".
+                Each coordinate must be an integer in [0, 1000], normalized to the current screenshot
+                (0 = left/top edge, 1000 = right/bottom edge). Require left <= right and top <= bottom.
+                You must include "<bbox>...</bbox>" wrappers.
+                Use "-1,-1,-1,-1" only as an explicit invalid/unknown sentinel.
+        """
+        return await self.actuator.agent_hover(box)
+
+    @final
+    @tool(name="agentScroll", description=AGENT_SCROLL_DESCRIPTION)
+    async def agent_scroll(self: Self, direction: ScrollDirection, box: str, value: float | None = None) -> JsonValue:
+        """
+        Request parameters for scroll.
+
+        Args:
+            direction: up, down, left, or right
+            box: Bounding box string for the target UI element, formatted as "left,top,right,bottom".
+                Each coordinate must be an integer in [0, 1000], normalized to the current screenshot
+                (0 = left/top edge, 1000 = right/bottom edge). Require left <= right and top <= bottom.
+                You must include "<bbox>...</bbox>" wrappers.
+                Use "-1,-1,-1,-1" only as an explicit invalid/unknown sentinel.
+        """
+        return await self.actuator.agent_scroll(direction, box, value)
+
+    @final
+    @tool(name="agentType", description=AGENT_TYPE_DESCRIPTION)
+    async def agent_type(self: Self, value: str, box: str, pressEnter: bool = False) -> JsonValue:
+        """
+        Request parameters for type.
+
+        Args:
+            value: value to type into the element at the center of the specified box.
+            box: Bounding box string for the target UI element, formatted as "left,top,right,bottom".
+                Each coordinate must be an integer in [0, 1000], normalized to the current screenshot
+                (0 = left/top edge, 1000 = right/bottom edge). Require left <= right and top <= bottom.
+                You must include "<bbox>...</bbox>" wrappers.
+                Use "-1,-1,-1,-1" only as an explicit invalid/unknown sentinel.
+            press_enter: whether or not to press enter after typing the string
+        """
+        return await self.actuator.agent_type(value, box, pressEnter)
+
+    @final
+    @tool(name="goToUrl", description=GO_TO_URL_DESCRIPTION)
+    async def go_to_url(self: Self, url: str) -> JsonValue:
+        """
+        Request parameters for navigation.
+
+        Args:
+            url: Fully qualified URL to navigate to.
+        """
+        return await self.actuator.go_to_url(url)
+
+    @final
+    @tool(name="return")
+    def _return(self: Self, value: str | None) -> JsonValue:
+        """Complete execution of the task and return to the user.
+
+        Return can either be bare (no value) or a string literal.
+        """
+        return self.actuator._return(value)
+
+    @final
+    @tool(name="think")
+    def think(self: Self, value: str) -> JsonValue:
+        """Has no effect on the environment. Should be used for reasoning about the next action."""
+        return self.actuator.think(value)
+
+    @final
+    @tool(name="throw")
+    def throw_agent_error(self: Self, value: str) -> JsonValue:
+        """Used when the task requested by the user is not possible."""
+        return self.actuator.throw_agent_error(value)
+
+    @final
+    @tool(name="wait")
+    async def wait(self: Self, seconds: float) -> JsonValue:
+        """Pauses execution for the specified number of seconds."""
+        return await self.actuator.wait(seconds)
+
+    @final
+    @tool(name="waitForPageToSettle")
+    async def wait_for_page_to_settle(self: Self) -> JsonValue:
+        """Ensure the browser page is ready for the next Action."""
+        return await self.actuator.wait_for_page_to_settle()
+
+    @final
+    @tool(name="takeObservation")
+    async def take_observation(self: Self) -> BrowserObservation:
+        """Take an observation of the existing browser state."""
+        return await self.actuator.take_observation()
+
+
+class BrowserActuatorBase(ActuatorBase):
+    """
+    An Actuator for Browser use.
+
+    If an actuation method receives invalid arguments, it should raise ValueError. If it is not able to actuate due to
+    an execution error, it should raise RuntimeError.
+    """
+
+    domain = "browser-use"
+    _action_provider: BrowserActionProvider | None = None
+
+    @final
+    def list_actions(self) -> list[ActionType]:
+        """List the valid Actions this Actuator can take."""
+        if self._action_provider is None:
+            self._action_provider = BrowserActionProvider(self)
+        return self._action_provider.provide()
+
+    @abstractmethod
+    async def agent_click(
+        self,
+        box: str,
+        click_type: ClickType | None = None,
+        click_options: ClickOptions | None = None,
+    ) -> JsonValue:
+        """Clicks the center of the specified box."""
+
+    @abstractmethod
+    async def agent_hover(self, box: str) -> JsonValue:
+        """Hovers on the center of the specified box."""
+
+    @abstractmethod
+    async def agent_scroll(self, direction: ScrollDirection, box: str, value: float | None = None) -> JsonValue:
+        """Scrolls the element in the specified box in the specified direction.
+
+        Valid directions are up, down, left, and right.
+        """
+
+    @abstractmethod
+    async def agent_type(self, value: str, box: str, pressEnter: bool = False) -> JsonValue:
+        """Types the specified value into the element at the center of the
+        specified box.
+
+        If desired, the agent can press enter after typing the string.
+        """
+
+    @abstractmethod
+    async def go_to_url(self, url: str) -> JsonValue:
+        """Navigates to the specified URL."""
+
+    @abstractmethod
+    def _return(self, value: str | None) -> JsonValue:
+        """Complete execution of the task and return to the user.
+
+        Return can either be bare (no value) or a string literal."""
+
+    @abstractmethod
+    def think(self, value: str) -> JsonValue:
+        """Has no effect on the environment. Should be used for reasoning about the next action."""
+
+    @abstractmethod
+    def throw_agent_error(self, value: str) -> JsonValue:
+        """Used when the task requested by the user is not possible."""
+
+    @abstractmethod
+    async def wait(self, seconds: float) -> JsonValue:
+        """Pauses execution for the specified number of seconds."""
+
+    @abstractmethod
+    async def wait_for_page_to_settle(self) -> JsonValue:
+        """Ensure the browser page is ready for the next Action."""
+
+    @abstractmethod
+    async def take_observation(self) -> BrowserObservation:
+        """Take an observation of the existing browser state."""

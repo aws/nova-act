@@ -4,10 +4,11 @@ boto3>=1.42.1
 boto3-stubs
 cryptography
 fire
+injector
 install_playwright>=0.1.0,<1.0.0
 jsonschema
 mypy-boto3-s3
-numpy<=2.2.6
+numpy
 pandas
 pillow
 playwright>=1.54.0,<=1.56.0
@@ -15,6 +16,6 @@ pydantic>=2.10.6
 pytz
 requests
 retry
-strands-agents>=1.2.0,<=1.23.0
-strands-agents-tools<=0.2.19
+strands-agents>=1.2.0,<=1.29.0
+strands-agents-tools<=0.2.22
 tenacity

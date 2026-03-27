@@ -13,18 +13,36 @@
 # limitations under the License.
 """Generic Docker build operations."""
 
+import fnmatch
 import json
 import logging
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Set
+from typing import Callable, Set
 
 from nova_act.cli.core.constants import BUILD_DIR_PREFIX
 from nova_act.cli.core.exceptions import ImageBuildError
 
 logger = logging.getLogger(__name__)
+
+# Directories excluded from project copy during Docker build.
+# These are universally safe to exclude: version control, caches, virtual envs, and secrets.
+DEFAULT_EXCLUDE_DIRS: Set[str] = {
+    ".git",
+    "__pycache__",
+    "node_modules",
+    ".env",
+    ".venv",
+    "venv",
+    ".tox",
+    ".mypy_cache",
+    ".pytest_cache",
+}
+
+# File patterns excluded from project copy during Docker build.
+DEFAULT_EXCLUDE_FILE_PATTERNS: Set[str] = {"*.pyc", "*.pyo"}
 
 
 class DockerBuilder:
@@ -43,14 +61,14 @@ class DockerBuilder:
         logger.info(f"Template directory: {template_dir}")
 
         try:
-            self.build_dir = self._ensure_build_directory()
+            self.build_dir = self.ensure_build_directory()
             logger.info(f"Build context directory: {self.build_dir}")
 
-            self._prepare_build_dir(project_path=project_path, template_dir=template_dir)
-            self._build_docker_image()
+            self.prepare_build_dir(project_path=project_path, template_dir=template_dir)
+            self.build_docker_image()
 
             if self.original_build_dir is not None:
-                self._save_build_info_file(project_path)
+                self.save_build_info_file(project_path)
                 logger.info(f"Build artifacts preserved in: {self.build_dir}")
 
             logger.info(f"Docker build completed successfully: {self.image_tag}")
@@ -58,7 +76,7 @@ class DockerBuilder:
         finally:
             self._cleanup_if_needed()
 
-    def _ensure_build_directory(self) -> Path:
+    def ensure_build_directory(self) -> Path:
         """Create build directory."""
         if self.build_dir:
             if self.build_dir.exists() and not self.force:
@@ -67,7 +85,7 @@ class DockerBuilder:
             return self.build_dir
         return Path(tempfile.mkdtemp(prefix=BUILD_DIR_PREFIX))
 
-    def _prepare_build_dir(self, project_path: str, template_dir: Path) -> None:
+    def prepare_build_dir(self, project_path: str, template_dir: Path) -> None:
         """Prepare build directory with templates and project files."""
         # Copy template files first to let project files override
         self._copy_template_files(template_dir=template_dir)
@@ -113,31 +131,58 @@ class DockerBuilder:
         """Copy single file deployment."""
         assert self.build_dir is not None
         if project_file.name in template_files:
-            self._log_template_override_warning(filename=project_file.name)
+            logger.warning(f"Source file '{project_file.name}' will override template file")
         shutil.copy(src=project_file, dst=self.build_dir / project_file.name)
 
+    @staticmethod
+    def _should_exclude(name: str, is_dir: bool) -> bool:
+        """Check if a file or directory should be excluded from project copy."""
+        if is_dir:
+            return name in DEFAULT_EXCLUDE_DIRS
+        return any(fnmatch.fnmatch(name, pattern) for pattern in DEFAULT_EXCLUDE_FILE_PATTERNS)
+
+    @staticmethod
+    def _make_copytree_ignore() -> Callable[[str, list[str]], set[str]]:
+        """Create an ignore function for shutil.copytree that filters excluded patterns."""
+
+        def _ignore(directory: str, contents: list[str]) -> set[str]:
+            ignored: set[str] = set()
+            dir_path = Path(directory)
+            for name in contents:
+                is_dir = (dir_path / name).is_dir()
+                if DockerBuilder._should_exclude(name, is_dir):
+                    ignored.add(name)
+            return ignored
+
+        return _ignore
+
     def _copy_directory_contents(self, project_dir: Path, template_files: Set[str]) -> None:
-        """Copy directory contents, warning about template overrides."""
+        """Copy directory contents, excluding problematic dirs/files and warning about template overrides."""
         assert self.build_dir is not None
+        ignore_fn = self._make_copytree_ignore()
+
         for item in project_dir.iterdir():
+            if self._should_exclude(item.name, item.is_dir()):
+                logger.info(f"Excluding '{item.name}' from project copy")
+                continue
+
             if item.name in template_files:
-                self._log_template_override_warning(filename=item.name)
+                logger.warning(f"Source file '{item.name}' will override template file")
 
             if item.is_file():
                 shutil.copy(src=item, dst=self.build_dir / item.name)
             elif item.is_dir():
-                shutil.copytree(src=item, dst=self.build_dir / item.name, dirs_exist_ok=True)
+                shutil.copytree(src=item, dst=self.build_dir / item.name, dirs_exist_ok=True, ignore=ignore_fn)
 
-    def _log_template_override_warning(self, filename: str) -> None:
-        """Log warning about template file override."""
-        logger.warning(f"Source file '{filename}' will override template file")
-
-    def _build_docker_image(self) -> None:
+    def build_docker_image(self) -> None:
         """Build Docker image."""
         logger.info(f"Building Docker image: {self.image_tag}")
 
         try:
-            subprocess.run(["docker", "build", "-t", self.image_tag, str(self.build_dir)], check=True)
+            subprocess.run(
+                ["docker", "build", "--platform", "linux/arm64", "-t", self.image_tag, str(self.build_dir)],
+                check=True,
+            )  # nosec B607
             logger.info(f"Docker image built successfully: {self.image_tag}")
         except subprocess.CalledProcessError as e:
             logger.error(f"Docker build failed for image {self.image_tag}: {e}")
@@ -162,7 +207,7 @@ class DockerBuilder:
             logger.info(f"Cleaning up temporary build directory: {self.build_dir}")
             shutil.rmtree(self.build_dir)
 
-    def _save_build_info_file(self, project_path: str) -> None:
+    def save_build_info_file(self, project_path: str) -> None:
         """Save build information file."""
         assert self.build_dir is not None
         build_info = {"image_tag": self.image_tag, "project_path": project_path}

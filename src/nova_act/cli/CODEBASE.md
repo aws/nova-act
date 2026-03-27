@@ -167,7 +167,7 @@ class DeploymentError(NovaActCLIError)     # Deployment operation failures
 class ConfigurationError(NovaActCLIError)  # Configuration issues
 class WorkflowError(NovaActCLIError)       # Workflow operation failures
 class WorkflowNameArnMismatchError(WorkflowError)  # Workflow name/ARN mismatch
-class RuntimeError(NovaActCLIError)        # Runtime operation failures
+class ExecutionError(NovaActCLIError)        # Runtime execution operation failures
 class ImageBuildError(NovaActCLIError)     # ECR image build failures
 ```
 
@@ -549,7 +549,6 @@ class WorkflowManager:
     # Internal helpers
     def _ensure_workflow_definition_exists(name: str, s3_bucket_name: str | None, skip_s3_creation: bool) -> str | None
     def _recover_workflow_definition_if_needed(workflow: WorkflowInfo, s3_bucket_name: str | None, skip_s3_creation: bool) -> WorkflowInfo
-    def _extract_resource_name_from_arn(arn: str) -> str
     def _validate_workflow_name_matches_arn(workflow_name: str, arn: str) -> None
     def _validate_workflow_definition_exists(workflow_definition_arn: str) -> None
     def _create_export_config(custom_bucket_name: str | None = None) -> ExportConfig | None
@@ -669,7 +668,7 @@ class AgentCoreIAMRoleManager:
 **Purpose:** AgentCore workflow builder with Docker containerization
 **Interface:**
 ```python
-class AgentCoreImageBuilder:
+class BuildContextPreparer:
     def __init__(workflow_name: str, project_path: str, entry_point: str)
     def build_workflow_image(build_dir: Optional[str] = None, force: bool = False) -> str
 ```
@@ -759,7 +758,7 @@ def generate_workflow_tags(workflow_name: str) -> Dict[str, str]
 1. **AgentCoreSourceValidator** validates source directory and entry point
 2. **WorkflowDeployer** orchestrates the deployment:
    - Uses **AgentCoreDeploymentService** for AgentCore-specific deployment
-   - Uses **AgentCoreImageBuilder** to build container images
+   - Uses **BuildContextPreparer** to prepare build context for container images
    - Uses **ECRClient** to push images to ECR
    - Uses **AgentCoreClient** to create agent runtime
    - Uses **StateManager** to persist workflow state
@@ -791,7 +790,7 @@ def generate_workflow_tags(workflow_name: str) -> Dict[str, str]
 1. **CLI Input:** Click commands → parameter validation
 2. **Input Validation:** AgentCoreSourceValidator → validated source files
 3. **IAM Setup:** AgentCoreIAMRoleManager → execution role
-4. **Image Building:** AgentCoreImageBuilder → container image
+4. **Image Building:** BuildContextPreparer → container image
 5. **Image Storage:** ECRClient → ECR repository
 6. **Runtime Creation:** AgentCoreDeploymentService → AgentCore runtime
 7. **State Persistence:** StateManager → JSON state files

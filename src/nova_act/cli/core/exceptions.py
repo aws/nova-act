@@ -54,13 +54,19 @@ class WorkflowNameArnMismatchError(WorkflowError):
     pass
 
 
-class RuntimeError(NovaActCLIError):
-    """Raised when runtime operations fail."""
+class ExecutionError(NovaActCLIError):
+    """Raised when runtime execution operations fail."""
 
     pass
 
 
 class ImageBuildError(NovaActCLIError):
     """Raised when ECR image build operations fail."""
+
+    pass
+
+
+class CodeBuildError(NovaActCLIError):
+    """Raised when CodeBuild operations fail."""
 
     pass

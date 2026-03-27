@@ -13,18 +13,21 @@
 # limitations under the License.
 """Update command for Nova Act CLI workflows."""
 
-import click
-from boto3 import Session
+from __future__ import annotations
 
-from nova_act.cli.core.identity import auto_detect_account_id
-from nova_act.cli.core.region import get_default_region
+from typing import TYPE_CHECKING
+
+import click
+
 from nova_act.cli.core.styling import command, secondary, styled_error_exception, success, value
 from nova_act.cli.workflow.utils.arn import (
     extract_workflow_definition_name_from_arn,
     validate_workflow_definition_arn,
 )
 from nova_act.cli.workflow.utils.console import build_nova_act_workflow_console_url
-from nova_act.cli.workflow.workflow_manager import WorkflowManager
+
+if TYPE_CHECKING:
+    from nova_act.cli.workflow.workflow_manager import WorkflowManager
 
 
 def _validate_workflow_exists(name: str, region: str, workflow_manager: WorkflowManager) -> str:
@@ -68,6 +71,13 @@ def _display_update_success(name: str, region: str, old_arn: str, new_arn: str) 
 @click.option("--region", help="Region for WorkflowDefinition (defaults to config default_region)")
 def update(name: str, workflow_definition_arn: str, region: str | None = None) -> None:
     """Update an existing workflow's WorkflowDefinition ARN for a specific region."""
+    # Lazy-import heavy dependencies at call site
+    from boto3 import Session
+
+    from nova_act.cli.core.identity import auto_detect_account_id
+    from nova_act.cli.core.region import get_default_region
+    from nova_act.cli.workflow.workflow_manager import WorkflowManager
+
     # Create session at command boundary
     session = Session()
 

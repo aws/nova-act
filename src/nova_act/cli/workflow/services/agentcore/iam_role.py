@@ -41,9 +41,28 @@ class AgentCoreRoleCreator:
 
         if self.iam_client.role_exists(role_name=role_name):
             print(f"Using existing IAM role: {role_arn}")
+            self._reconcile_role_policies(role_name)
             return role_arn
 
         return self._create_role_with_policies(role_name=role_name, workflow_name=workflow_name)
+
+    def _reconcile_role_policies(self, role_name: str) -> None:
+        """Update trust policy and re-apply all inline policies on an existing role."""
+        trust_policy = self._build_trust_policy()
+
+        current_role = self.iam_client.get_role(role_name)
+        current_trust = current_role.Role.get("AssumeRolePolicyDocument", {})
+        trust_changed = json.dumps(current_trust, sort_keys=True) != json.dumps(trust_policy, sort_keys=True)
+
+        if trust_changed:
+            self.iam_client.update_assume_role_policy(
+                role_name=role_name,
+                policy_document=json.dumps(trust_policy),
+            )
+            print("Updated trust policy. Waiting for IAM propagation...")
+            time.sleep(10)
+
+        self._attach_inline_policies(role_name)
 
     def _create_role_with_policies(self, role_name: str, workflow_name: str) -> str:
         """Create IAM role with required policies for AgentCore."""
@@ -59,7 +78,6 @@ class AgentCoreRoleCreator:
         role_arn = str(response.Role["Arn"])
         print(f"Created IAM role: {role_arn}")
 
-        self._attach_managed_policies(role_name)
         self._attach_inline_policies(role_name)
 
         print(f"Attached all required permissions to role: {role_arn}")
@@ -69,7 +87,7 @@ class AgentCoreRoleCreator:
         return role_arn
 
     def _build_trust_policy(self) -> Dict[str, object]:
-        """Build trust policy for AgentCore service."""
+        """Build trust policy for AgentCore and CodeBuild services."""
         return {
             "Version": "2012-10-17",
             "Statement": [
@@ -80,17 +98,23 @@ class AgentCoreRoleCreator:
                     "Action": "sts:AssumeRole",
                     "Condition": {
                         "StringEquals": {"aws:SourceAccount": self.account_id},
-                        "ArnLike": {"aws:SourceArn": [f"arn:aws:bedrock-agentcore:{self.region}:{self.account_id}:*"]},
+                        "ArnLike": {"aws:SourceArn": f"arn:aws:bedrock-agentcore:{self.region}:{self.account_id}:*"},
                     },
-                }
+                },
+                {
+                    "Sid": "CodeBuildAssumeRolePolicy",
+                    "Effect": "Allow",
+                    "Principal": {"Service": "codebuild.amazonaws.com"},
+                    "Action": "sts:AssumeRole",
+                    "Condition": {
+                        "StringEquals": {"aws:SourceAccount": self.account_id},
+                        "ArnLike": {
+                            "aws:SourceArn": f"arn:aws:codebuild:{self.region}:{self.account_id}:project/nova-act-*"
+                        },
+                    },
+                },
             ],
         }
-
-    def _attach_managed_policies(self, role_name: str) -> None:
-        """Attach AWS managed policies to role."""
-        # No managed policies needed - removed AmazonBedrockFullAccess and AmazonAPIGatewayInvokeFullAccess
-        # Existing inline policies (ECR, CloudWatch, S3, BedrockAgentCore) provide sufficient permissions
-        pass
 
     def _attach_inline_policies(self, role_name: str) -> None:
         """Attach inline policies to role."""
@@ -112,8 +136,34 @@ class AgentCoreRoleCreator:
                 "Statement": [
                     {
                         "Effect": "Allow",
-                        "Action": ["ecr:GetAuthorizationToken", "ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer"],
+                        "Action": ["ecr:GetAuthorizationToken"],
                         "Resource": "*",
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "ecr:BatchGetImage",
+                            "ecr:GetDownloadUrlForLayer",
+                            "ecr:BatchCheckLayerAvailability",
+                            "ecr:CompleteLayerUpload",
+                            "ecr:InitiateLayerUpload",
+                            "ecr:PutImage",
+                            "ecr:UploadLayerPart",
+                        ],
+                        "Resource": f"arn:aws:ecr:{self.region}:{self.account_id}:repository/nova-act-*",
+                    },
+                ],
+            },
+            "CodeBuildPolicy": {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "codebuild:StartBuild",
+                            "codebuild:BatchGetBuilds",
+                        ],
+                        "Resource": f"arn:aws:codebuild:{self.region}:{self.account_id}:project/nova-act-*",
                     }
                 ],
             },

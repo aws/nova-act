@@ -13,9 +13,10 @@
 # limitations under the License.
 from __future__ import annotations
 
-from typing import NamedTuple, Optional, TypeVar, Union
+from typing import TYPE_CHECKING, NamedTuple, Optional, TypeVar, Union
 
 from nova_act.impl.backends.base import Endpoints
+
 from nova_act.impl.backends.starburst.backend import StarburstBackend
 from nova_act.impl.backends.sunburst.backend import SunburstBackend
 from nova_act.types.errors import AuthError
@@ -49,6 +50,7 @@ class BackendFactory:
 
         if workflow is not None:
             return BackendFactory.BackendResult(workflow.backend, workflow)
+
 
 
         BackendFactory._validate_auth(

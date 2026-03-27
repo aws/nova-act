@@ -55,3 +55,21 @@ class DeleteWorkflowDefinitionRequest(BaseModel):
 
 class DeleteWorkflowDefinitionResponse(BaseModel):
     pass
+
+
+class ListWorkflowDefinitionsRequest(BaseModel):
+    maxResults: int | None = None
+    nextToken: str | None = None
+    sortOrder: str | None = None
+
+
+class WorkflowDefinitionSummary(BaseModel):
+    workflowDefinitionArn: str
+    workflowDefinitionName: str
+    createdAt: datetime
+    status: str
+
+
+class ListWorkflowDefinitionsResponse(BaseModel):
+    workflowDefinitionSummaries: list[WorkflowDefinitionSummary]
+    nextToken: str | None = None

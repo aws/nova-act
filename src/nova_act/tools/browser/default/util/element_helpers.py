@@ -77,8 +77,7 @@ def blur(point: dict[str, float], page: Page) -> None:
             if (!elem) return null;
             elem.blur();
         }
-        """
-        % (DEEP_ELEMENT_FROM_POINT_JS,),
+        """ % (DEEP_ELEMENT_FROM_POINT_JS,),
         [point["x"], point["y"]],
     )
 
@@ -171,8 +170,7 @@ def recurse_through_iframes(page: Page, x: float, y: float, inner_js: str, retur
                 // Not an iframe — run the caller's custom JS logic.
                 %s
             }
-            """
-            % (DEEP_ELEMENT_FROM_POINT_JS, inner_js),
+            """ % (DEEP_ELEMENT_FROM_POINT_JS, inner_js),
             [current_x, current_y],
         )
 
@@ -302,8 +300,7 @@ def check_if_native_dropdown(page: Page, x: float, y: float) -> bool:
             if (!hitElement) return false;
             return !!findNearestSelect(hitElement);
         }
-        """
-        % (DEEP_ELEMENT_FROM_POINT_JS,),
+        """ % (DEEP_ELEMENT_FROM_POINT_JS,),
         [x, y],
     )
     return result
@@ -375,8 +372,7 @@ def is_element_focused(page: Page, x: float, y: float) -> FocusState:
             const hasMeaningfulFocus = activeElement !== document.body && activeElement !== document.documentElement;
             return { isFocusedXY, hasMeaningfulFocus };
         }
-        """
-        % (DEEP_ELEMENT_FROM_POINT_JS,),
+        """ % (DEEP_ELEMENT_FROM_POINT_JS,),
         [x, y],
     )
 

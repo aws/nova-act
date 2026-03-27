@@ -17,6 +17,7 @@ from dataclasses import dataclass
 
 from typing_extensions import NotRequired, TypedDict
 
+from nova_act.impl.program.base import CallResult
 from nova_act.types.api.trace import TraceDict
 
 # REQUEST TYPES
@@ -197,3 +198,4 @@ class StepObjectInput(TypedDict):
     prompt: str
     metadata: StepObjectInputMetadata
     agentRunCreate: NotRequired[AgentRunCreate]
+    callResults: NotRequired[list[CallResult]]

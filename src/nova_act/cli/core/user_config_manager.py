@@ -38,7 +38,7 @@ class UserConfigManager:
                 data = yaml.safe_load(f) or {}
             return UserConfigManager._load_user_config(data)
         except Exception as e:
-            raise ConfigurationError(f"Failed to load user config: {e}")
+            raise ConfigurationError(f"Failed to load user config: {e}") from e
 
     @staticmethod
     def save_config(config: UserConfig) -> None:
@@ -51,7 +51,7 @@ class UserConfigManager:
             with open(file=config_file, mode="w") as f:
                 yaml.dump(data=data, stream=f, default_flow_style=False, sort_keys=False)
         except Exception as e:
-            raise ConfigurationError(f"Failed to save user config: {e}")
+            raise ConfigurationError(f"Failed to save user config: {e}") from e
 
     @staticmethod
     def _create_default_config() -> UserConfig:

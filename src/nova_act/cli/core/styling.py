@@ -25,8 +25,12 @@ from nova_act.cli.core.user_config_manager import UserConfigManager
 logger = getLogger(__name__)
 
 
-def _initialize_theme() -> None:
-    """Initialize theme from config or environment."""
+def initialize_theme() -> None:
+    """Initialize theme from environment variable or user config.
+
+    Called once during CLI startup. Environment variable takes precedence
+    over user config. Falls back to default theme on any error.
+    """
     env_theme = os.environ.get(THEME_ENV_VAR)
     if env_theme:
         try:
@@ -49,10 +53,8 @@ def _initialize_theme() -> None:
                 theme_name = ThemeName.DEFAULT
             set_active_theme(theme_name)
     except Exception:
+        logger.debug("Failed to initialize theme, using default", exc_info=True)
         set_active_theme(DEFAULT_THEME)
-
-
-_initialize_theme()
 
 
 def info(message: str) -> None:
