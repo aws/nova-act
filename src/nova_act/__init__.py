@@ -18,21 +18,18 @@ import builtins
 import pdb
 import sys
 
+from pydantic import JsonValue as JSONType
 from strands import tool
 
 from nova_act.impl.common import rsync_from_default_user_data
 from nova_act.impl.extension import ExtensionActuator
-from nova_act.tools.human.interface.human_input_callback import (
-    HumanInputCallbacksProvider,
-)
-
-
-from pydantic import JsonValue as JSONType
-
 from nova_act.nova_act import NovaAct
 from nova_act.tools.browser.default.default_nova_local_browser_actuator import DefaultNovaLocalBrowserActuator
 from nova_act.tools.browser.interface.browser import BrowserActuatorBase
 from nova_act.tools.browser.interface.playwright_pages import PlaywrightPageManagerBase
+from nova_act.tools.human.interface.human_input_callback import (
+    HumanInputCallbacksProvider,
+)
 from nova_act.types.act_errors import (
     ActActuationError,
     ActAgentError,

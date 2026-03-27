@@ -22,6 +22,20 @@ from nova_act.tools.browser.interface.types.click_types import ClickOptions, Cli
 from nova_act.tools.browser.interface.types.scroll_types import ScrollDirection
 from nova_act.types.api.step import Observation
 
+AGENT_CLICK_DESCRIPTION = "Clicks the center of the specified box."
+GO_TO_URL_DESCRIPTION = (
+    "Navigates to the specified URL. Use this only if the user explicitly asks you to visit a URL they provided."
+)
+AGENT_HOVER_DESCRIPTION = "Hovers the center of the specified box."
+AGENT_TYPE_DESCRIPTION = (
+    "Types the specified value into the element at the center of the specified box. "
+    "If desired, press enter after typing the string."
+)
+AGENT_SCROLL_DESCRIPTION = (
+    "Scrolls the element in the specified box in the specified direction. "
+    "Valid directions are up, down, left, and right."
+)
+
 
 class BrowserObservation(Observation):
     """An Observation of a Browser Page.
@@ -71,42 +85,79 @@ class BrowserActionProvider:
         ]
 
     @final
-    @tool(name="agentClick")
+    @tool(name="agentClick", description=AGENT_CLICK_DESCRIPTION)
     def agent_click(
         self: Self, box: str, click_type: ClickType | None = None, click_options: ClickOptions | None = None
     ) -> JsonValue:
-        """Clicks the center of the specified box."""
+        """
+        Request parameters for clicking.
+
+        Args:
+            box: Bounding box string for the target UI element, formatted as "left,top,right,bottom".
+                Each coordinate must be an integer in [0, 1000], normalized to the current screenshot
+                (0 = left/top edge, 1000 = right/bottom edge). Require left <= right and top <= bottom.
+                You must include "<bbox>...</bbox>" wrappers.
+                Use "-1,-1,-1,-1" only as an explicit invalid/unknown sentinel.
+        """
         return self.actuator.agent_click(box, click_type, click_options)
 
     @final
-    @tool(name="agentHover")
+    @tool(name="agentHover", description=AGENT_HOVER_DESCRIPTION)
     def agent_hover(self: Self, box: str) -> JsonValue:
-        """Hovers on the center of the specified box."""
+        """
+        Request parameters for hover.
+
+        Args:
+            box: Bounding box string for the target UI element, formatted as "left,top,right,bottom".
+                Each coordinate must be an integer in [0, 1000], normalized to the current screenshot
+                (0 = left/top edge, 1000 = right/bottom edge). Require left <= right and top <= bottom.
+                You must include "<bbox>...</bbox>" wrappers.
+                Use "-1,-1,-1,-1" only as an explicit invalid/unknown sentinel.
+        """
         return self.actuator.agent_hover(box)
 
     @final
-    @tool(name="agentScroll")
+    @tool(name="agentScroll", description=AGENT_SCROLL_DESCRIPTION)
     def agent_scroll(self: Self, direction: ScrollDirection, box: str, value: float | None = None) -> JsonValue:
-        """Scrolls the element in the specified box in the specified direction.
+        """
+        Request parameters for scroll.
 
-        Valid directions are up, down, left, and right.
+        Args:
+            direction: up, down, left, or right
+            box: Bounding box string for the target UI element, formatted as "left,top,right,bottom".
+                Each coordinate must be an integer in [0, 1000], normalized to the current screenshot
+                (0 = left/top edge, 1000 = right/bottom edge). Require left <= right and top <= bottom.
+                You must include "<bbox>...</bbox>" wrappers.
+                Use "-1,-1,-1,-1" only as an explicit invalid/unknown sentinel.
         """
         return self.actuator.agent_scroll(direction, box, value)
 
     @final
-    @tool(name="agentType")
+    @tool(name="agentType", description=AGENT_TYPE_DESCRIPTION)
     def agent_type(self: Self, value: str, box: str, pressEnter: bool = False) -> JsonValue:
-        """Types the specified value into the element at the center of the
-        specified box.
+        """
+        Request parameters for type.
 
-        If desired, the agent can press enter after typing the string.
+        Args:
+            value: value to type into the element at the center of the specified box.
+            box: Bounding box string for the target UI element, formatted as "left,top,right,bottom".
+                Each coordinate must be an integer in [0, 1000], normalized to the current screenshot
+                (0 = left/top edge, 1000 = right/bottom edge). Require left <= right and top <= bottom.
+                You must include "<bbox>...</bbox>" wrappers.
+                Use "-1,-1,-1,-1" only as an explicit invalid/unknown sentinel.
+            press_enter: whether or not to press enter after typing the string
         """
         return self.actuator.agent_type(value, box, pressEnter)
 
     @final
-    @tool(name="goToUrl")
+    @tool(name="goToUrl", description=GO_TO_URL_DESCRIPTION)
     def go_to_url(self: Self, url: str) -> JsonValue:
-        """Navigates to the specifed URL."""
+        """
+        Request parameters for navigation.
+
+        Args:
+            url: Fully qualified URL to navigate to.
+        """
         return self.actuator.go_to_url(url)
 
     @final

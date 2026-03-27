@@ -94,7 +94,7 @@ def main(
     """Find apartments and calculate distance to transit station.
 
     Usage:
-    python -m nova_act.samples.apartments_transit_walking \
+    python -m nova_act.samples.search_apartments_calculate_commute \
         --apartment_url <apartment search website> \
         --maps_url <maps service website> \
         [--transit_city <city_with_a_transit_station>] \

@@ -22,10 +22,11 @@ from attrs import define, field
 from attrs.setters import frozen
 
 from nova_act.tools.actuator.interface.actuator import ActionType
-from nova_act.types.act_metadata import ActMetadata
+from nova_act.types.act_metadata import ActMetadata, build_trajectory_file_path
 from nova_act.types.act_result import ActGetResult
 from nova_act.types.state.step import StepWithProgram
 from nova_act.types.workflow_run import WorkflowRun
+from nova_act.util.logging import get_session_logs_directory
 
 DEFAULT_ACT_MAX_STEPS = 30
 
@@ -58,6 +59,7 @@ class Act:
     tools: list[ActionType] = field(factory=list)  # HITL + custom tools
     # Workflow context (immutable)
     workflow_run: WorkflowRun | None = field(default=None, on_setattr=frozen)
+    replayable: bool = field(default=False, on_setattr=frozen)
 
     # generate start_time on construction; make immutable
     start_time: float = field(factory=lambda: time.time(), on_setattr=frozen, init=False)
@@ -77,6 +79,10 @@ class Act:
 
     @property
     def metadata(self) -> ActMetadata:
+        session_logs_dir = get_session_logs_directory()
+        trajectory_path = (
+            build_trajectory_file_path(session_logs_dir, self.id, self.prompt) if session_logs_dir else None
+        )
         return ActMetadata(
             session_id=self.session_id,
             act_id=self.id,
@@ -85,6 +91,7 @@ class Act:
             end_time=self.end_time,
             step_server_times_s=self.get_step_server_times_s,
             prompt=self.prompt,
+            trajectory_file_path=trajectory_path,
         )
 
     @property
@@ -106,6 +113,7 @@ class Act:
         self._result = ActGetResult(
             response=response,
             metadata=self.metadata,
+            replayable=self.replayable,
         )
         # fmt: on
         self.is_complete = True

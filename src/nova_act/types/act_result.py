@@ -14,14 +14,18 @@
 from __future__ import annotations
 
 import dataclasses
+import io
 
 from pydantic import JsonValue
 
 from nova_act.types.act_metadata import ActMetadata
+from nova_act.util.logging import setup_logging
 
 """
 Successful outcome of act()
 """
+
+_LOGGER = setup_logging(__name__)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -29,12 +33,22 @@ class ActResult:
     """A result from act()."""
 
     metadata: ActMetadata
+    replayable: bool = False
+
+    @property
+    def trajectory_file_path(self) -> str | None:
+        """Get the trajectory file path. Emits a warning if replayable was not enabled."""
+        if not self.replayable:
+            _LOGGER.warning(
+                "trajectory_file_path is not available because replayable was not set to True "
+                "when creating the NovaAct session. Set replayable=True to enable trajectory recording."
+            )
+            return None
+        return self.metadata.trajectory_file_path
 
     def __repr__(self) -> str:
-        # Get all instance attributes except 'metadata' and 'steps_taken'
-        field_names = [
-            field.name for field in dataclasses.fields(self) if field.name not in ("metadata", "steps_taken")
-        ]
+        # Get all instance attributes except 'metadata'
+        field_names = [field.name for field in dataclasses.fields(self) if field.name not in ("metadata",)]
 
         # Get the values of those instance attributes
         field_values = [getattr(self, field) for field in field_names]
@@ -72,4 +86,5 @@ class ActGetResult(ActResult):
         """Convert to an ActResultWithoutResponse."""
         return ActResult(
             metadata=self.metadata,
+            replayable=self.replayable,
         )

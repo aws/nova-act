@@ -23,7 +23,7 @@ def safe_relative_path(path: str, base_dir: str) -> str:
     abs_base = os.path.abspath(base_dir)
 
     # Ensure the path is within the base directory
-    if not abs_path.startswith(abs_base + os.sep):
+    if not (abs_path == abs_base or abs_path.startswith(abs_base + os.sep)):
         raise InvalidPath(f"Path traversal attempt detected: {path}")
 
     return os.path.relpath(abs_path, abs_base)

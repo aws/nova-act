@@ -31,6 +31,7 @@ class SessionState(Enum):
 class SessionContext:
     id: str
     state: SessionState
+    logs_directory: str | None = None
 
     def trace_prefix(self, *, with_state_emoji: bool = False) -> str:
         return f"{self.id[-4:]}> {self.state.value if with_state_emoji else ''}"
@@ -68,6 +69,19 @@ def set_logging_session_state(state: SessionState) -> None:
     session_context = _session_context.get()
     if session_context is not None:
         session_context.state = state
+
+
+def set_session_logs_directory(path: str) -> None:
+    session_context = _session_context.get()
+    if session_context is not None:
+        session_context.logs_directory = path
+
+
+def get_session_logs_directory() -> str | None:
+    session_context = _session_context.get()
+    if session_context is None:
+        return None
+    return session_context.logs_directory
 
 
 _LOG_ENV_VAR = "NOVA_ACT_LOG_LEVEL"

@@ -12,8 +12,36 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import dataclasses
+import os
+import re
 from datetime import datetime
 from typing import Dict
+
+_FILENAME_SUB_RE = re.compile(r'[<>:"/\\|?*\x00-\x1F\s]')
+
+
+def _safe_filename(s: str, max_length: int) -> str:
+    """Replace invalid filename characters and whitespace with underscores."""
+    safe = _FILENAME_SUB_RE.sub("_", s)
+    safe = safe.strip("_")
+    return safe[:max_length]
+
+
+def build_trajectory_file_path(session_logs_directory: str, act_id: str, prompt: str) -> str:
+    """Build the trajectory file path for an act.
+
+    Args:
+        session_logs_directory: The directory where session logs are stored.
+        act_id: The act identifier.
+        prompt: The act prompt text.
+
+    Returns:
+        The full file path for the trajectory JSON file.
+    """
+    prompt_filename_snippet = _safe_filename(prompt, 30)
+    file_name_prefix = f"act_{act_id}_{prompt_filename_snippet}"
+    trajectory_file_name = f"{file_name_prefix}_trajectory.json"
+    return os.path.join(session_logs_directory, trajectory_file_name)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -27,6 +55,7 @@ class ActMetadata:
     step_server_times_s: list[float] = dataclasses.field(default_factory=list)
     time_worked_s: float | None = None
     human_wait_time_s: float = 0.0
+    trajectory_file_path: str | None = None
 
     def __repr__(self) -> str:
         local_tz = datetime.now().astimezone().tzinfo

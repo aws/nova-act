@@ -96,6 +96,7 @@ class PlaywrightInstanceManager:
         self._modifier_key = "ControlOrMeta"
         self._safe_site_validation_error: InvalidURL | InvalidCertificate | None = None
         self._ssl_hook_enabled = False
+        # Static flag: are we running in an interactive REPL? Never changes after init.
         self._is_interactive = detect_interactive_mode()
 
     @property
@@ -146,6 +147,10 @@ class PlaywrightInstanceManager:
         if self._ssl_hook_enabled:
             return
 
+        # Skip hook setup when ignore_https_errors is True.
+        if self._ignore_https_errors:
+            return
+
         def handle_navigation(route: Route) -> None:
             if route.request.is_navigation_request() and route.request.url:
                 try:
@@ -167,9 +172,13 @@ class PlaywrightInstanceManager:
         """Explicitly clear the stored SSL validation error."""
         self._safe_site_validation_error = None
 
-    def disable_ssl_validation_hook(self) -> None:
-        """Disable SSL validation for manual browsing."""
-        if self._context and self._ssl_hook_enabled and self._is_interactive:
+    def disable_ssl_validation_hook(self, force: bool = False) -> None:
+        """Disable SSL validation for manual browsing.
+
+        Args:
+            force: If True, disable even in non-interactive mode (for HITL).
+        """
+        if self._context and self._ssl_hook_enabled and (self._is_interactive or force):
             self._context.unroute_all(behavior="wait")
             self._ssl_hook_enabled = False
 
@@ -334,6 +343,7 @@ class PlaywrightInstanceManager:
                     context_options["record_video_dir"] = self._session_logs_directory
                     context_options["record_video_size"] = {"width": self.screen_width, "height": self.screen_height}
 
+
                 context = self._launch_browser(context_options)
                 trusted_page = context.pages[0]
 
@@ -367,16 +377,20 @@ class PlaywrightInstanceManager:
                         except OSError as e:
                             _LOGGER.error(f"An Unexpected error occured when renaming {video_path}: {e}")
 
-        if self._owns_context and self._context is not None and not self._owns_playwright:
+        _can_close_context = not self._owns_playwright
+
+        if self._owns_context and self._context is not None and _can_close_context:
             try:
                 self._context.close()
             except Exception as e:
                 _LOGGER.error(f"Error closing context: {e}")
-                try:
-                    if hasattr(self._context, "browser") and self._context.browser:
-                        self._context.browser.close()
-                except Exception:
-                    pass
+                if not self._owns_playwright:
+                    try:
+                        if hasattr(self._context, "browser") and self._context.browser:
+                            self._context.browser.close()
+                    except Exception:
+                        pass
+            self._context = None
 
         if self._launched_default_chrome_popen is not None:
             self._launched_default_chrome_popen.terminate()

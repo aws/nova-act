@@ -14,20 +14,9 @@
 """Create command for Nova Act CLI workflows."""
 
 import click
-from boto3 import Session
-from botocore.exceptions import ClientError, NoCredentialsError
 
 from nova_act.cli.core.config import get_state_file_path
-from nova_act.cli.core.error_detection import (
-    extract_operation_name,
-    extract_permission_from_error,
-    get_credential_error_message,
-    get_permission_error_message,
-    is_permission_error,
-)
 from nova_act.cli.core.exceptions import ConfigurationError, ValidationError, WorkflowError
-from nova_act.cli.core.identity import auto_detect_account_id
-from nova_act.cli.core.region import get_default_region
 from nova_act.cli.core.styling import (
     command,
     header,
@@ -36,30 +25,9 @@ from nova_act.cli.core.styling import (
     success,
     value,
 )
+from nova_act.cli.workflow.commands.error_handlers import handle_client_error, handle_credential_error
 from nova_act.cli.workflow.utils.arn import extract_workflow_definition_name_from_arn
 from nova_act.cli.workflow.utils.console import build_nova_act_workflow_console_url
-from nova_act.cli.workflow.workflow_manager import WorkflowManager
-
-
-def _handle_credential_error() -> None:
-    """Handle AWS credential errors."""
-    raise styled_error_exception(get_credential_error_message())
-
-
-def _handle_client_error(error: ClientError, workflow_name: str, region: str, account_id: str) -> None:
-    """Handle AWS ClientError with permission detection."""
-    if is_permission_error(error):
-        operation = extract_operation_name(error)
-        permission = extract_permission_from_error(error)
-        message = get_permission_error_message(
-            operation=operation,
-            workflow_name=workflow_name,
-            region=region,
-            account_id=account_id,
-            permission=permission,
-        )
-        raise styled_error_exception(message)
-    raise styled_error_exception(f"AWS error during workflow creation: {str(error)}")
 
 
 def _display_creation_success(workflow_definition_arn: str | None, name: str, region: str, account_id: str) -> None:
@@ -97,6 +65,14 @@ def create(
 ) -> None:
     """Register a new workflow in the configuration."""
     try:
+        # Lazy-import heavy dependencies at call site
+        from boto3 import Session
+        from botocore.exceptions import ClientError, NoCredentialsError
+
+        from nova_act.cli.core.identity import auto_detect_account_id
+        from nova_act.cli.core.region import get_default_region
+        from nova_act.cli.workflow.workflow_manager import WorkflowManager
+
         # Create session at command boundary
         session = Session()
 
@@ -119,10 +95,16 @@ def create(
         )
 
     except NoCredentialsError:
-        _handle_credential_error()
+        handle_credential_error()
 
     except ClientError as e:
-        _handle_client_error(error=e, workflow_name=name, region=effective_region, account_id=account_id)
+        handle_client_error(
+            error=e,
+            workflow_name=name,
+            region=effective_region,
+            account_id=account_id,
+            context="workflow creation",
+        )
 
     except (WorkflowError, ValidationError, ConfigurationError) as e:
         raise styled_error_exception(str(e))

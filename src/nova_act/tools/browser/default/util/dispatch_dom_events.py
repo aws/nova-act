@@ -42,7 +42,6 @@ def dispatch_event_sequence(page: Page, point: dict[str, float], events_config: 
                 element.dispatchEvent(new Event(event.type, event.init));
             }
         }
-        """
-        % (DEEP_ELEMENT_FROM_POINT_JS,),
+        """ % (DEEP_ELEMENT_FROM_POINT_JS,),
         {"point": point, "eventsConfig": events_config},
     )

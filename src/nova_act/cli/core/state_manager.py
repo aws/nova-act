@@ -99,7 +99,7 @@ class StateManager:
             return self._load_region_state(data)
         except Exception as e:
             message = get_state_corrupted_message(state_file=state_file, error=str(e))
-            raise ConfigurationError(message)
+            raise ConfigurationError(message) from e
 
     def save_region_state(self, state: RegionState) -> None:
         """Save state for current account/region with locking."""
@@ -160,7 +160,7 @@ class StateManager:
             if temp_file and Path(temp_file).exists():
                 Path(temp_file).unlink()
             message = get_state_write_failed_message(state_file=state_file, error=str(e))
-            raise ConfigurationError(message)
+            raise ConfigurationError(message) from e
 
     @staticmethod
     def _load_region_state(data: Dict[str, Any]) -> RegionState:  # type: ignore[explicit-any]

@@ -31,10 +31,12 @@ from nova_act.cli.core.clients.nova_act.types import (
     CreateWorkflowDefinitionRequest,
     ExportConfig,
     GetWorkflowDefinitionRequest,
+    WorkflowDefinitionSummary,
 )
 from nova_act.cli.core.clients.s3.client import S3Client
 from nova_act.cli.core.error_detection import get_workflow_not_found_message
 from nova_act.cli.core.exceptions import (
+    ExecutionError,
     ValidationError,
     WorkflowError,
     WorkflowNameArnMismatchError,
@@ -42,7 +44,10 @@ from nova_act.cli.core.exceptions import (
 from nova_act.cli.core.state_manager import StateManager
 from nova_act.cli.core.styling import info, success
 from nova_act.cli.core.types import AgentCoreDeployment, WorkflowInfo
-from nova_act.cli.workflow.utils.arn import construct_workflow_definition_arn
+from nova_act.cli.workflow.utils.arn import (
+    construct_workflow_definition_arn,
+    extract_workflow_definition_name_from_arn,
+)
 from nova_act.cli.workflow.utils.bucket_manager import BucketManager
 
 logger = logging.getLogger(__name__)
@@ -62,6 +67,18 @@ class WorkflowManager:
         """Get workflows for the current account and region."""
         state = self.state_manager.get_region_state()
         return state.workflows
+
+    def list_remote_workflows(self) -> list[WorkflowDefinitionSummary]:
+        """List workflow definitions from AWS.
+
+        Returns:
+            List of remote workflow definition summaries.
+
+        Raises:
+            Exception: If the remote API call fails (caller should handle gracefully).
+        """
+        client = NovaActClient(self.session, region_name=self.region)
+        return client.list_workflow_definitions()
 
     def get_workflow(self, name: str) -> WorkflowInfo:
         """Get workflow information by name from current account and region."""
@@ -223,33 +240,12 @@ class WorkflowManager:
         logger.info(f"Updated workflow '{name}' ARN in account '{self.account_id}', region '{self.region}'")
         return workflow
 
-    def _extract_resource_name_from_arn(self, arn: str) -> str:
-        """Extract resource name from WorkflowDefinition ARN.
-
-        Expected format: arn:aws:nova-act:region:account:workflow-definition/resource-name
-        """
-        if not arn or not isinstance(arn, str):
-            raise ValidationError(f"Invalid ARN format: {arn}")
-
-        parts = arn.split(":")
-        if len(parts) != 6 or parts[0] != "arn" or parts[1] != "aws":
-            raise ValidationError(f"Invalid ARN format: {arn}")
-
-        resource_part = parts[5]  # workflow-definition/resource-name
-        if "/" not in resource_part:
-            raise ValidationError(f"Invalid ARN format: {arn}")
-
-        try:
-            return resource_part.split("/")[-1]
-        except (IndexError, AttributeError):
-            raise ValidationError(message=f"Invalid ARN format: {arn}")
-
     def _validate_workflow_name_matches_arn(self, workflow_name: str, workflow_definition_arn: str) -> None:
         """Validate that workflow name matches the resource name in the ARN.
 
         This prevents workflow name drift from the actual AWS resource.
         """
-        resource_name = self._extract_resource_name_from_arn(workflow_definition_arn)
+        resource_name = extract_workflow_definition_name_from_arn(workflow_definition_arn)
         if workflow_name != resource_name:
             raise WorkflowNameArnMismatchError(
                 f"Workflow name '{workflow_name}' does not match ARN resource name '{resource_name}'. "
@@ -264,13 +260,13 @@ class WorkflowManager:
 
         try:
             # Extract workflow definition name from ARN
-            workflow_name = self._extract_resource_name_from_arn(arn=workflow_definition_arn)
+            workflow_name = extract_workflow_definition_name_from_arn(workflow_definition_arn)
             request = GetWorkflowDefinitionRequest(workflowDefinitionName=workflow_name)
             client.get_workflow_definition(request=request)
             logger.info(f"Validated WorkflowDefinition exists: {workflow_definition_arn}")
             success("✓ Workflow definition validated")
         except Exception as e:
-            raise WorkflowError(f"WorkflowDefinition {workflow_definition_arn} does not exist in AWS: {e}")
+            raise WorkflowError(f"WorkflowDefinition {workflow_definition_arn} does not exist in AWS: {e}") from e
 
     def delete_workflow(self, name: str) -> None:
         """Delete workflow from current account and region."""
@@ -360,11 +356,11 @@ class WorkflowManager:
                 # Validate custom bucket exists
                 s3_client = S3Client(session=self.session, region=self.region)
                 if s3_client.bucket_exists(bucket_name=custom_bucket_name):
-                    logger.info(f"Skipping creating existing custom S3 bucket: " f"{custom_bucket_name}")
+                    logger.info(f"Skipping creating existing custom S3 bucket: {custom_bucket_name}")
                     success("✓ Using existing S3 bucket")
                     return ExportConfig(s3BucketName=custom_bucket_name)
                 else:
-                    logger.warning(f"Custom bucket {custom_bucket_name} not found, " f"creating default")
+                    logger.warning(f"Custom bucket {custom_bucket_name} not found, creating default")
 
             info("Setting up S3 bucket for workflow exports...")
             bucket_manager = BucketManager(session=self.session, region=self.region, account_id=self.account_id)
@@ -374,7 +370,7 @@ class WorkflowManager:
                 success(f"✓ S3 bucket ready: {bucket_name}")
                 return ExportConfig(s3BucketName=bucket_name)
 
-            raise RuntimeError("Failed to create S3 bucket")
+            raise ExecutionError("Failed to create S3 bucket")
         except Exception as e:
             logger.error(f"Failed to create export config: {e}")
             raise

@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM public.ecr.aws/docker/library/python:3.12-slim
 
 # Set working directory
 WORKDIR /app
@@ -35,7 +35,7 @@ EXPOSE 8080
 
 # Set environment variables
 ENV PYTHONPATH=/app
-ENV AWS_DEFAULT_REGION=us-east-1
+ENV AWS_DEFAULT_REGION={{region}}
 ENV ENTRY_POINT={{entry_point}}
 ENV NOVA_ACT_SKIP_PLAYWRIGHT_INSTALL=1
 

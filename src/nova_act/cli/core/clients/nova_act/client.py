@@ -28,6 +28,9 @@ from nova_act.cli.core.clients.nova_act.types import (
     DeleteWorkflowDefinitionResponse,
     GetWorkflowDefinitionRequest,
     GetWorkflowDefinitionResponse,
+    ListWorkflowDefinitionsRequest,
+    ListWorkflowDefinitionsResponse,
+    WorkflowDefinitionSummary,
 )
 from nova_act.cli.core.constants import DEFAULT_REGION
 
@@ -64,3 +67,22 @@ class NovaActClient:
         params = request.model_dump(exclude_none=True)
         response = self._client.delete_workflow_definition(**params)
         return DeleteWorkflowDefinitionResponse.model_validate(response)
+
+    def list_workflow_definitions(self) -> list[WorkflowDefinitionSummary]:
+        """List all workflow definitions, handling pagination."""
+        all_summaries: list[WorkflowDefinitionSummary] = []
+        next_token: str | None = None
+
+        while True:
+            request = ListWorkflowDefinitionsRequest(maxResults=100, nextToken=next_token)
+            params = request.model_dump(exclude_none=True)
+            response = self._client.list_workflow_definitions(**params)
+            parsed = ListWorkflowDefinitionsResponse.model_validate(response)
+            all_summaries.extend(parsed.workflowDefinitionSummaries)
+
+            next_token = parsed.nextToken
+            if not next_token:
+                break
+
+        logger.info(f"Listed {len(all_summaries)} workflow definitions")
+        return all_summaries

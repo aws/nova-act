@@ -26,6 +26,7 @@ from nova_act.tools.browser.default.util.agent_hover import agent_hover
 from nova_act.tools.browser.default.util.agent_scroll import agent_scroll
 from nova_act.tools.browser.default.util.agent_type import agent_type
 from nova_act.tools.browser.default.util.bbox_parser import parse_bbox_string
+from nova_act.tools.browser.default.util.get_bbox_values import get_bbox_values
 from nova_act.tools.browser.default.util.go_to_url import go_to_url
 from nova_act.tools.browser.default.util.take_observation import take_observation
 from nova_act.tools.browser.default.util.wait import WAIT_FOR_PAGE_TO_SETTLE_CONFIG, wait_for_page_to_settle
@@ -79,9 +80,11 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
         self,
         playwright_options: PlaywrightInstanceOptions,
         state_guardrail: GuardrailCallable | None = None,
+        save_dom: bool = False,
     ):
         self._playwright_manager = PlaywrightInstanceManager(playwright_options)
         self._state_guardrail = state_guardrail
+        self._save_dom = save_dom
 
     def start(self, **kwargs: Any) -> None:  # type: ignore[explicit-any]
         if not self._playwright_manager.started:
@@ -91,6 +94,13 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
     def stop(self, **kwargs: Any) -> None:  # type: ignore[explicit-any]
         if self.started:
             self._playwright_manager.stop()
+
+    def lock_context(self) -> None:
+        if self._playwright_manager.started:
+            self._playwright_manager.setup_ssl_validation_hook(self._playwright_manager.context)
+
+    def unlock_context(self) -> None:
+        self._playwright_manager.disable_ssl_validation_hook(force=True)
 
     @property
     def started(self, **kwargs: Any) -> bool:  # type: ignore[explicit-any]
@@ -221,6 +231,8 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
 
         id_to_bbox_map: dict[int, BboxTLWH] = {}
         simplified_dom = ""
+        if self._save_dom:
+            id_to_bbox_map, simplified_dom = get_bbox_values(self._playwright_manager.main_page)
 
         screenshot_data_url = take_observation(self._playwright_manager.main_page, dimensions)
 

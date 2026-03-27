@@ -149,7 +149,11 @@ def handle_color_input(page: Page, element_info: ElementDict, color_value: str) 
     # Use JavaScript to set the color value directly
     try:
         element = locate_element(element_info, page)
-        element.evaluate(f"(element) => element.value='{color_value}'")
+        element.evaluate(f"""(element) => {{
+            element.value = '{color_value}';
+            element.dispatchEvent(new Event('input'));
+            element.dispatchEvent(new Event('change'));
+        }}""")
     except Exception as e:
         _LOGGER.warning(f"Color input element not found: {e}")
 
@@ -223,12 +227,10 @@ def handle_range_input(page: Page, element_info: ElementDict, range_value: str) 
     try:
         element = locate_element(element_info, page)
         # Use JavaScript to set the range value and trigger events
-        element.evaluate(
-            f"""(element) => {{
+        element.evaluate(f"""(element) => {{
             element.value = '{range_value}';
             element.dispatchEvent(new Event('input'));
             element.dispatchEvent(new Event('change'));
-        }}"""
-        )
+        }}""")
     except Exception:
         _LOGGER.warning("Range input element not found")

@@ -45,16 +45,6 @@ class S3Client:
 
     def create_bucket(self, bucket_name: str) -> None:
         """Create S3 bucket with security configurations."""
-        self._create_bucket_resource(bucket_name)
-        self._configure_bucket_security(bucket_name)
-        self._log_bucket_creation_success(bucket_name)
-
-    def _log_bucket_creation_success(self, bucket_name: str) -> None:
-        """Log successful bucket creation."""
-        logger.info(f"Created secure S3 bucket: {bucket_name}")
-
-    def _create_bucket_resource(self, bucket_name: str) -> None:
-        """Create the S3 bucket resource."""
         if self.region == "us-east-1":
             self.client.create_bucket(Bucket=bucket_name)
         else:
@@ -63,27 +53,14 @@ class S3Client:
                 CreateBucketConfiguration={"LocationConstraint": self.region},  # type: ignore[typeddict-item]
             )
 
-    def _configure_bucket_security(self, bucket_name: str) -> None:
-        """Configure bucket security settings."""
         try:
-            self._apply_security_configurations(bucket_name)
-            self._log_security_success(bucket_name)
+            self._block_public_access(bucket_name)
+            self._enable_encryption(bucket_name)
+            self._enable_versioning(bucket_name)
         except ClientError as e:
-            self._log_security_failure(bucket_name=bucket_name, error=e)
-
-    def _apply_security_configurations(self, bucket_name: str) -> None:
-        """Apply all security configurations to bucket."""
-        self._block_public_access(bucket_name)
-        self._enable_encryption(bucket_name)
-        self._enable_versioning(bucket_name)
-
-    def _log_security_success(self, bucket_name: str) -> None:
-        """Log successful security configuration."""
-        logger.info(f"Applied security configurations to bucket: {bucket_name}")
-
-    def _log_security_failure(self, bucket_name: str, error: ClientError) -> None:
-        """Log security configuration failure."""
-        logger.warning(f"Failed to apply security configurations to {bucket_name}: {error}")
+            logger.warning(f"Created bucket {bucket_name} but failed to apply security configurations: {e}")
+        else:
+            logger.info(f"Created secure S3 bucket: {bucket_name}")
 
     def _block_public_access(self, bucket_name: str) -> None:
         """Block all public access to the bucket."""
@@ -109,3 +86,9 @@ class S3Client:
     def _enable_versioning(self, bucket_name: str) -> None:
         """Enable versioning for the bucket."""
         self.client.put_bucket_versioning(Bucket=bucket_name, VersioningConfiguration={"Status": "Enabled"})
+
+    def upload_file(self, bucket: str, key: str, file_path: str) -> None:
+        """Upload a file to S3."""
+        logger.info(f"Uploading {file_path} to s3://{bucket}/{key}")
+        self.client.upload_file(Filename=file_path, Bucket=bucket, Key=key)
+        logger.info(f"Upload complete: s3://{bucket}/{key}")

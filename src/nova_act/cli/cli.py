@@ -26,10 +26,16 @@ except ImportError:
 import os
 
 from nova_act.cli.__version__ import VERSION
+from nova_act.cli.core.styling import initialize_theme
 from nova_act.cli.core.theme import ThemeName, set_active_theme
 from nova_act.cli.group import StyledGroup
-from nova_act.cli.workflow.commands import create, delete, deploy, run, show, update
+from nova_act.cli.workflow.commands.create import create
+from nova_act.cli.workflow.commands.delete import delete
+from nova_act.cli.workflow.commands.deploy import deploy
 from nova_act.cli.workflow.commands.list import list
+from nova_act.cli.workflow.commands.run import run
+from nova_act.cli.workflow.commands.show import show
+from nova_act.cli.workflow.commands.update import update
 
 
 @click.group(cls=StyledGroup)
@@ -41,13 +47,12 @@ def workflow(ctx: click.Context, profile: str | None) -> None:
         os.environ["AWS_PROFILE"] = profile
 
 
-# Add all commands to workflow group in desired order
-workflow.add_command(create.create)
-workflow.add_command(update.update)
-workflow.add_command(delete.delete)
-workflow.add_command(show.show)
-workflow.add_command(deploy.deploy)
-workflow.add_command(run.run)
+workflow.add_command(create)
+workflow.add_command(update)
+workflow.add_command(delete)
+workflow.add_command(show)
+workflow.add_command(deploy)
+workflow.add_command(run)
 workflow.add_command(list)
 
 
@@ -56,6 +61,7 @@ workflow.add_command(list)
 @click.option("--no-color", is_flag=True, help="Disable colored output")
 def main(no_color: bool) -> None:
     """Nova Act CLI."""
+    initialize_theme()
     if no_color:
         set_active_theme(ThemeName.NONE)
 

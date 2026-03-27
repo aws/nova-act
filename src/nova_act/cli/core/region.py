@@ -15,7 +15,7 @@
 
 import boto3
 
-DEFAULT_REGION = "us-east-1"
+from nova_act.cli.core.constants import DEFAULT_REGION
 
 
 def get_default_region() -> str:

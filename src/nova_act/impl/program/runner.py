@@ -19,6 +19,7 @@ from pydantic import JsonValue
 
 from nova_act.impl.program.base import CallResult, CompiledProgram, ProgramResult
 from nova_act.impl.thinker import get_current_thinker
+from nova_act.tools.actuator.interface.actuator import ActuatorBase
 from nova_act.tools.browser.interface.browser import BrowserObservation
 from nova_act.tools.browser.interface.types.agent_redirect_error import AgentRedirectError
 from nova_act.types.act_errors import (
@@ -66,10 +67,12 @@ class ProgramRunner:
         event_handler: EventHandler,
         state_guardrail: GuardrailCallable | None = None,
         verbose: bool = False,
+        actuator: ActuatorBase | None = None,
     ):
         self.event_handler = event_handler
         self.state_guardrail = state_guardrail
         self.verbose = verbose
+        self.actuator = actuator
 
     def run(self, program: CompiledProgram) -> ProgramResult:
         """Run a program."""
@@ -88,7 +91,20 @@ class ProgramRunner:
                 else:
                     set_logging_session_state(SessionState.ACTING)
 
+                # Unlock context for tools that require it (e.g., HITL tools)
+                needs_unlocked_context = (
+                    getattr(call.target, "requires_unlocked_actuator_context", False) and self.actuator is not None
+                )
+                if needs_unlocked_context:
+                    assert self.actuator is not None  # for mypy
+                    self.actuator.unlock_context()
+
                 return_value = call.target(**call.source.kwargs)
+
+                # Re-lock context after tool execution
+                if needs_unlocked_context:
+                    assert self.actuator is not None  # for mypy
+                    self.actuator.lock_context()
 
                 # Check state guardrail if configured
                 # Note that we also run the guardrail within url.py:validate_url()

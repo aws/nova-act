@@ -23,6 +23,7 @@ from nova_act.cli.core.clients.iam.types import (
     GetRoleResponse,
     PutRolePolicyRequest,
 )
+from nova_act.cli.core.exceptions import ExecutionError
 
 
 class IAMClient:
@@ -51,7 +52,7 @@ class IAMClient:
         except ClientError as e:
             if e.response["Error"]["Code"] == "NoSuchEntity":
                 return False
-            raise RuntimeError(f"Failed to check IAM role {role_name}: {e}")
+            raise ExecutionError(f"Failed to check IAM role {role_name}: {e}")
 
     def attach_role_policy(self, request: AttachRolePolicyRequest) -> None:
         """Attach managed policy to role."""
@@ -60,3 +61,7 @@ class IAMClient:
     def put_role_policy(self, request: PutRolePolicyRequest) -> None:
         """Put inline policy on role."""
         self.client.put_role_policy(**request.model_dump())
+
+    def update_assume_role_policy(self, role_name: str, policy_document: str) -> None:
+        """Update the trust policy (assume role policy) for an existing role."""
+        self.client.update_assume_role_policy(RoleName=role_name, PolicyDocument=policy_document)
