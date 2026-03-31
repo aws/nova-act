@@ -27,7 +27,7 @@ optional-dependencies.dev = {file = "requirements-dev.txt"}
 optional-dependencies.cli = {file = "requirements-cli.txt"}
 
 [tool.setuptools.package-data]
-nova_act = ["cli/workflow/services/*/templates/*"]
+nova_act = ["cli/workflow/services/*/templates/*", "tools/browser/default/util/*.js"]
 
 [tool.mypy]
 disallow_untyped_defs = true

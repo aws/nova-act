@@ -73,3 +73,24 @@ class WorkflowDefinitionSummary(BaseModel):
 class ListWorkflowDefinitionsResponse(BaseModel):
     workflowDefinitionSummaries: list[WorkflowDefinitionSummary]
     nextToken: str | None = None
+
+
+class ListWorkflowRunsRequest(BaseModel):
+    workflowDefinitionName: str
+    maxResults: int | None = None
+    nextToken: str | None = None
+    sortOrder: str | None = None
+
+
+class WorkflowRunSummary(BaseModel):
+    workflowRunArn: str
+    workflowRunId: str
+    status: str
+    startedAt: datetime
+    endedAt: datetime | None = None
+    traceLocation: str | None = None
+
+
+class ListWorkflowRunsResponse(BaseModel):
+    workflowRunSummaries: list[WorkflowRunSummary]
+    nextToken: str | None = None

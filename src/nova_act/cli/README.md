@@ -20,6 +20,117 @@ IMPORTANT: The Nova Act CLI is a convenience utility to quickstart the creation 
 pip install nova-act[cli]
 ```
 
+## Browser Commands
+
+> **🤖 Coding Agents**: Run `act browser --help` for complete command usage, flags, and examples directly in your terminal.
+
+Interactive browser automation commands for quick testing and development. Commands manage browser sessions locally and support custom NovaAct configuration. See `src/nova_act/cli/browser/README.md` for full architecture details.
+
+### Available Commands
+
+| Category | Command | Description |
+|----------|---------|-------------|
+| **Browsing** | `ask` | Ask a read-only question about the current page |
+| | `back` | Go back in browser history |
+| | `click` | Click an element described in natural language |
+| | `console-log` | Capture and display browser console output |
+| | `execute` | Execute browser actions using natural language (primary agent command) |
+| | `fill-form` | Fill out a form using natural language field descriptions |
+| | `forward` | Go forward in browser history |
+| | `goto` | Navigate to a URL (raw Playwright go_to_url) |
+| | `network-log` | Capture and display network requests/responses |
+| | `page` | Get current page info (URL, title) |
+| | `refresh` | Refresh the current page |
+| | `scroll-to` | Scroll to an element or position on the page |
+| | `tab-close` | Close a browser tab |
+| | `tab-list` | List all open browser tabs |
+| | `tab-new` | Open a new browser tab |
+| | `tab-select` | Switch to a specific browser tab |
+| | `type` | Type text into the currently focused element |
+| | `verify` | Visually assert a condition is true on the current page |
+| | `wait-for` | Poll until a condition is met on the current page |
+| **Extraction** | `diff` | Observe page state before and after an action |
+| | `evaluate` | Evaluate a JavaScript expression in the page context |
+| | `extract` | Extract structured data from the current page |
+| | `get-content` | Get page text content in text, HTML, or markdown format |
+| | `pdf` | Save the current page as a PDF file |
+| | `perf` | Collect page performance metrics |
+| | `query` | Query page elements matching a CSS selector |
+| | `screenshot` | Capture a screenshot of the current page |
+| | `snapshot` | Capture accessibility tree snapshot |
+| | `style` | Get computed CSS styles for elements matching a selector |
+| **Session** | `session list` | List all active browser sessions |
+| | `session close` | Close a specific browser session |
+| | `session close-all` | Close all active browser sessions |
+| | `session create` | Create a new browser session |
+| | `session prune` | Remove stale sessions (24h+ inactive by default, or `--all`) |
+| | `session export` | Export session history and artifacts |
+| | `session record-show` | Show session recording |
+| | `session trace-start` | Start CDP tracing |
+| | `session trace-stop` | Stop CDP tracing and save trace file |
+| **Setup** | `doctor` | Run diagnostic checks on the browser CLI environment |
+| | `setup` | Store API key in local config for persistent authentication |
+| | `qa-plan` | Generate QA test plan from Gherkin feature files |
+
+### Basic Usage
+
+```bash
+act browser execute "Go to amazon.com and search for laptops"
+act browser goto https://example.com
+act browser ask "What is the main heading?"
+act browser extract "Get all product prices"
+act browser screenshot --output page.png
+act browser query "a.nav-link" --properties "text,href"
+act browser doctor
+```
+
+### Common Flags
+
+All browsing and extraction commands share these flags:
+
+| Flag | Description |
+|------|-------------|
+| `--session-id` | Session ID (default: `default`) |
+| `--json` | Output results as structured JSON |
+| `--quiet` / `-q` | Suppress SDK output for token efficiency |
+| `--verbose` / `-v` | Show decorated output with full SDK trace |
+| `--headless` / `--headed` | Control browser visibility (default: headless) |
+| `--executable-path` | Path to custom Chromium-based browser executable |
+| `--cdp` | Connect to existing browser via CDP WebSocket endpoint |
+| `--auth-mode` | Authentication mode: `api-key` or `aws` (auto-detected) |
+| `--profile` | AWS profile name for AWS auth |
+| `--nova-arg KEY=VALUE` | Pass additional NovaAct parameters (repeatable) |
+
+### Custom NovaAct Arguments
+
+All browser commands support `--nova-arg key=value` (repeatable) to pass arguments to the NovaAct constructor.
+
+```bash
+act browser execute "test" --nova-arg headless=false --nova-arg screen_width=1920
+```
+
+Supported types: boolean (`true`/`false`/`1`/`0`/`yes`/`no`), integer, float, string. The CLI validates arguments against the NovaAct constructor signature.
+
+### Session Management
+
+Sessions persist across CLI invocations using Chrome DevTools Protocol (CDP):
+
+```bash
+# Default session (reused across commands)
+act browser goto https://example.com
+act browser execute "Click the login button"
+
+# Named sessions for parallel workflows
+act browser goto https://site1.com --session-id session1
+act browser goto https://site2.com --session-id session2
+
+# Session lifecycle management
+act browser session create --session-id work --starting-page https://example.com
+act browser session list
+act browser session close --session-id work
+act browser session prune --all
+```
+
 ## Quick Start
 
 ### Option 1: Named Workflow Management (Recommended)
@@ -131,7 +242,7 @@ act workflow deploy --name my-workflow --source-dir /path/to/code
 
 ## Configuration
 
-Workflows are stored in separate state files per AWS account and region in `~/.act_cli/state/{account_id}/{region}/workflows.json` with file locking for concurrent access protection. User preferences are stored in `~/.act_cli/config.yml`.
+Workflows are stored in separate state files per AWS account and region in `~/.act_cli/state/{account_id}/{region}/workflows.json` with file locking for concurrent access protection. Workflow user preferences are stored in `~/.act_cli/config.yml`. Browser CLI configuration (API key) is stored separately in `~/.act_cli/browser/config.yaml`.
 
 **State File Structure** (`~/.act_cli/state/123456789012/us-east-1/workflows.json`):
 ```json
@@ -500,10 +611,15 @@ arn:aws:nova-act:{region}:{account-id}:workflow-definition/{workflow-name}
 
 ## File Locations
 
-### User Data
+### Workflow Data
 - State files: `~/.act_cli/state/{account_id}/{region}/workflows.json` (per region/account)
-- User config: `~/.act_cli/config.yml`
+- Workflow user config: `~/.act_cli/config.yml`
 - Build artifacts: `~/.act_cli/builds/{workflow-name}/` (persistent)
+
+### Browser Data
+- Browser config: `~/.act_cli/browser/config.yaml` (API key, `0o600` permissions)
+- Session metadata: `~/.act_cli/browser/sessions/` (per-session JSON files)
+- Command logs: `~/.act_cli/browser/session_logs/`
 
 ### Lock Files
 - State locks: `~/.act_cli/state/{account_id}-{region}.lock` (temporary, for concurrent access)
