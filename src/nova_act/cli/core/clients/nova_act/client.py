@@ -30,7 +30,10 @@ from nova_act.cli.core.clients.nova_act.types import (
     GetWorkflowDefinitionResponse,
     ListWorkflowDefinitionsRequest,
     ListWorkflowDefinitionsResponse,
+    ListWorkflowRunsRequest,
+    ListWorkflowRunsResponse,
     WorkflowDefinitionSummary,
+    WorkflowRunSummary,
 )
 from nova_act.cli.core.constants import DEFAULT_REGION
 
@@ -86,3 +89,29 @@ class NovaActClient:
 
         logger.info(f"Listed {len(all_summaries)} workflow definitions")
         return all_summaries
+
+    def list_workflow_runs(
+        self, workflow_name: str, *, max_results: int = 100, sort_order: str = "Descending"
+    ) -> list[WorkflowRunSummary]:
+        """List workflow runs for a given workflow definition, handling pagination."""
+        all_runs: list[WorkflowRunSummary] = []
+        next_token: str | None = None
+
+        while True:
+            request = ListWorkflowRunsRequest(
+                workflowDefinitionName=workflow_name,
+                maxResults=max_results,
+                nextToken=next_token,
+                sortOrder=sort_order,
+            )
+            params = request.model_dump(exclude_none=True)
+            response = self._client.list_workflow_runs(**params)
+            parsed = ListWorkflowRunsResponse.model_validate(response)
+            all_runs.extend(parsed.workflowRunSummaries)
+
+            next_token = parsed.nextToken
+            if not next_token:
+                break
+
+        logger.info(f"Listed {len(all_runs)} workflow runs for '{workflow_name}'")
+        return all_runs

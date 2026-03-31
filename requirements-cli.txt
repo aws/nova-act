@@ -1,2 +1,7 @@
 click
 pyyaml
+filelock>=3.0.0
+psutil>=5.0.0
+markdownify>=1.0.0
+rapidfuzz>=3.0.0
+gherkin-official>=39.0.0

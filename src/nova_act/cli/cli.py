@@ -26,6 +26,7 @@ except ImportError:
 import os
 
 from nova_act.cli.__version__ import VERSION
+from nova_act.cli.browser import browser
 from nova_act.cli.core.styling import initialize_theme
 from nova_act.cli.core.theme import ThemeName, set_active_theme
 from nova_act.cli.group import StyledGroup
@@ -33,6 +34,7 @@ from nova_act.cli.workflow.commands.create import create
 from nova_act.cli.workflow.commands.delete import delete
 from nova_act.cli.workflow.commands.deploy import deploy
 from nova_act.cli.workflow.commands.list import list
+from nova_act.cli.workflow.commands.list_runs import list_runs
 from nova_act.cli.workflow.commands.run import run
 from nova_act.cli.workflow.commands.show import show
 from nova_act.cli.workflow.commands.update import update
@@ -54,6 +56,7 @@ workflow.add_command(show)
 workflow.add_command(deploy)
 workflow.add_command(run)
 workflow.add_command(list)
+workflow.add_command(list_runs)
 
 
 @click.group(cls=StyledGroup)
@@ -67,6 +70,7 @@ def main(no_color: bool) -> None:
 
 
 main.add_command(workflow)
+main.add_command(browser)
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Nova Act Browser Configuration",
+  "description": "Configuration schema for Nova Act CLI browser settings",
+  "type": "object",
+  "properties": {
+    "executable_path": {
+      "type": ["string", "null"],
+      "description": "Path to custom Chromium-based browser executable"
+    },
+    "headless": {
+      "type": "boolean",
+      "description": "Run browser in headless mode (no UI)",
+      "default": false
+    },
+    "profile": {
+      "type": ["string", "null"],
+      "description": "Path to browser profile directory for persistent sessions"
+    }
+  },
+  "additionalProperties": false
+}

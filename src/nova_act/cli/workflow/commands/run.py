@@ -208,7 +208,6 @@ def _start_log_tailing(session: Session, client: AgentCoreClient, agent_arn: str
 
 def _create_log_callback() -> Callable[[LogEvent], None]:
     """Create callback function for log events."""
-    from nova_act.cli.workflow.utils.log_tailer import LogEvent
 
     def log_callback(log_event: LogEvent) -> None:
         timestamp = datetime.fromtimestamp(log_event.timestamp / 1000, tz=timezone.utc)

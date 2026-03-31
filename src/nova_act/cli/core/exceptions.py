@@ -70,3 +70,33 @@ class CodeBuildError(NovaActCLIError):
     """Raised when CodeBuild operations fail."""
 
     pass
+
+
+class SessionError(NovaActCLIError):
+    """Base exception for session-related errors."""
+
+    pass
+
+
+class SessionLockTimeout(SessionError):
+    """Raised when session lock cannot be acquired within timeout."""
+
+    pass
+
+
+class SessionNotFoundError(SessionError, KeyError):
+    """Raised when a session ID is not found."""
+
+    pass
+
+
+class SessionLimitReached(SessionError):
+    """Raised when the maximum number of active sessions is reached."""
+
+    pass
+
+
+class BrowserProcessDead(SessionError):
+    """Raised when the browser process for a session is no longer running."""
+
+    pass

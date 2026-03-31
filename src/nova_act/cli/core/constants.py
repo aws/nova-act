@@ -32,3 +32,6 @@ DEFAULT_ENTRY_POINT = "main.py"
 # Theme configuration
 DEFAULT_THEME = ThemeName.DEFAULT
 THEME_ENV_VAR = "ACT_CLI_THEME"
+
+# Date/time formatting
+DEFAULT_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
