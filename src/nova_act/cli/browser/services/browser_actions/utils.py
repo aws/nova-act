@@ -21,6 +21,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from playwright.sync_api import Error as PlaywrightError
 from pydantic import BaseModel
 
 from nova_act.cli.browser.services.intent_resolution.snapshot import (
@@ -79,7 +80,7 @@ def get_page_context(page: Page) -> str:
             f"Viewport: {info['viewportWidth']}x{viewport_h} | "
             f"Scroll: {scroll_y}px / {page_height}px tall ({pct}% scrolled)"
         )
-    except Exception:
+    except (PlaywrightError, TypeError, KeyError):
         return ""
 
 
@@ -241,6 +242,6 @@ def run_observe(nova_act: NovaAct) -> str:
             layout = resp.get("layout", "")
             return str(layout) if layout else ""
         return ""
-    except Exception:
+    except RuntimeError:
         logger.debug("observe call failed", exc_info=True)
         return ""

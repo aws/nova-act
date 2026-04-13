@@ -19,6 +19,7 @@ import io
 from typing import TYPE_CHECKING
 
 from PIL import Image, ImageDraw, ImageFont
+from playwright.sync_api import Error as PlaywrightError
 
 if TYPE_CHECKING:
     from playwright.sync_api import FloatRect, Page
@@ -150,7 +151,39 @@ def resolve_element_boxes(
             bbox = locator.bounding_box()
             if bbox:
                 results.append((elem, bbox))
-        except Exception:
+        except PlaywrightError:
             continue
 
     return results
+
+
+def annotate_page_screenshot(
+    active_page: Page,
+    screenshot_bytes: bytes,
+    annotate_filter: str | None = None,
+) -> tuple[bytes, int]:
+    """Annotate a screenshot with bounding boxes for interactive elements.
+
+    Args:
+        active_page: Playwright Page to get accessibility snapshot from.
+        screenshot_bytes: Raw screenshot bytes to annotate.
+        annotate_filter: Comma-separated roles to include, or None for all interactive roles.
+
+    Returns:
+        Tuple of (annotated_bytes, annotation_count).
+    """
+    from nova_act.cli.browser.services.intent_resolution.snapshot import flatten_snapshot
+
+    tree = active_page.accessibility.snapshot()
+    elements = flatten_snapshot(tree)
+
+    role_filter: frozenset[str] | None = None
+    if annotate_filter:
+        role_filter = frozenset(r.strip() for r in annotate_filter.split(","))
+
+    elements_with_boxes = resolve_element_boxes(active_page, elements, role_filter)
+    annotation_count = len(elements_with_boxes)
+    if elements_with_boxes:
+        screenshot_bytes = annotate_screenshot(screenshot_bytes, elements_with_boxes)
+
+    return screenshot_bytes, annotation_count

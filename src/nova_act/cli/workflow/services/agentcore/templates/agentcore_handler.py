@@ -30,11 +30,6 @@ from bedrock_agentcore import BedrockAgentCoreApp
 app = BedrockAgentCoreApp()
 
 
-@app.route("/ping")
-def ping() -> Dict[str, str]:
-    return {"status": "healthy"}
-
-
 @app.entrypoint
 def handler(payload: Dict[str, Any]) -> None:  # type: ignore
     """Main entrypoint for AgentCore Runtime."""

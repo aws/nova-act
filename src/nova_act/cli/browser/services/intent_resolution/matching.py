@@ -22,16 +22,10 @@ from rapidfuzz import fuzz
 
 from nova_act.cli.browser.services.intent_resolution.snapshot import SnapshotElement
 
-# Tier 1 patterns
-_HTML_TAGS = (
-    r"a|abbr|address|article|aside|audio|b|blockquote|body|br|button|canvas|caption|cite|code|col|colgroup|"
-    r"dd|del|details|dfn|dialog|div|dl|dt|em|embed|fieldset|figcaption|figure|footer|form|h[1-6]|head|header|"
-    r"hgroup|hr|html|i|iframe|img|input|ins|kbd|label|legend|li|link|main|map|mark|menu|meta|meter|nav|"
-    r"noscript|object|ol|optgroup|option|output|p|param|picture|pre|progress|q|rp|rt|ruby|s|samp|script|"
-    r"search|section|select|slot|small|source|span|strong|style|sub|summary|sup|table|tbody|td|template|"
-    r"textarea|tfoot|th|thead|time|title|tr|track|u|ul|var|video|wbr"
-)
-_CSS_SELECTOR_RE = re.compile(rf"^[#.\[]|^[a-z]+[\[.#:]|^(?:{_HTML_TAGS})$", re.IGNORECASE)
+# Tier 1 patterns — require unambiguous CSS syntax signals (structural heuristic).
+# Bare HTML tag names ("button", "search", "menu") are NOT matched — they fall through
+# to Tier 2/3 name matching, which is strictly better for single-word inputs.
+_CSS_SELECTOR_RE = re.compile(r"^[#.\[]|^[a-z]+[\[.#:]", re.IGNORECASE)
 _SNAPSHOT_REF_RE = re.compile(r"^e\d+$", re.IGNORECASE)
 
 FUZZY_SCORE_THRESHOLD = 85

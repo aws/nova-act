@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 
 import click
 import yaml
+from playwright.sync_api import Error as PlaywrightError
 
 from nova_act import NovaAct
 from nova_act.cli.browser.services.browser_actions.utils import run_observe
@@ -110,13 +111,13 @@ def auto_orientation(
     if not params.no_snapshot:
         try:
             metadata.update(_capture_auto_snapshot(nova_act, session_info, cmd_dir, command_name))
-        except Exception:
+        except (PlaywrightError, OSError):
             logger.debug("Auto-snapshot failed for command '%s'", command_name)
 
     if not params.no_screenshot:
         try:
             metadata.update(_capture_auto_screenshot(nova_act, session_info, cmd_dir))
-        except Exception:
+        except (PlaywrightError, OSError, TypeError):
             logger.debug("Auto-screenshot failed for command '%s'", command_name)
 
     return metadata
@@ -136,6 +137,6 @@ def emit_steps_summary(
         if cmd_dir is None:
             cmd_dir = log_dir
         return write_steps_summary(trajectory_dir, command_name, snapshots, cmd_dir)
-    except Exception:
+    except (OSError, _json.JSONDecodeError, KeyError):
         logger.debug("Steps summary failed for command '%s'", command_name)
         return None

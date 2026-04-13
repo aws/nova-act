@@ -27,9 +27,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import TypedDict
 
-from nova_act.cli.browser.services.session.cdp_endpoint_manager import (
-    CdpEndpointManager,
-)
 from nova_act.cli.browser.services.session.models import (
     SessionInfo,
     SessionState,
@@ -157,7 +154,7 @@ class SessionPersistence:
         cdp_endpoint_raw = metadata.get("cdp_endpoint")
 
         # Determine state
-        state = self._determine_session_state(browser_pid, cdp_endpoint_raw)
+        state = self._determine_session_state(browser_pid)
 
         # Extract remaining fields
         fields = self._extract_metadata_fields(metadata)
@@ -181,26 +178,17 @@ class SessionPersistence:
     @staticmethod
     def _determine_session_state(
         browser_pid: int | None,
-        cdp_endpoint_raw: object,
     ) -> SessionState:
-        """Determine session state from browser liveness signals.
+        """Determine session state from browser PID liveness.
 
-        Checks PID liveness and CDP endpoint responsiveness.
+        Args:
+            browser_pid: Browser process ID, or None if unknown.
+
+        Returns:
+            STARTED if PID is alive, STOPPED otherwise.
         """
         if browser_pid is None or not is_process_running(browser_pid):
             return SessionState.STOPPED
-
-        if cdp_endpoint_raw is not None:
-            try:
-                CdpEndpointManager().validate_cdp_endpoint(str(cdp_endpoint_raw))
-                return SessionState.STARTED
-            except RuntimeError:
-                logger.warning(
-                    "Session has live PID %d but CDP endpoint '%s' is unresponsive; marking STOPPED",
-                    browser_pid,
-                    cdp_endpoint_raw,
-                )
-                return SessionState.STOPPED
 
         return SessionState.STARTED
 

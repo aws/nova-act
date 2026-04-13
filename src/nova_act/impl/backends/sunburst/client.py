@@ -127,13 +127,6 @@ class SunburstClient(BurstClient):
 
     def send_act_telemetry(self, act: Act, success: ActGetResult | None, error: NovaActError | None) -> None:
         """Send telemetry for an act."""
-
-        headers = {
-            "Authorization": f"Bearer {self._api_key}",
-            "Content-Type": "application/json",
-            "X-Api-Key": f"{self._api_key}",
-        }
-
         latency = -1.0
         if act.end_time is not None:
             latency = act.end_time - act.start_time
@@ -166,21 +159,20 @@ class SunburstClient(BurstClient):
 
         try:
             url = self._endpoints.api_url + "/agent/telemetry"
-            response = requests.post(url=url, json=payload, headers=headers)
+            response = requests.post(url=url, json=payload, headers=self._headers)
             if response.status_code != 200:
                 _LOGGER.debug("Failed to send act telemetry: %s", response.text)
         except Exception as e:
             # Swallow any exceptions
             _LOGGER.debug("Error sending act telemetry: %s", e)
 
-    def send_environment_telemetry(self, session_id: str, actuator_type: Literal["custom", "playwright"]) -> None:
-        """Do not send telemetry for this backend."""
-        headers = {
-            "Authorization": f"Bearer {self._api_key}",
-            "Content-Type": "application/json",
-            "X-Api-Key": f"{self._api_key}",
-        }
-
+    def send_environment_telemetry(
+        self,
+        session_id: str,
+        actuator_type: Literal["custom", "playwright"],
+        sdk_variant: Literal["SYNC", "ASYNC"],
+    ) -> None:
+        """Send environment telemetry."""
         python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
 
         system_name = platform.system().lower() or "unknown"
@@ -191,8 +183,9 @@ class SunburstClient(BurstClient):
             "environment": {
                 "actuatorType": actuator_type,
                 "pythonVersion": python_version,
-                "sessionId": session_id,
+                "sdkVariant": sdk_variant,
                 "sdkVersion": VERSION,
+                "sessionId": session_id,
                 "system": system,
             },
             "type": "ENVIRONMENT",
@@ -200,7 +193,7 @@ class SunburstClient(BurstClient):
 
         try:
             url = self._endpoints.api_url + "/agent/telemetry"
-            response = requests.post(url=url, json=payload, headers=headers)
+            response = requests.post(url=url, json=payload, headers=self._headers)
             if response.status_code != 200:
                 _LOGGER.debug("Failed to send environment telemetry: %s", response.text)
         except Exception as e:

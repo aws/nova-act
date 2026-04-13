@@ -21,6 +21,12 @@ import sys
 from pydantic import JsonValue as JSONType
 from strands import tool
 
+from nova_act.browser_auth import (
+    AgentCoreBrowserSessionProvider,
+    BrowserSessionProvider,
+    LocalFileSessionProvider,
+    S3SessionProvider,
+)
 from nova_act.impl.common import rsync_from_default_user_data
 from nova_act.impl.extension import ExtensionActuator
 from nova_act.nova_act import NovaAct
@@ -62,7 +68,11 @@ from nova_act.util.jsonschema import BOOL_SCHEMA, STRING_SCHEMA
 from nova_act.util.logging import setup_logging
 
 __all__ = [
+    "AgentCoreBrowserSessionProvider",
+    "BrowserSessionProvider",
+    "LocalFileSessionProvider",
     "NovaAct",
+    "S3SessionProvider",
     "ActAgentError",
     "ActAgentFailed",
     "ActExecutionError",

@@ -61,5 +61,10 @@ class BurstClient(ABC):
     def send_act_telemetry(self, act: Act, success: ActGetResult | None, error: NovaActError | None) -> None:
         """Send telemetry for an act. By default, do not send any."""
 
-    def send_environment_telemetry(self, session_id: str, actuator_type: Literal["custom", "playwright"]) -> None:
+    def send_environment_telemetry(
+        self,
+        session_id: str,
+        actuator_type: Literal["custom", "playwright"],
+        sdk_variant: Literal["SYNC", "ASYNC"],
+    ) -> None:
         """Send environment telemetry. By default, do not send any."""

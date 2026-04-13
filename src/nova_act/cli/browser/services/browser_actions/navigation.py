@@ -18,6 +18,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from playwright.sync_api import Error as PlaywrightError
+
 from nova_act.cli.browser.services.action_results import NavigateResult, ScrollToResult
 from nova_act.cli.browser.services.browser_actions.utils import (
     BOOL_SCHEMA,
@@ -121,7 +123,7 @@ class NavigationMixin:
                 else:
                     return None
                 return tracker.transition(f"Scrolled to '{target}' via fast path.")
-        except Exception:
+        except PlaywrightError:
             logger.debug("Fast scroll failed for '%s', falling back to AI loop", target)
             return None
 

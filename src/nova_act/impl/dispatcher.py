@@ -274,6 +274,7 @@ class ActDispatcher:
                 awl_program = decode_awl_raw_program(step_object.model_output.awl_raw_program)
                 trace_log_lines(awl_program)
 
+
                 # Handle pause/cancel conditions
                 while control.state == ControlState.PAUSED:
                     time.sleep(0.1)

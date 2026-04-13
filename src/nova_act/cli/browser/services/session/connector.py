@@ -84,6 +84,7 @@ class NovaActConnector:
         Raises:
             RuntimeError: If NovaAct start fails
         """
+        nova_act: NovaAct | None = None
         try:
             constructor_args = self._build_constructor_args(session_info, nova_args, auth_config)
             nova_act = self._initialize(constructor_args)
@@ -91,7 +92,10 @@ class NovaActConnector:
 
             session_info.nova_act_instance = nova_act
             session_info.state = SessionState.STARTED
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — session connection error boundary; multiple heterogeneous operations
+            if nova_act is not None:
+                with contextlib.suppress(Exception):
+                    nova_act.stop()
             self.cleanup_workflow()
             self._handle_failure(session_info, e)
             raise RuntimeError(f"Failed to start session '{session_info.session_id}': {e}") from e
@@ -110,12 +114,13 @@ class NovaActConnector:
         Raises:
             RuntimeError: If reconnection fails
         """
+        nova_act: NovaAct | None = None
         try:
             constructor_args = self._build_constructor_args(session_info, {}, auth_config)
             nova_act = self._initialize(constructor_args)
             session_info.nova_act_instance = nova_act
             session_info.state = SessionState.STARTED
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — session reconnection error boundary; multiple heterogeneous operations
             self.cleanup_workflow()
             self._handle_failure(session_info, e)
             sid = session_info.session_id
@@ -199,7 +204,7 @@ class NovaActConnector:
         if self._exit_stack is not None:
             try:
                 self._exit_stack.close()
-            except Exception:
+            except Exception:  # noqa: BLE001 — cleanup boundary; must not let workflow teardown failures propagate
                 logger.debug("Failed to clean up workflow", exc_info=True)
             finally:
                 self._exit_stack = None
@@ -233,7 +238,9 @@ class NovaActConnector:
                 logger.debug("Workflow definition '%s' already exists", workflow_name)
             else:
                 logger.warning("Could not auto-create workflow definition '%s': %s", workflow_name, e)
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # noqa: BLE001 — fallback after specific ClientError handler; catches any non-ClientError from boto/SDK
             logger.warning("Could not auto-create workflow definition '%s': %s", workflow_name, e)
 
     def _initialize(self, constructor_args: dict[str, object]) -> NovaAct:

@@ -137,8 +137,15 @@ class BurstBackend(Backend[T]):
     def send_act_telemetry(self, act: Act, success: ActGetResult | None, error: NovaActError | None) -> None:
         self._client.send_act_telemetry(act=act, success=success, error=error)
 
-    def send_environment_telemetry(self, session_id: str, actuator_type: Literal["custom", "playwright"]) -> None:
-        self._client.send_environment_telemetry(session_id=session_id, actuator_type=actuator_type)
+    def send_environment_telemetry(
+        self,
+        session_id: str,
+        actuator_type: Literal["custom", "playwright"],
+        sdk_variant: Literal["SYNC", "ASYNC"],
+    ) -> None:
+        self._client.send_environment_telemetry(
+            session_id=session_id, actuator_type=actuator_type, sdk_variant=sdk_variant
+        )
 
     def step(
         self, act: Act, call_results: list[SdkCallResult], tool_map: dict[str, ActionType] = {}

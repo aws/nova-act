@@ -25,6 +25,7 @@ from nova_act.asyncio.tools.browser.default.util.agent_click import agent_click
 from nova_act.asyncio.tools.browser.default.util.agent_hover import agent_hover
 from nova_act.asyncio.tools.browser.default.util.agent_scroll import agent_scroll
 from nova_act.asyncio.tools.browser.default.util.agent_type import agent_type
+from nova_act.asyncio.tools.browser.default.util.element_helpers import viewport_dimensions
 from nova_act.asyncio.tools.browser.default.util.get_bbox_values import get_bbox_values
 from nova_act.asyncio.tools.browser.default.util.go_to_url import go_to_url
 from nova_act.asyncio.tools.browser.default.util.take_observation import take_observation
@@ -39,6 +40,7 @@ from nova_act.asyncio.tools.browser.interface.browser import (
 from nova_act.asyncio.tools.browser.interface.playwright_pages import PlaywrightPageManagerBase
 from nova_act.tools.browser.default.util.bbox_parser import parse_bbox_string
 from nova_act.tools.browser.interface.types.click_types import ClickOptions
+from nova_act.tools.browser.interface.types.dimensions_dict import DimensionsDict
 from nova_act.tools.browser.interface.types.scroll_types import ScrollDirection
 from nova_act.types.api.step import BboxTLWH
 from nova_act.types.errors import (
@@ -115,6 +117,10 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
     @property
     def pages(self) -> list[Page]:
         return self._playwright_manager.context.pages
+
+    async def get_viewport_size(self) -> DimensionsDict:
+        """Return the current viewport dimensions."""
+        return await viewport_dimensions(self._playwright_manager.main_page)
 
     @_check_ssl_error
     async def agent_click(

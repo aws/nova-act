@@ -20,6 +20,7 @@ import time
 from typing import TYPE_CHECKING
 from urllib.parse import urldefrag
 
+from playwright.sync_api import Error as PlaywrightError
 from pydantic import BaseModel
 
 from nova_act.cli.browser.services.action_results import (
@@ -39,6 +40,7 @@ from nova_act.cli.browser.services.browser_actions.utils import (
     transition_tracker,
 )
 from nova_act.cli.browser.services.intent_resolution import ResolutionPath, resolve
+from nova_act.cli.browser.services.intent_resolution.resolver import FILLABLE_ROLES
 from nova_act.cli.browser.utils.parsing import parse_json_schema
 
 if TYPE_CHECKING:
@@ -133,7 +135,7 @@ class InteractionMixin:
                 else:
                     return None
                 return ClickResult(clicked=target, transition=tracker.transition(f"Clicked '{target}' via fast path."))
-        except Exception:
+        except PlaywrightError:
             logger.debug("Fast click failed for '%s', falling back to AI", target)
             return None
 
@@ -205,7 +207,7 @@ class InteractionMixin:
                         resolved.element.role, name=resolved.element.name  # type: ignore[arg-type]
                     ).fill(value)
                     filled_count += 1
-                except Exception:
+                except PlaywrightError:
                     logger.debug("Fast fill failed for field '%s', deferring to AI", key)
                     failed[key] = value
             return failed, tracker.transition(f"Filled {filled_count} field(s) via fast path.")
@@ -361,14 +363,17 @@ class InteractionMixin:
             try:
                 focused = self._nova_act.page.locator(":focus")
                 if focused.count() > 0:
-                    if append:
-                        focused.type(text)
-                    else:
-                        focused.fill(text)
-                    return TypeResult(
-                        typed=text, target="focused element", transition=f"Typed '{text}' into focused element"
-                    )
-            except Exception:
+                    with transition_tracker(self._nova_act.page) as tracker:
+                        if append:
+                            focused.type(text)
+                        else:
+                            focused.fill(text)
+                        return TypeResult(
+                            typed=text,
+                            target="focused element",
+                            transition=tracker.transition(f"Typed '{text}' into focused element"),
+                        )
+            except PlaywrightError:
                 logger.debug("Fast-path type into focused element failed")
 
         # Fast path: resolve target
@@ -376,15 +381,27 @@ class InteractionMixin:
             try:
                 resolution = resolve(target, "fill-form", self._nova_act.page)
                 if resolution.path == ResolutionPath.FAST and resolution.element:
-                    locator = self._nova_act.page.get_by_role(
-                        resolution.element.role, name=resolution.element.name  # type: ignore[arg-type]
-                    )
-                    if append:
-                        locator.type(text)
+                    if resolution.element.role not in FILLABLE_ROLES:
+                        logger.debug(
+                            "Fast-path target '%s' has non-fillable role '%s', falling back to AI",
+                            target,
+                            resolution.element.role,
+                        )
                     else:
-                        locator.fill(text)
-                    return TypeResult(typed=text, target=target, transition=f"Typed '{text}' into '{target}'")
-            except Exception:
+                        with transition_tracker(self._nova_act.page) as tracker:
+                            locator = self._nova_act.page.get_by_role(
+                                resolution.element.role, name=resolution.element.name  # type: ignore[arg-type]
+                            )
+                            if append:
+                                locator.type(text)
+                            else:
+                                locator.fill(text)
+                            return TypeResult(
+                                typed=text,
+                                target=target,
+                                transition=tracker.transition(f"Typed '{text}' into '{target}'"),
+                            )
+            except PlaywrightError:
                 logger.debug("Fast-path type into target '%s' failed, falling back to AI", target)
 
         # AI fallback

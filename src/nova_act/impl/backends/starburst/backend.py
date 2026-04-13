@@ -27,7 +27,6 @@ class StarburstBackend(BurstBackend[Endpoints]):
     def __init__(
         self,
         boto_session: Session,
-        backend_override: str | None = None,
         boto_config: Config | None = None,
     ):
         self._boto_session = boto_session

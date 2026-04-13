@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 
 import click
 
+from nova_act.cli.browser.services.browser_actions import BrowserActions
 from nova_act.cli.browser.utils.decorators import (
     browser_command_options,
     pack_command_params,
@@ -55,47 +56,28 @@ def tab_close(tab_id: int | None, params: CommandParams) -> None:
     prep = prepare_session(params, None)
 
     with command_session("tab-close", prep.manager, prep.session_info, params, log_args={"tab_id": tab_id}) as nova_act:
-        pages = nova_act.page.context.pages
-        if len(pages) <= 1:
+        active_page = get_active_page(nova_act, prep.session_info)
+        context = active_page.context
+        actions = BrowserActions(nova_act)
+
+        try:
+            result = actions.close_tab(context, tab_id, active_page)
+        except ValueError:
             exit_with_error(
                 "Cannot close last tab",
                 "At least one tab must remain open",
                 suggestions=["Use 'session stop' to end the browser session instead"],
                 error_code=ErrorCode.VALIDATION_ERROR,
             )
+        except IndexError as exc:
+            exit_with_error(
+                "Invalid tab index",
+                str(exc),
+                suggestions=["Use 'tab-list' to see available tabs"],
+                error_code=ErrorCode.VALIDATION_ERROR,
+            )
 
-        if tab_id is None:
-            target = get_active_page(nova_act, prep.session_info)
-            tab_id = list(pages).index(target)
-        else:
-            if tab_id < 0 or tab_id >= len(pages):
-                exit_with_error(
-                    "Invalid tab index",
-                    f"Index {tab_id} out of range (0-{len(pages) - 1})",
-                    suggestions=["Use 'tab-list' to see available tabs"],
-                    error_code=ErrorCode.VALIDATION_ERROR,
-                )
-            target = pages[tab_id]
-
-        closed_url = target.url
-        closed_title = target.title()
-        target.close()
-
-        # Switch to nearest remaining tab
-        remaining = nova_act.page.context.pages
-        new_index = min(tab_id, len(remaining) - 1)
-        remaining[new_index].bring_to_front()
-
-        # Persist new active tab index
-        prep.session_info.active_tab_index = new_index
+        prep.session_info.active_tab_index = result["new_active_index"]  # type: ignore[assignment]
         prep.manager.save_session_metadata(prep.session_info)
 
-    echo_success(
-        "Tab closed",
-        details={
-            "closed_index": tab_id,
-            "closed_url": closed_url,
-            "closed_title": closed_title,
-            "new_active_index": new_index,
-        },
-    )
+    echo_success("Tab closed", details=result)

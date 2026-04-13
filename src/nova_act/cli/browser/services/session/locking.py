@@ -86,5 +86,5 @@ class SessionLockManager(FileLockManager):
         lock = self._get_or_create_lock(session_id)
         try:
             lock.release()
-        except Exception:
+        except OSError:
             logger.debug("Failed to release lock for session '%s'", session_id, exc_info=True)

@@ -71,34 +71,21 @@ def wait_for(
 
     prep = prepare_session(params, starting_page)
 
-    try:
-        with command_session(
-            "wait_for",
-            prep.manager,
-            prep.session_info,
-            params,
-            log_args={"condition": condition, "timeout": timeout, "interval": interval},
-        ) as nova_act:
-            actions = BrowserActions(nova_act)
-            result = actions.wait_for(
-                condition,
-                timeout=timeout,
-                interval=interval,
-                focus=focus,
-                per_call_timeout=DefaultBrowserConfig.DEFAULT_ACT_TIMEOUT_SECONDS,
-                **prep.method_args,
-            )
-    except RuntimeError as e:
-        exit_with_error(
-            "Condition not met",
-            str(e),
-            suggestions=[
-                "Increase --timeout for slower pages",
-                "Adjust --interval to poll more or less frequently",
-                "Verify the condition text matches what appears on the page",
-            ],
-            error_code=ErrorCode.TIMEOUT_ERROR,
-            retryable=True,
+    with command_session(
+        "wait_for",
+        prep.manager,
+        prep.session_info,
+        params,
+        log_args={"condition": condition, "timeout": timeout, "interval": interval},
+    ) as nova_act:
+        actions = BrowserActions(nova_act)
+        result = actions.wait_for(
+            condition,
+            timeout=timeout,
+            interval=interval,
+            focus=focus,
+            per_call_timeout=DefaultBrowserConfig.DEFAULT_ACT_TIMEOUT_SECONDS,
+            **prep.method_args,
         )
 
     if result.met:

@@ -104,6 +104,130 @@ playwright install chrome
 ```
 
 
+### Browser session persistence
+
+The SDK supports saving and restoring browser session state (cookies, localStorage) across NovaAct runs. This enables agents to maintain authenticated sessions without requiring manual login on every run. Three storage backends are available:
+
+- **Local file** - stores session state on disk at `~/.nova-act/sessions/<profile>.json` with restricted file permissions (0o600)
+- **S3** - stores session state in Amazon S3 with SSE-KMS encryption
+- **AgentCore browser profiles** - persists session state server-side via the AgentCore service (no client-side state transfer)
+
+#### Local file
+
+```python
+from nova_act import LocalFileSessionProvider, NovaAct, workflow
+
+@workflow(
+    workflow_definition_name=<your-workflow-definition-name>,
+    model_id="nova-act-latest",
+)
+def main():
+    provider = LocalFileSessionProvider(profile="my-agent")
+    with NovaAct(
+        starting_page="https://example.com",
+        browser_auth=provider,
+    ) as nova:
+        result = nova.act_get("Return the page title.")
+        print(f"Title: {result.response}")
+
+if __name__ == "__main__":
+    main()
+```
+
+#### S3
+
+```python
+from nova_act import NovaAct, S3SessionProvider, workflow
+
+@workflow(
+    workflow_definition_name=<your-workflow-definition-name>,
+    model_id="nova-act-latest",
+)
+def main():
+    provider = S3SessionProvider(
+        profile="my-agent",
+        bucket="my-session-bucket",
+        kms_key_id="alias/my-key",  # optional
+    )
+    with NovaAct(
+        starting_page="https://example.com",
+        browser_auth=provider,
+    ) as nova:
+        result = nova.act_get("Return the page title.")
+        print(f"Title: {result.response}")
+
+if __name__ == "__main__":
+    main()
+```
+
+**Prerequisites:** An S3 bucket with SSE-KMS default encryption and AWS credentials with `s3:GetObject` and `s3:PutObject` permissions.
+
+#### AgentCore browser profiles
+
+```python
+from nova_act import AgentCoreBrowserSessionProvider, NovaAct, workflow
+
+@workflow(
+    workflow_definition_name=<your-workflow-definition-name>,
+    model_id="nova-act-latest",
+)
+def main():
+    provider = AgentCoreBrowserSessionProvider(
+        profile="my-agent",
+        region="us-west-2",  # optional
+    )
+    with NovaAct(
+        starting_page="https://example.com",
+        browser_auth=provider,
+    ) as nova:
+        result = nova.act_get("Return the page title.")
+        print(f"Title: {result.response}")
+
+if __name__ == "__main__":
+    main()
+```
+
+**Prerequisites:** AWS credentials with AgentCore permissions.
+
+> **Note:** AgentCore browser sessions run server-side. To view and interact with the remote browser outside the AWS Console (e.g., for manual login or CAPTCHA solving), deploy the [Nova Act Human Intervention Service](https://github.com/amazon-agi-labs/nova-act-human-intervention). Its UI Takeover pattern streams the live browser session to your local browser via DCV, giving you full mouse and keyboard control.
+
+#### What gets saved and restored
+
+The SDK captures browser state via Playwright's [`context.storage_state()`](https://playwright.dev/python/docs/api/class-browsercontext#browser-context-storage-state). On restore, only cookies are injected (via [`context.add_cookies()`](https://playwright.dev/python/docs/api/class-browsercontext#browser-context-add-cookies)) because the SDK uses a [persistent browser context](https://playwright.dev/python/docs/api/class-browsertype#browser-type-launch-persistent-context) which does not support the `storage_state` parameter.
+
+| Storage type | Saved | Restored | XSS readable | Size limit | Auth significance |
+|-------------|------|----------|-------------|-----------|-------------------|
+| [Cookies](https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies) | Yes | Yes | No, if `HttpOnly` is set | ~4 KB each | Primary auth mechanism. Sent automatically with every request. `HttpOnly` + `Secure` + `SameSite` attributes make cookies the [OWASP-recommended](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html) storage for session tokens. [NIST 800-63B](https://github.com/OWASP/ASVS/issues/553) also recommends against alternatives. |
+| [localStorage](https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage) | Yes | No | Yes | 5 MB | Some SPAs store JWTs here for `Authorization: Bearer` headers. [OWASP warns against this](https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html#local-storage): "a single XSS can steal all data in these objects." Not encrypted at rest. No `HttpOnly` equivalent exists. Not restored currently - the app re-initializes on first load. |
+| [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API) | No | No | Yes | [Up to 80% of disk](https://developer.chrome.com/docs/apps/offline_storage) | Rarely used for auth. Same [XSS exposure as localStorage](https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/12-Testing_Browser_Storage). Primarily a client-side database for offline data and large caches. Excluded from capture to keep saved state small. |
+
+For most authentication flows (OAuth, SAML), **cookies are sufficient** for session restoration. localStorage is saved but not restored - apps re-initialize their client-side state on first load without issue. See [OWASP ASVS V3](https://github.com/OWASP/ASVS/blob/master/4.0/en/0x12-V3-Session-management.md) for session management verification requirements.
+
+#### Alternative: Chrome persistent profile
+
+For single-machine use where you want full browser state persistence (cookies, localStorage, IndexedDB, cache, service workers, extensions), you can use Chrome's built-in profile directory instead of a `BrowserSessionProvider`:
+
+```python
+with NovaAct(
+    starting_page="https://example.com",
+    user_data_dir="~/.nova-act/my-chrome-profile",
+    clone_user_data_dir=False,  # persist changes back to the profile
+) as nova:
+    nova.act("Do something")
+```
+
+This persists everything Chrome normally stores between runs. The tradeoff:
+
+| | `BrowserSessionProvider` | `user_data_dir` |
+|---|---|---|
+| What's persisted | Cookies (saved & restored) + localStorage (saved only) | Full Chrome profile |
+| Shareable across machines | Yes (S3, AgentCore) | No (local only) |
+| Encrypted storage | Yes (S3 SSE-KMS) | No (plain files) |
+| Profile size | Small (JSON with auth state) | Large (full browser cache) |
+| Server-side browsers | Yes (AgentCore) | Not applicable |
+
+Use `user_data_dir` for simple local development. Use `BrowserSessionProvider` when you need remote storage, encryption, or AgentCore integration.
+
 ## Quick Start
 
 *Note: The first time you run NovaAct, it may take 1 to 2 minutes to start. This is because NovaAct needs to [install Playwright modules](https://playwright.dev/python/docs/browsers#install-browsers). Subsequent runs will only take a few seconds to start. This functionality can be toggled off by setting the `NOVA_ACT_SKIP_PLAYWRIGHT_INSTALL` environment variable.*

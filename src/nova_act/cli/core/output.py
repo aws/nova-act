@@ -210,6 +210,23 @@ def _echo_success_default(details: Mapping[str, object] | None, log_path: str | 
         click.echo(f"log_dir: {log_path}", file=out)
 
 
+def _append_error_to_log(log_path: str | None, error_code: ErrorCode, message: str, suggestions: list[str]) -> None:
+    """Append error details to the log file so errors are captured even in non-verbose mode."""
+    if not log_path:
+        return
+    try:
+        with open(log_path, "a") as f:
+            f.write("\n--- ERROR ---\n")
+            f.write(f"code: {error_code.value}\n")
+            f.write(f"message: {message}\n")
+            if suggestions:
+                f.write("suggestions:\n")
+                for s in suggestions:
+                    f.write(f"  - {s}\n")
+    except Exception:  # noqa: BLE001
+        pass  # Never mask the real error
+
+
 def exit_with_error(
     title: str,
     message: str,
@@ -221,6 +238,7 @@ def exit_with_error(
     """Display formatted error and exit with error code."""
     log_path = get_current_log_path()
     out = get_cli_stdout()
+    _append_error_to_log(log_path, error_code, message, suggestions)
     if is_quiet_mode():
         _exit_error_quiet(out, log_path)
     elif is_json_mode():

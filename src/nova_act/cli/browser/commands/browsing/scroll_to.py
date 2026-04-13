@@ -78,20 +78,9 @@ def scroll_to(
 
     prep = prepare_session(params, starting_page)
 
-    try:
-        with command_session(
-            "scroll_to", prep.manager, prep.session_info, params, log_args={"target": target}
-        ) as nova_act:
-            actions = BrowserActions(nova_act)
-            result = actions.scroll_to(target, max_attempts=max_attempts, timeout=timeout, **prep.method_args)
-    except RuntimeError as e:
-        exit_with_error(
-            "Scroll target not found",
-            str(e),
-            suggestions=["Try increasing --max-attempts", "Try a more specific target description"],
-            error_code=ErrorCode.NAVIGATION_ERROR,
-            retryable=True,
-        )
+    with command_session("scroll_to", prep.manager, prep.session_info, params, log_args={"target": target}) as nova_act:
+        actions = BrowserActions(nova_act)
+        result = actions.scroll_to(target, max_attempts=max_attempts, timeout=timeout, **prep.method_args)
 
     details: dict[str, object] = {k: v for k, v in asdict(result).items() if k != "target"}
     if result.attempts == 0:

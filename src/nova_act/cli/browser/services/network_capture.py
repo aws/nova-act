@@ -62,10 +62,15 @@ class NetworkCaptureService:
         capture.detach(page)
     """
 
-    def __init__(self, max_entries: int = DEFAULT_MAX_ENTRIES) -> None:
+    def __init__(
+        self,
+        max_entries: int = DEFAULT_MAX_ENTRIES,
+        redact_headers: list[str] | None = None,
+    ) -> None:
         self._entries: deque[NetworkEntry] = deque(maxlen=max_entries)
         self._entry_index: dict[str, NetworkEntry] = {}  # request_key -> entry for O(1) lookup
         self._pending: dict[str, float] = {}  # request_key -> start_time
+        self._redact_patterns = redact_headers or []
         self._attached = False
 
     @property
@@ -131,6 +136,15 @@ class NetworkCaptureService:
     def entry_count(self) -> int:
         return len(self._entries)
 
+    def _redact(self, headers: dict[str, str]) -> dict[str, str]:
+        """Replace values of headers matching redact patterns with '[REDACTED]'."""
+        if not self._redact_patterns:
+            return headers
+        return {
+            k: "[REDACTED]" if any(fnmatch.fnmatch(k.lower(), p.lower()) for p in self._redact_patterns) else v
+            for k, v in headers.items()
+        }
+
     def _on_request(self, request: Request) -> None:
         key = _request_key(request)
         self._pending[key] = time.monotonic()
@@ -139,7 +153,7 @@ class NetworkCaptureService:
             method=request.method,
             resource_type=request.resource_type,
             timestamp=time.time(),
-            request_headers=dict(request.headers),
+            request_headers=self._redact(dict(request.headers)),
         )
         self._entries.append(entry)
         self._entry_index[key] = entry
@@ -153,7 +167,7 @@ class NetworkCaptureService:
         entry = self._entry_index.pop(key, None)
         if entry is not None:
             entry.status = response.status
-            entry.response_headers = dict(response.headers)
+            entry.response_headers = self._redact(dict(response.headers))
             entry.duration_ms = round(duration, 1) if duration is not None else None
             content_length = response.headers.get("content-length")
             if content_length:

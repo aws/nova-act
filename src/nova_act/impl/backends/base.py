@@ -26,6 +26,7 @@ from nova_act.tools.actuator.interface.actuator import ActionType
 from nova_act.tools.browser.interface.browser import BrowserObservation
 from nova_act.types.act_errors import ActInvalidModelGenerationError, ActInvalidToolError, ActInvalidToolSchemaError
 from nova_act.types.act_result import ActGetResult
+from nova_act.types.api.step import Statement
 from nova_act.types.errors import (
     InterpreterError,
     InvalidToolArgumentsError,
@@ -126,7 +127,12 @@ class Backend(ABC, Generic[T]):
     def send_act_telemetry(self, act: Act, success: ActGetResult | None, error: NovaActError | None) -> None:
         """Send telemetry for an act. By default, do not send any."""
 
-    def send_environment_telemetry(self, session_id: str, actuator_type: Literal["custom", "playwright"]) -> None:
+    def send_environment_telemetry(
+        self,
+        session_id: str,
+        actuator_type: Literal["custom", "playwright"],
+        sdk_variant: Literal["SYNC", "ASYNC"],
+    ) -> None:
         """Send environment telemetry. By default, do not send any."""
 
 
@@ -173,7 +179,9 @@ class AwlBackend(Backend[T]):
 
         # Interpret a program from the AST
         try:
-            base_program = NovaActInterpreter.interpret_ast(step_object.model_output.program_ast, tool_map)
+            base_program = NovaActInterpreter.interpret_ast(
+                cast(list[Statement], step_object.model_output.program_ast), tool_map
+            )
         except UnknownToolError as e:
             raise ActInvalidToolError(
                 message=str(e),

@@ -31,6 +31,7 @@ from nova_act.cli.browser.utils.decorators import (
 )
 from nova_act.cli.browser.utils.error_handlers import handle_common_errors
 from nova_act.cli.browser.utils.session import (
+    _emit_auth_fallback_warning,
     build_browser_options_from_params,
     get_or_create_session,
     get_session_manager,
@@ -76,6 +77,7 @@ def create(
     validate_session_available(params.session_id, manager)
 
     auth_config = resolve_auth_mode(params.auth_mode, params.profile, params.region, params.workflow_name)
+    _emit_auth_fallback_warning(auth_config, params.auth_mode)
     browser_options = build_browser_options_from_params(
         params,
         auth_config=auth_config,

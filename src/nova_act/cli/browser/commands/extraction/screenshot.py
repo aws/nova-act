@@ -105,26 +105,14 @@ def screenshot(
 
         annotation_count = 0
         if annotate:
-            from nova_act.cli.browser.services.intent_resolution.snapshot import (
-                flatten_snapshot,
-            )
             from nova_act.cli.browser.services.screenshot_annotator import (
-                annotate_screenshot,
-                resolve_element_boxes,
+                annotate_page_screenshot,
             )
 
             active_page = get_active_page(nova_act, prep.session_info)
-            tree = active_page.accessibility.snapshot()
-            elements = flatten_snapshot(tree)
-
-            role_filter: frozenset[str] | None = None
-            if annotate_filter:
-                role_filter = frozenset(r.strip() for r in annotate_filter.split(","))
-
-            elements_with_boxes = resolve_element_boxes(active_page, elements, role_filter)
-            annotation_count = len(elements_with_boxes)
-            if elements_with_boxes:
-                screenshot_bytes = annotate_screenshot(screenshot_bytes, elements_with_boxes)
+            screenshot_bytes, annotation_count = annotate_page_screenshot(
+                active_page, screenshot_bytes, annotate_filter
+            )
 
         write_output_file(output, screenshot_bytes)
 

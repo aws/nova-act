@@ -365,3 +365,35 @@ class ChromeLauncher:
 
         process, ws_url = self._launch_and_connect(args, port)
         return LaunchResult(process=process, ws_url=ws_url, port=port, user_data_dir=resolution.user_data_dir)
+
+    def launch_chrome_with_user_data_dir(
+        self,
+        user_data_dir: Path,
+        headless: bool,
+        executable_path: str | None = None,
+        launch_args: list[str] | None = None,
+    ) -> LaunchResult:
+        """Launch Chrome with CDP using a pre-existing user data directory.
+
+        Unlike launch_chrome_with_cdp() which resolves profiles internally,
+        this method takes a user_data_dir directly — the caller is responsible
+        for profile resolution and any rsync operations.
+
+        Args:
+            user_data_dir: Path to Chrome user data directory (already prepared by caller)
+            headless: Whether to launch in headless mode
+            executable_path: Optional path to custom Chromium-based browser executable
+            launch_args: Additional Chrome launch arguments
+
+        Returns:
+            LaunchResult containing Chrome process, WebSocket URL, CDP port, and user data directory
+
+        Raises:
+            RuntimeError: If Chrome launch fails or CDP endpoint not available
+        """
+        chrome_path = executable_path if executable_path else self.detect_chrome_path()
+        self._validate_browser_executable(chrome_path)
+        port = self.find_available_port()
+        args = self._build_chrome_arguments(chrome_path, port, user_data_dir, headless, launch_args)
+        process, ws_url = self._launch_and_connect(args, port)
+        return LaunchResult(process=process, ws_url=ws_url, port=port, user_data_dir=user_data_dir)

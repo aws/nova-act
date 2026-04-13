@@ -53,6 +53,7 @@ from nova_act.tools.human.interface.human_input_callback import (
 )
 
 
+from nova_act.browser_auth import BrowserAuth
 from nova_act.impl.backends.factory import BackendFactory
 from nova_act.types.act_errors import ActError, ActInvalidModelGenerationError
 from nova_act.types.act_result import ActGetResult, ActResult
@@ -171,6 +172,7 @@ class NovaAct:
         tools: list[ActionType] | None = None,
         workflow: Workflow | None = None,
         replayable: bool = False,
+        browser_auth: BrowserAuth = None,
     ):
         """Initialize a client object.
 
@@ -265,6 +267,11 @@ class NovaAct:
         replayable: bool
             When enabled, stores Act trajectory information during memory so that it may be serialized
             and replayed. Defaults to False. Can also be enabled with NOVA_ACT_REPLAYABLE environment variable.
+        browser_auth: BrowserAuth, optional
+            Browser authentication provider. Accepts any ``BrowserCookieProvider`` (for cookie
+            injection) or ``BrowserSessionProvider`` subclass (for full session persistence).
+            Built-in options: ``LocalFileSessionProvider``, ``S3SessionProvider``,
+            ``AgentCoreBrowserSessionProvider``. Defaults to None (no authentication).
         """
         self._workflow_run: WorkflowRun | None = None
 
@@ -272,6 +279,7 @@ class NovaAct:
         if not security_options:
             security_options = SecurityOptions()
 
+        self._browser_auth = browser_auth
 
         self._replayable = replayable or "NOVA_ACT_REPLAYABLE" in os.environ
         self._workflow: Workflow | None = None
@@ -421,6 +429,7 @@ class NovaAct:
             cdp_use_existing_page=cdp_use_existing_page,
             user_browser_args=user_browser_args,
             security_options=security_options,
+            browser_auth_mode=self._browser_auth,
         )
         self._cdp_endpoint_url = cdp_endpoint_url
         self._allowed_file_open_paths = security_options.allowed_file_open_paths
@@ -722,6 +731,7 @@ class NovaAct:
             self._backend.send_environment_telemetry(
                 session_id=self._session_id,
                 actuator_type=actuator_type,
+                sdk_variant="ASYNC",
             )
 
             await self._actuator.start(

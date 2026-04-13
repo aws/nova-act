@@ -137,7 +137,8 @@ class SessionRecorder:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(self._manifest, f, indent=2)
             os.replace(tmp_path, str(self._manifest_path))
-        except BaseException:
+        except BaseException as e:
+            logger.warning("Failed to persist session manifest: %s", e)
             try:
                 os.unlink(tmp_path)
             except OSError:

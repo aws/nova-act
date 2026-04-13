@@ -87,7 +87,7 @@ def list_sessions(show_all: bool) -> None:
 
         _display_sessions(sessions, show_all)
 
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         exit_with_error(
             "Failed to list sessions", str(e), suggestions=["Check if session manager is accessible", "Try again"]
         )
