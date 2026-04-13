@@ -15,12 +15,13 @@
 
 import click
 
+from nova_act.cli.browser.services.session.closer import SessionCloser
 from nova_act.cli.browser.services.session.manager import SessionManager
 from nova_act.cli.browser.services.session.models import SessionInfo
 from nova_act.cli.browser.utils.decorators import json_option
 from nova_act.cli.browser.utils.session import get_session_manager
 from nova_act.cli.core.exceptions import SessionNotFoundError
-from nova_act.cli.core.json_output import ErrorCode, is_json_mode
+from nova_act.cli.core.json_output import ErrorCode
 from nova_act.cli.core.output import echo_success, exit_with_error
 
 
@@ -55,7 +56,9 @@ def _close_single_session(manager: SessionManager, session_id: str, force: bool)
             ],
             error_code=ErrorCode.BROWSER_ERROR,
         )
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # noqa: BLE001 — top-level CLI error boundary; catches anything not handled by specific handlers above
         exit_with_error(
             f"Unexpected error closing session '{session_id}'",
             str(e),
@@ -78,40 +81,12 @@ def _get_sessions_to_close(manager: SessionManager) -> list[SessionInfo]:
     """
     try:
         return manager.list_sessions()
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         exit_with_error(
             "Failed to close all sessions",
             str(e),
             suggestions=["Try again", "Close sessions individually: act browser session close <session-id>"],
         )
-
-
-def _close_sessions_batch(
-    manager: SessionManager, sessions: list[SessionInfo], force: bool
-) -> tuple[list[str], list[str]]:
-    """Close multiple sessions and track results.
-
-    Args:
-        manager: SessionManager instance
-        sessions: List of sessions to close
-        force: Whether to force close
-
-    Returns:
-        Tuple of (closed_session_ids, failed_sessions)
-    """
-    closed_ids: list[str] = []
-    failed_sessions = []
-
-    for session in sessions:
-        if not is_json_mode():
-            click.echo(f"Closing session '{session.session_id}'...")
-        try:
-            manager.close_session(session.session_id, force=force)
-            closed_ids.append(session.session_id)
-        except Exception as e:
-            failed_sessions.append(f"{session.session_id}: {str(e)}")
-
-    return closed_ids, failed_sessions
 
 
 def _report_close_all_results(closed_ids: list[str], total_count: int, failed_sessions: list[str]) -> None:
@@ -169,6 +144,5 @@ def close_all(force: bool) -> None:
         echo_success("No sessions to close", details={"Info": "No sessions found"})
         return
 
-    # Force-close non-active sessions (FAILED/STOPPED) since they can't be gracefully stopped
-    closed_ids, failed_sessions = _close_sessions_batch(manager, sessions, force)
+    closed_ids, failed_sessions = SessionCloser.close_sessions_batch(manager, sessions, force)
     _report_close_all_results(closed_ids, len(sessions), failed_sessions)

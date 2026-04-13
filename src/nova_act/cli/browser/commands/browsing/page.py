@@ -35,7 +35,9 @@ from nova_act.cli.browser.utils.session import (
     get_active_page,
     prepare_session,
 )
-from nova_act.cli.core.output import echo_success
+from nova_act.cli.core.output import echo_success, get_cli_stdout
+
+BLOCKED_METHODS: frozenset[str] = frozenset({"close"})
 
 
 def _get_page_signatures(page: object) -> str:
@@ -43,6 +45,8 @@ def _get_page_signatures(page: object) -> str:
     lines: list[str] = []
     for name in sorted(dir(page)):
         if name.startswith("_"):
+            continue
+        if name in BLOCKED_METHODS:
             continue
         attr = getattr(page, name, None)
         if attr is None or not callable(attr):
@@ -101,11 +105,17 @@ def page(
         active_page = get_active_page(nova_act, prep.session_info)
         if signatures:
             sig_output = _get_page_signatures(active_page)
-            click.echo(sig_output)
+            click.echo(sig_output, file=get_cli_stdout())
             return
 
         if not method_name:
             raise click.UsageError("method_name is required unless --signatures is used")
+
+        if method_name in BLOCKED_METHODS:
+            raise click.UsageError(
+                f"Method '{method_name}' is blocked for safety. "
+                f"Blocked methods: {', '.join(sorted(BLOCKED_METHODS))}"
+            )
 
         if not hasattr(active_page, method_name):
             raise click.UsageError(f"Unknown page method: {method_name}")

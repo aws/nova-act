@@ -97,11 +97,11 @@ class CdpEndpointManager:
 
         try:
             port = int(cdp_endpoint)
-        except ValueError:
+        except ValueError as e:
             raise ValueError(
                 f"Invalid CDP endpoint format: '{cdp_endpoint}'. "
                 "Expected port number (e.g., 9222) or WebSocket URL (e.g., ws://localhost:9222)"
-            )
+            ) from e
         validate_port(port)
         return f"{_WS_PREFIX}localhost:{port}"
 
@@ -163,7 +163,7 @@ class CdpEndpointManager:
                 DefaultBrowserConfig.CDP_VERSION_CHECK_TIMEOUT_SECONDS,
             )
         except requests.RequestException as e:
-            raise RuntimeError(f"CDP endpoint '{endpoint}' is not reachable: {e}")
+            raise RuntimeError(f"CDP endpoint '{endpoint}' is not reachable: {e}") from e
         except KeyError as e:
             raise RuntimeError(f"CDP endpoint '{endpoint}' did not return webSocketDebuggerUrl") from e
 

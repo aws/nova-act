@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import math
 from abc import abstractmethod
 
 from pydantic import JsonValue
@@ -19,6 +20,7 @@ from typing_extensions import Self, final
 
 from nova_act.tools.actuator.interface.actuator import ActionType, ActuatorBase
 from nova_act.tools.browser.interface.types.click_types import ClickOptions, ClickType
+from nova_act.tools.browser.interface.types.dimensions_dict import DimensionsDict
 from nova_act.tools.browser.interface.types.scroll_types import ScrollDirection
 from nova_act.types.api.step import Observation
 
@@ -84,6 +86,49 @@ class BrowserActionProvider:
             self.take_observation,
         ]
 
+    def _normalize_box_to_absolute(self, box: str) -> str:
+        """Convert normalized box coords (0-1000) to absolute <box> format.
+
+        If the box is already in "<box>top,left,bottom,right</box>" format
+        (absolute pixel coordinates), it is returned as-is.
+
+        Args:
+            box: Either "left,top,right,bottom" with each coord in [0, 1000],
+                 or "<box>top,left,bottom,right</box>" with absolute pixels.
+
+        Returns:
+            "<box>top,left,bottom,right</box>" with absolute pixel coordinates
+        """
+        box = box.strip()
+
+        # Already in absolute <box> format — pass through
+        if box.startswith("<box>") and box.endswith("</box>"):
+            return box
+
+        # Handle <bbox>...</bbox> format from backend
+        if box.startswith("<bbox>") and box.endswith("</bbox>"):
+            box = box[len("<bbox>") : -len("</bbox>")]
+        elif "<bbox>" in box or "</bbox>" in box:
+            raise ValueError(f"Malformed bbox format: {box}")
+
+        parts = box.split(",")
+        if len(parts) != 4:
+            raise ValueError(f"Expected 4 coordinates, got {len(parts)}: {box}")
+        try:
+            coords = [int(p.strip()) for p in parts]
+        except ValueError as e:
+            raise ValueError(f"All coordinates must be integers, got: {box}") from e
+        for c in coords:
+            if c < 0 or c > 1000:
+                raise ValueError(f"All coordinates must be in [0, 1000], got: {box}")
+        dims = self.actuator.get_viewport_size()
+        width, height = dims["width"], dims["height"]
+        left = math.floor(coords[0] * width / 1000)
+        top = math.floor(coords[1] * height / 1000)
+        right = math.ceil(coords[2] * width / 1000)
+        bottom = math.ceil(coords[3] * height / 1000)
+        return f"<box>{top},{left},{bottom},{right}</box>"
+
     @final
     @tool(name="agentClick", description=AGENT_CLICK_DESCRIPTION)
     def agent_click(
@@ -97,8 +142,10 @@ class BrowserActionProvider:
                 Each coordinate must be an integer in [0, 1000], normalized to the current screenshot
                 (0 = left/top edge, 1000 = right/bottom edge). Require left <= right and top <= bottom.
                 You must include "<bbox>...</bbox>" wrappers.
-                Use "-1,-1,-1,-1" only as an explicit invalid/unknown sentinel.
+            click_type: The type of click. Can be of left, left-double, and right
+            click_options: The options for a click.
         """
+        box = self._normalize_box_to_absolute(box)
         return self.actuator.agent_click(box, click_type, click_options)
 
     @final
@@ -112,8 +159,8 @@ class BrowserActionProvider:
                 Each coordinate must be an integer in [0, 1000], normalized to the current screenshot
                 (0 = left/top edge, 1000 = right/bottom edge). Require left <= right and top <= bottom.
                 You must include "<bbox>...</bbox>" wrappers.
-                Use "-1,-1,-1,-1" only as an explicit invalid/unknown sentinel.
         """
+        box = self._normalize_box_to_absolute(box)
         return self.actuator.agent_hover(box)
 
     @final
@@ -128,8 +175,9 @@ class BrowserActionProvider:
                 Each coordinate must be an integer in [0, 1000], normalized to the current screenshot
                 (0 = left/top edge, 1000 = right/bottom edge). Require left <= right and top <= bottom.
                 You must include "<bbox>...</bbox>" wrappers.
-                Use "-1,-1,-1,-1" only as an explicit invalid/unknown sentinel.
+            value: scroll amount
         """
+        box = self._normalize_box_to_absolute(box)
         return self.actuator.agent_scroll(direction, box, value)
 
     @final
@@ -144,9 +192,9 @@ class BrowserActionProvider:
                 Each coordinate must be an integer in [0, 1000], normalized to the current screenshot
                 (0 = left/top edge, 1000 = right/bottom edge). Require left <= right and top <= bottom.
                 You must include "<bbox>...</bbox>" wrappers.
-                Use "-1,-1,-1,-1" only as an explicit invalid/unknown sentinel.
             press_enter: whether or not to press enter after typing the string
         """
+        box = self._normalize_box_to_absolute(box)
         return self.actuator.agent_type(value, box, pressEnter)
 
     @final
@@ -217,6 +265,10 @@ class BrowserActuatorBase(ActuatorBase):
         if self._action_provider is None:
             self._action_provider = BrowserActionProvider(self)
         return self._action_provider.provide()
+
+    @abstractmethod
+    def get_viewport_size(self) -> DimensionsDict:
+        """Return the current viewport dimensions as {"width": int, "height": int}."""
 
     @abstractmethod
     def agent_click(

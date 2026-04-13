@@ -22,6 +22,7 @@ import logging
 import os
 import platform
 import re
+import subprocess
 from contextlib import AbstractContextManager
 from datetime import datetime
 from pathlib import Path
@@ -251,7 +252,7 @@ class SessionManager:
             session_info.cdp_endpoint = launch.ws_url
             session_info.cdp_port = launch.port
             session_info.user_data_dir = str(launch.user_data_dir)
-        except Exception as e:
+        except RuntimeError as e:
             self._handle_browser_setup_failure(
                 session_info,
                 e,
@@ -280,6 +281,59 @@ class SessionManager:
             return os.path.samefile(resolved, default_resolved) or resolved.startswith(default_resolved + os.sep)
         except (OSError, ValueError):
             return False
+
+    def _rsync_and_launch_chrome(
+        self,
+        session_info: SessionInfo,
+        working_dir: str,
+        *,
+        headless: bool,
+        executable_path: str | None,
+        launch_args: list[str] | None = None,
+    ) -> None:
+        """Rsync default Chrome profile to working_dir, remove SingletonLock, and launch Chrome.
+
+        Updates session_info with user_data_dir, browser_pid, cdp_endpoint, cdp_port.
+
+        Args:
+            session_info: Session to update with browser details
+            working_dir: Directory to rsync Chrome data into and launch from
+            headless: Whether to launch in headless mode
+            executable_path: Optional custom browser executable
+            launch_args: Additional Chrome launch arguments
+        """
+        try:
+            from nova_act import rsync_from_default_user_data  # noqa: PLC0415
+
+            rsync_from_default_user_data(working_dir)
+        except (ImportError, subprocess.CalledProcessError, OSError) as e:
+            self._handle_browser_setup_failure(
+                session_info,
+                e,
+                f"Failed to rsync Chrome profile for session '{session_info.session_id}'",
+            )
+
+        session_info.user_data_dir = working_dir
+
+        # Remove SingletonLock as safety net (rsync excludes Singleton* but belt-and-suspenders)
+        (Path(working_dir) / "SingletonLock").unlink(missing_ok=True)
+
+        try:
+            launch = self._chrome_launcher.launch_chrome_with_user_data_dir(
+                user_data_dir=Path(working_dir),
+                headless=headless,
+                executable_path=executable_path,
+                launch_args=launch_args,
+            )
+            session_info.browser_pid = launch.process.pid
+            session_info.cdp_endpoint = launch.ws_url
+            session_info.cdp_port = launch.port
+        except RuntimeError as e:
+            self._handle_browser_setup_failure(
+                session_info,
+                e,
+                f"Failed to launch Chrome for session '{session_info.session_id}'",
+            )
 
     def _launch_with_rsynced_profile(self, session_info: SessionInfo, options: BrowserOptions) -> None:
         """Rsync system Chrome profile to a managed directory and launch Chrome.
@@ -311,47 +365,18 @@ class SessionManager:
         working_dir_path.mkdir(parents=True, exist_ok=True)
         working_dir = str(working_dir_path)
 
-        # Rsync Chrome data to managed directory
-        try:
-            from nova_act import rsync_from_default_user_data  # noqa: PLC0415
+        # Build launch args with profile directory if needed
+        launch_args = list(options.launch_args) if options.launch_args else []
+        if profile_directory:
+            launch_args.append(f"--profile-directory={profile_directory}")
 
-            rsync_from_default_user_data(working_dir)
-        except Exception as e:
-            self._handle_browser_setup_failure(
-                session_info,
-                e,
-                f"Failed to rsync Chrome profile for session '{session_info.session_id}'",
-            )
-
-        session_info.user_data_dir = working_dir
-
-        # Remove SingletonLock as safety net (rsync excludes Singleton* but belt-and-suspenders)
-        (Path(working_dir) / "SingletonLock").unlink(missing_ok=True)
-
-        # Launch Chrome with the rsynced copy
-        try:
-            chrome_path = options.executable_path or self._chrome_launcher.detect_chrome_path()
-            self._chrome_launcher._validate_browser_executable(chrome_path)
-            port = self._chrome_launcher.find_available_port()
-            user_data_dir = Path(working_dir)
-
-            launch_args = list(options.launch_args) if options.launch_args else []
-            if profile_directory:
-                launch_args.append(f"--profile-directory={profile_directory}")
-
-            args = self._chrome_launcher._build_chrome_arguments(
-                chrome_path, port, user_data_dir, options.headless, launch_args or None
-            )
-            process, ws_url = self._chrome_launcher._launch_and_connect(args, port)
-            session_info.browser_pid = process.pid
-            session_info.cdp_endpoint = ws_url
-            session_info.cdp_port = port
-        except Exception as e:
-            self._handle_browser_setup_failure(
-                session_info,
-                e,
-                f"Failed to launch Chrome for session '{session_info.session_id}'",
-            )
+        self._rsync_and_launch_chrome(
+            session_info,
+            working_dir,
+            headless=options.headless,
+            executable_path=options.executable_path,
+            launch_args=launch_args or None,
+        )
 
     def _setup_browser(self, session_info: SessionInfo, options: BrowserOptions) -> None:
         """Setup browser by launching a new Chrome instance or preparing for default Chrome.
@@ -403,46 +428,13 @@ class SessionManager:
             profile_dir.mkdir(parents=True, exist_ok=True)
             working_dir = str(profile_dir)
 
-        try:
-            from nova_act import rsync_from_default_user_data  # noqa: PLC0415
-
-            rsync_from_default_user_data(working_dir)
-        except Exception as e:
-            self._handle_browser_setup_failure(
-                session_info,
-                e,
-                f"Failed to rsync Chrome profile for session '{session_info.session_id}'",
-            )
-
-        session_info.user_data_dir = working_dir
-
-        # Remove SingletonLock that may have been rsynced from the source Chrome profile.
-        # rsync_from_default_user_data excludes Singleton* but this is a safety net.
-        lock_file = Path(working_dir) / "SingletonLock"
-        lock_file.unlink(missing_ok=True)
-
-        # Launch Chrome using the rsynced user data directory directly.
-        # We bypass _launch_new_browser because _resolve_user_data_directory expects
-        # a profile dir (with Preferences at root), but working_dir is a full Chrome
-        # user data dir (Preferences lives in Default/ subdirectory).
-        try:
-            chrome_path = options.executable_path or self._chrome_launcher.detect_chrome_path()
-            self._chrome_launcher._validate_browser_executable(chrome_path)
-            port = self._chrome_launcher.find_available_port()
-            user_data_dir = Path(working_dir)
-            args = self._chrome_launcher._build_chrome_arguments(
-                chrome_path, port, user_data_dir, options.headless, options.launch_args or None
-            )
-            process, ws_url = self._chrome_launcher._launch_and_connect(args, port)
-            session_info.browser_pid = process.pid
-            session_info.cdp_endpoint = ws_url
-            session_info.cdp_port = port
-        except Exception as e:
-            self._handle_browser_setup_failure(
-                session_info,
-                e,
-                f"Failed to launch Chrome for session '{session_info.session_id}'",
-            )
+        self._rsync_and_launch_chrome(
+            session_info,
+            working_dir,
+            headless=options.headless,
+            executable_path=options.executable_path,
+            launch_args=options.launch_args or None,
+        )
 
     def _count_active_sessions(self) -> int:
         """Count sessions in active states (STARTING or STARTED)."""
@@ -486,6 +478,8 @@ class SessionManager:
             SessionLimitReached: If max active sessions limit is reached
             RuntimeError: If Chrome launch or NovaAct.start() fails
         """
+        self._validate_session_id(session_id)
+
         # Auto-prune stale sessions to prevent resource accumulation
         self.prune_sessions(ignore_ttl=False, dry_run=False)
 
@@ -505,7 +499,6 @@ class SessionManager:
                 f"'act browser session close-all', or increase limit with --max-sessions."
             )
 
-        self._validate_session_id(session_id)
         options = browser_options or BrowserOptions()
         session_info = self._initialize_session_info(session_id)
         session_info.browser_options_meta = {
@@ -576,8 +569,8 @@ class SessionManager:
             try:
                 session_info = self._persistence.load_session(session_id)
                 self._sessions[session_id] = session_info
-            except (FileNotFoundError, json.JSONDecodeError, KeyError, ValueError):
-                raise SessionNotFoundError(f"Session '{session_id}' not found")
+            except (FileNotFoundError, json.JSONDecodeError, KeyError, ValueError) as e:
+                raise SessionNotFoundError(f"Session '{session_id}' not found") from e
 
         session_info = self._sessions[session_id]
 

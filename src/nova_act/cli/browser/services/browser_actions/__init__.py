@@ -31,12 +31,13 @@ from nova_act.cli.browser.services.browser_actions.inspection import (
 )
 from nova_act.cli.browser.services.browser_actions.interaction import InteractionMixin
 from nova_act.cli.browser.services.browser_actions.navigation import NavigationMixin
+from nova_act.cli.browser.services.browser_actions.tab_operations import TabOperationsMixin
 
 if TYPE_CHECKING:
     from nova_act import NovaAct
 
 
-class BrowserActions(NavigationMixin, ExplorationMixin, InteractionMixin, InspectionMixin):
+class BrowserActions(NavigationMixin, ExplorationMixin, InteractionMixin, InspectionMixin, TabOperationsMixin):
     """Pure browser capability logic — no CLI, no output formatting, no logging."""
 
     def __init__(self, nova_act: NovaAct) -> None:

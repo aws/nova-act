@@ -55,6 +55,11 @@ class AuthError(NovaActError):
         super().__init__(message)
 
 
+class BrowserAuthError(NovaActError):
+    """Indicates there's an error with browser authentication"""
+
+    def __init__(self, message: str):
+        super().__init__(message)
 
 
 class IAMAuthError(NovaActError):

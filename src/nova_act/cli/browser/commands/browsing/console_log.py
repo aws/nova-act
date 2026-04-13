@@ -40,15 +40,19 @@ from nova_act.cli.core.output import echo_success, get_cli_stdout
 if TYPE_CHECKING:
     from nova_act.cli.browser.types import CommandParams
 
-# Module-level registry: session_id -> ConsoleCaptureService
-_capture_registry: dict[str, ConsoleCaptureService] = {}
+
+def _new_registry() -> dict[str, ConsoleCaptureService]:
+    return {}
 
 
-def get_or_create_capture(session_id: str) -> ConsoleCaptureService:
+def get_or_create_capture(
+    session_id: str,
+    _registry: dict[str, ConsoleCaptureService] = _new_registry(),
+) -> ConsoleCaptureService:
     """Get existing capture service or create a new one for the session."""
-    if session_id not in _capture_registry:
-        _capture_registry[session_id] = ConsoleCaptureService()
-    return _capture_registry[session_id]
+    if session_id not in _registry:
+        _registry[session_id] = ConsoleCaptureService()
+    return _registry[session_id]
 
 
 def _entry_to_dict(entry: ConsoleEntry) -> dict[str, object]:

@@ -21,7 +21,7 @@ from typing import NamedTuple, TypeVar
 
 import click
 
-from nova_act.cli.browser.utils.log_capture import _build_log_path
+from nova_act.cli.browser.utils.log_capture import _build_log_path, _write_metadata_header
 from nova_act.cli.core.exceptions import (
     BrowserProcessDead,
     SessionLimitReached,
@@ -250,6 +250,15 @@ def handle_common_errors(func: F) -> F:  # type: ignore[explicit-any]
             log_path, cmd_dir = _build_log_path(session_id, command_name)
             set_current_log_path(str(log_path))
             set_current_log_dir(str(cmd_dir))
+            # Create a minimal log.txt so it exists even if the command fails before
+            # entering capture_command_log(). Commands that use command_session() will
+            # overwrite this file with the full version including SDK output.
+            # Best-effort: capture_command_log will retry later if this fails.
+            try:
+                with open(log_path, "w") as f:
+                    _write_metadata_header(f, command_name, session_id, None)
+            except OSError:
+                pass
         try:
             return func(*args, **kwargs)
         except click.exceptions.Exit:
@@ -285,7 +294,36 @@ def handle_common_errors(func: F) -> F:  # type: ignore[explicit-any]
                 ],
                 error_code=ErrorCode.BROWSER_ERROR,
             )
-        except Exception as e:
+        except ConnectionError as e:
+            exit_with_error(
+                "Connection failed",
+                str(e),
+                suggestions=[
+                    "Check network connectivity",
+                    "Verify the browser process is running",
+                    "Retry the command",
+                ],
+                error_code=ErrorCode.BROWSER_ERROR,
+                retryable=True,
+            )
+        except TimeoutError as e:
+            exit_with_error(
+                "Operation timed out",
+                str(e),
+                suggestions=["Retry the command", "Increase timeout if available", "Check system resources"],
+                error_code=ErrorCode.TIMEOUT_ERROR,
+                retryable=True,
+            )
+        except PermissionError as e:
+            exit_with_error(
+                "Permission denied",
+                str(e),
+                suggestions=["Check file and directory permissions", "Run with appropriate user privileges"],
+                error_code=ErrorCode.FILE_ERROR,
+            )
+        except (
+            Exception
+        ) as e:  # noqa: BLE001 — top-level CLI error boundary; catches anything not handled by specific handlers above
             details = _get_failure_details(e)
             if _handle_sdk_error(e, details):
                 return None

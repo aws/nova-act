@@ -17,7 +17,7 @@ IMPORTANT: The Nova Act CLI is a convenience utility to quickstart the creation 
 ## Installation
 
 ```bash
-pip install nova-act[cli]
+pip install "nova-act[cli]"
 ```
 
 ## Browser Commands

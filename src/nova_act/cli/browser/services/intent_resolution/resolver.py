@@ -52,7 +52,7 @@ class ResolvedTarget:
 # Role filters per command type
 CLICKABLE_ROLES = frozenset({"button", "link", "menuitem", "tab", "checkbox", "radio", "option", "switch", "treeitem"})
 FILLABLE_ROLES = frozenset({"textbox", "searchbox", "combobox", "spinbutton", "textarea"})
-SEARCH_ROLES = frozenset({"searchbox", "textbox", "button"})
+SEARCH_ROLES = frozenset({"searchbox", "button"})
 HEADING_LANDMARK_ROLES = frozenset(
     {"heading", "region", "navigation", "contentinfo", "banner", "main", "complementary"}
 )
@@ -115,15 +115,12 @@ def resolve(target: str, command_type: str, page: "Page") -> ResolvedTarget:
         if result.element.role in HEADING_LANDMARK_ROLES:
             boosted = result.score + HEADING_LANDMARK_BONUS
             if boosted >= FUZZY_SCORE_THRESHOLD:
-                # Re-check with bonus — need to verify gap still holds
-                result_confident = result.score >= (FUZZY_SCORE_THRESHOLD - HEADING_LANDMARK_BONUS)
-                if result_confident:
-                    return ResolvedTarget(
-                        path=ResolutionPath.FAST,
-                        element=result.element,
-                        confidence=boosted,
-                        match_method="token_set_ratio_boosted",
-                    )
+                return ResolvedTarget(
+                    path=ResolutionPath.FAST,
+                    element=result.element,
+                    confidence=boosted,
+                    match_method="token_set_ratio_boosted",
+                )
 
     if result.confident and result.element:
         return ResolvedTarget(

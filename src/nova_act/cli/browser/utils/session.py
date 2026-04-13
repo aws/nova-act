@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import json as _json
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -23,6 +24,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 import click
+from playwright.sync_api import Error as PlaywrightError
 
 from nova_act import NovaAct
 from nova_act.cli.browser.services.session.manager import SessionManager
@@ -33,7 +35,7 @@ from nova_act.cli.browser.services.session.models import (
 from nova_act.cli.browser.services.step_tracking import (
     patch_nova_act_for_step_snapshots,
 )
-from nova_act.cli.browser.utils.auth import AuthConfig, resolve_auth_mode
+from nova_act.cli.browser.utils.auth import AuthConfig, AuthMode, resolve_auth_mode
 from nova_act.cli.browser.utils.browser_config_cli import determine_headless_mode
 from nova_act.cli.browser.utils.disk_usage import check_disk_usage
 from nova_act.cli.browser.utils.log_capture import (
@@ -48,6 +50,8 @@ from nova_act.cli.browser.utils.nova_args import (
 )
 from nova_act.cli.core.config import get_browser_cli_dir
 from nova_act.cli.core.exceptions import SessionNotFoundError
+from nova_act.cli.core.json_output import is_json_mode
+from nova_act.cli.core.output import get_cli_stdout
 
 if TYPE_CHECKING:
     from playwright.sync_api import Page
@@ -92,6 +96,9 @@ def get_or_create_session(
         return session_info
 
     # Session is missing or stale — clean up and create a new one.
+    logger.info(
+        "Session '%s' is stale (no live browser instance). Force-closing and creating fresh session.", session_id
+    )
     try:
         manager.close_session(session_id, force=True)
     except SessionNotFoundError:
@@ -163,8 +170,8 @@ def get_active_page(nova_act: NovaAct, session_info: SessionInfo) -> Page:
         idx = session_info.active_tab_index
         if 0 <= idx < len(pages):
             return pages[idx]
-    except Exception:
-        pass
+    except (PlaywrightError, IndexError, TypeError):
+        logger.warning("Failed to get active tab page at index %d", session_info.active_tab_index, exc_info=True)
     return nova_act.page
 
 
@@ -196,8 +203,8 @@ def patch_active_tab(nova_act: NovaAct, session_info: SessionInfo) -> None:
                 pages = pm.context.pages
                 if 0 <= idx < len(pages):
                     return pages[idx]
-            except Exception:
-                pass
+            except (PlaywrightError, IndexError, TypeError):
+                logger.warning("Failed to resolve patched active tab at index %d", idx, exc_info=True)
         return original_get_page(index)
 
     pm.get_page = patched_get_page
@@ -264,6 +271,11 @@ def _handle_post_command(
     if steps_meta:
         orientation.update(steps_meta)
 
+    # Emit orientation metadata to stdout (JSON only — default mode log_dir is handled by echo_success)
+    if orientation and is_json_mode():
+        out = get_cli_stdout()
+        click.echo(_json.dumps({"orientation": orientation}), file=out)
+
     # Auto-record command to session manifest
     try:
         from nova_act.cli.browser.services.session_recorder import get_recorder
@@ -282,8 +294,8 @@ def _handle_post_command(
             ),
             steps_file=str(steps_meta.get("steps_path")) if steps_meta and steps_meta.get("steps_path") else None,
         )
-    except Exception:
-        logger.debug("Session recording failed for command '%s'", command_name)
+    except (ImportError, OSError):
+        logger.warning("Session recording failed for command '%s'", command_name)
 
 
 @contextmanager
@@ -335,7 +347,7 @@ def command_session(
                         cmd_dir.mkdir(parents=True, exist_ok=True)
                         before_path = cmd_dir / "before.png"
                         get_active_page(nova_act, session_info).screenshot(path=str(before_path))
-                except Exception:
+                except (PlaywrightError, OSError):
                     logger.debug("Before-screenshot failed for command '%s'", command_name)
 
             # Monkey-patch for per-step a11y snapshots
@@ -345,11 +357,16 @@ def command_session(
             _cmd_start = datetime.now()
             try:
                 yield nova_act
-            except Exception as exc:
+            except (
+                Exception
+            ) as exc:  # noqa: BLE001 — top-level command error boundary; re-raises after screenshot capture
                 if not params.no_screenshot_on_failure:
                     screenshot_path = capture_failure_screenshot(nova_act, params.session_id, command_name)
                     if screenshot_path:
-                        exc._failure_screenshot = screenshot_path  # type: ignore[attr-defined]
+                        try:
+                            exc._failure_screenshot = screenshot_path  # type: ignore[attr-defined]
+                        except (AttributeError, TypeError):
+                            logger.debug("Could not attach failure screenshot to exception: %s", type(exc).__name__)
                 raise
             else:
                 _handle_post_command(
@@ -381,6 +398,7 @@ def prepare_session(
     method_args = filter_method_args(nova_args)
 
     auth_config = resolve_auth_mode(params.auth_mode, params.profile, params.region, params.workflow_name)
+    _emit_auth_fallback_warning(auth_config, params.auth_mode)
     browser_options = build_browser_options_from_params(
         params,
         nova_args=constructor_args,
@@ -393,6 +411,12 @@ def prepare_session(
     _emit_disk_warning()
 
     return PreparedSession(session_info=session_info, method_args=method_args, manager=manager)
+
+
+def _emit_auth_fallback_warning(auth_config: AuthConfig, auth_mode: str | None) -> None:
+    """Warn when auto-detect silently fell back to AWS credentials."""
+    if auth_mode is None and auth_config.mode == AuthMode.AWS:
+        click.echo("⚠ API key not set — falling back to AWS credentials", err=True)
 
 
 def _emit_disk_warning() -> None:

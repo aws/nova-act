@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
 
 import yaml
+from playwright.sync_api import Error as PlaywrightError
 
 if TYPE_CHECKING:
     from nova_act import NovaAct
@@ -101,7 +102,7 @@ def patch_nova_act_for_step_snapshots(nova_act: NovaAct, snapshots_out: list[lis
 
             tree = nova_act.page.accessibility.snapshot()
             snapshots_out.append(flatten_snapshot(tree))
-        except Exception:
+        except PlaywrightError:
             logger.debug("Step snapshot capture failed", exc_info=True)
         return result
 
@@ -161,7 +162,7 @@ def write_steps_summary(
             "time_worked_s": round(time_worked, 1),
             "steps_path": str(steps_path),
         }
-    except Exception:
+    except (OSError, json.JSONDecodeError):
         logger.debug("Failed to write steps summary", exc_info=True)
         return None
 
@@ -220,7 +221,7 @@ def _validate_step(raw: object) -> TrajectoryStep | None:
 def _summarize_call(name: str, kwargs: dict[str, object]) -> str:
     """Build a short human-readable detail string for a call."""
     if name == "think":
-        return str(kwargs.get("text", ""))
+        return str(kwargs.get("value", ""))
     if name == "return":
         val = kwargs.get("value", "")
         return str(val)[:120]

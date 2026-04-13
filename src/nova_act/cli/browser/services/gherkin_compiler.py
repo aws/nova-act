@@ -192,7 +192,7 @@ def _expand_outline(scenario: Scenario) -> list[Scenario]:
 
         for row in rows:
             values = [c["value"] for c in row.get("cells", [])]
-            param_map = dict(zip(columns, values))
+            param_map = dict(zip(columns, values, strict=True))
 
             # Substitute <param> in step text and scenario name
             name = scenario.get("name", "")

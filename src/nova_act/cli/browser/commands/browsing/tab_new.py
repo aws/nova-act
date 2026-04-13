@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 
 import click
 
+from nova_act.cli.browser.services.browser_actions import BrowserActions
 from nova_act.cli.browser.utils.decorators import (
     browser_command_options,
     pack_command_params,
@@ -54,20 +55,10 @@ def tab_new(url: str, params: CommandParams) -> None:
 
     with command_session("tab-new", prep.manager, prep.session_info, params, log_args={"url": url}) as nova_act:
         context = get_active_page(nova_act, prep.session_info).context
-        new_page = context.new_page()
-        if url != "about:blank":
-            new_page.goto(url)
-        new_page.bring_to_front()
-        pages = context.pages
-        index = list(pages).index(new_page)
-        tab_url = new_page.url
-        tab_title = new_page.title()
+        actions = BrowserActions(nova_act)
+        result = actions.create_tab(context, url)
 
-        # Update active tab to the newly created tab
-        prep.session_info.active_tab_index = index
+        prep.session_info.active_tab_index = result["index"]  # type: ignore[assignment]
         prep.manager.save_session_metadata(prep.session_info)
 
-    echo_success(
-        "New tab opened",
-        details={"index": index, "url": tab_url, "title": tab_title},
-    )
+    echo_success("New tab opened", details=result)

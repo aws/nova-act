@@ -19,6 +19,7 @@ import json
 from typing import TYPE_CHECKING
 
 import click
+from playwright.sync_api import Error as PlaywrightError
 
 from nova_act.cli.browser.services.browser_actions import (
     DEFAULT_EVALUATE_TIMEOUT_SECONDS,
@@ -98,7 +99,7 @@ def evaluate(
         actions = BrowserActions(nova_act)
         try:
             result: object = actions.evaluate_js(expression, timeout=timeout)
-        except Exception as e:
+        except PlaywrightError as e:
             if "Evaluation timed out" in str(e):
                 exit_with_error(
                     "Evaluation timed out",

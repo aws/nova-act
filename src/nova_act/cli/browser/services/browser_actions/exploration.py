@@ -18,6 +18,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from playwright.sync_api import Error as PlaywrightError
 from pydantic import BaseModel, JsonValue
 
 from nova_act.cli.browser.services.action_results import ExploreResult, SearchResult
@@ -220,7 +221,7 @@ class ExplorationMixin:
         try:
             tree = self._nova_act.page.accessibility.snapshot()
             elements = flatten_snapshot(tree)
-        except Exception:
+        except PlaywrightError:
             return None
 
         best: SnapshotElement | None = None
@@ -268,7 +269,7 @@ class ExplorationMixin:
                         )
                     return None
 
-        except Exception:
+        except PlaywrightError:
             logger.debug("Fast search failed for '%s', falling back to AI", query)
             return None
         return None

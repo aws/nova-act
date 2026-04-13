@@ -121,12 +121,16 @@ class CallResult(BaseModel):
         _LOGGER.debug(f"  return_value: {return_value_for_log}")
         _LOGGER.debug(f"  error: {sdk_call_result.error}")
 
-        # Format the return value as JSON string
-        formatted_return_value = json.dumps(sdk_call_result.return_value)
+        if sdk_call_result.error is not None:
+            # Format the error as a string "{ErrorType}: {message}"
+            text = f"{type(sdk_call_result.error).__name__}: {str(sdk_call_result.error)}"
+        else:
+            # Format the return value as JSON string
+            text = json.dumps(sdk_call_result.return_value)
 
         result = cls(
             call_id=sdk_call_result.call.id,
-            content=[CallResultContent(text=formatted_return_value)],
+            content=[CallResultContent(text=text)],
         )
         _LOGGER.debug(f"  created CallResult: {result}")
         return result

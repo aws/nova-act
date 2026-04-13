@@ -16,11 +16,14 @@
 Handles the various close scenarios: normal close, force close, and failed session cleanup.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import shutil
 from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import click
 
@@ -35,6 +38,9 @@ from nova_act.cli.browser.utils.log_capture import suppress_sdk_output
 from nova_act.cli.core.config import get_cli_config_dir
 from nova_act.cli.core.exceptions import SessionNotFoundError
 from nova_act.cli.core.output import is_verbose_mode
+
+if TYPE_CHECKING:
+    from nova_act.cli.browser.services.session.manager import SessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -74,8 +80,8 @@ class SessionCloser:
 
             try:
                 return self._persistence.load_session(session_id)
-            except (FileNotFoundError, json.JSONDecodeError, KeyError, ValueError):
-                raise SessionNotFoundError(f"Session '{session_id}' not found")
+            except (FileNotFoundError, json.JSONDecodeError, KeyError, ValueError) as e:
+                raise SessionNotFoundError(f"Session '{session_id}' not found") from e
 
         return get_session(session_id)
 
@@ -165,7 +171,7 @@ class SessionCloser:
 
             self._terminate_browser(session_info)
             session_info.state = SessionState.STOPPED
-        except Exception as e:
+        except RuntimeError as e:
             error = e
             session_info.state = SessionState.FAILED
             session_info.error_message = str(e)
@@ -174,7 +180,7 @@ class SessionCloser:
 
             try:
                 self._cleanup_lock(session_id)
-            except Exception:
+            except OSError:
                 logger.debug("Failed to clean up lock for session '%s'", session_id, exc_info=True)
 
             if session_info.state == SessionState.STOPPED:
@@ -183,3 +189,31 @@ class SessionCloser:
 
         if error is not None:
             raise RuntimeError(f"Failed to stop session '{session_id}': {error}") from error
+
+    @staticmethod
+    def close_sessions_batch(
+        manager: SessionManager, sessions: list[SessionInfo], force: bool
+    ) -> tuple[list[str], list[str]]:
+        """Close multiple sessions and track results.
+
+        Args:
+            manager: SessionManager instance to close sessions through
+            sessions: List of sessions to close
+            force: Whether to force close
+
+        Returns:
+            Tuple of (closed_session_ids, failed_session_descriptions)
+        """
+        closed_ids: list[str] = []
+        failed_sessions: list[str] = []
+
+        for session in sessions:
+            try:
+                manager.close_session(session.session_id, force=force)
+                closed_ids.append(session.session_id)
+            except (
+                Exception
+            ) as e:  # noqa: BLE001 — batch operation error boundary; must continue closing remaining sessions
+                failed_sessions.append(f"{session.session_id}: {e}")
+
+        return closed_ids, failed_sessions

@@ -32,6 +32,6 @@ def check_disk_usage(base_dir: Path) -> str | None:
             return (
                 f"Browser CLI data directory is {gb:.1f}GB. Run 'act browser session prune --ignore-ttl' to free space."
             )
-    except Exception:
+    except OSError:
         logger.debug("Failed to check disk usage for %s", base_dir, exc_info=True)
     return None

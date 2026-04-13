@@ -17,6 +17,8 @@ import json
 from dataclasses import dataclass, fields
 from datetime import datetime
 
+from pydantic import JsonValue
+
 from nova_act.impl.program.base import CallResult, Program
 from nova_act.types.api.step import Statement
 from nova_act.types.api.trace import TraceDict
@@ -35,7 +37,8 @@ class ModelInput:
 class ModelOutput:
     awl_raw_program: str
     request_id: str
-    program_ast: list[Statement]
+    # AWL will produce list[Statement] and updated tool calls will produce list[JsonValue]
+    program_ast: list[Statement] | list[JsonValue]
 
     @classmethod
     def from_plan_response(cls, plan_response: str, request_id: str = "") -> ModelOutput:

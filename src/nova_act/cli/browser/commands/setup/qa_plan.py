@@ -81,7 +81,7 @@ def qa_plan(feature_file: str, plan_strategy: str, tags: tuple[str, ...], output
         if plan.scenarios:
             d = asdict(plan)
             # Add computed property that asdict() doesn't serialize
-            for sc_dict, sc_obj in zip(d["scenarios"], plan.scenarios):
+            for sc_dict, sc_obj in zip(d["scenarios"], plan.scenarios, strict=True):
                 sc_dict["requires_human_auth"] = sc_obj.requires_human_auth
             plans.append(d)
 

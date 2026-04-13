@@ -23,10 +23,12 @@ from playwright.sync_api import BrowserContext
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Page, Route, sync_playwright
 
+from nova_act.browser_auth import BrowserSessionProvider
 from nova_act.impl.common import quit_default_chrome_browser, should_install_chromium_dependencies
 from nova_act.impl.inputs import validate_url_ssl_certificate
 from nova_act.tools.browser.default.playwright_instance_options import PlaywrightInstanceOptions
 from nova_act.types.errors import (
+    BrowserAuthError,
     ClientNotStarted,
     InvalidCertificate,
     InvalidPlaywrightState,
@@ -53,6 +55,9 @@ def detect_interactive_mode() -> bool:
 class PlaywrightInstanceManager:
     """RAII Manager for the Playwright Browser"""
 
+    # Timeout (ms) for navigating pages to about:blank during teardown.
+    _TEARDOWN_GOTO_TIMEOUT_MS = 5_000
+
     def __init__(self, options: PlaywrightInstanceOptions):
         self._playwright = options.maybe_playwright
         self._owns_playwright = options.owns_playwright
@@ -74,6 +79,7 @@ class PlaywrightInstanceManager:
         self._proxy = options.proxy
         self._cdp_use_existing_page = options.cdp_use_existing_page
         self.security_options = options.security_options
+        self._browser_auth_mode = options.browser_auth_mode
 
         if self._cdp_endpoint_url is not None or self._use_default_chrome_browser:
             if self._record_video:
@@ -347,16 +353,89 @@ class PlaywrightInstanceManager:
                 context = self._launch_browser(context_options)
                 trusted_page = context.pages[0]
 
+            # Apply authentication cookies BEFORE navigating to starting page
+            if self._browser_auth_mode is not None:
+                _LOGGER.info(f"Loading cookies from {self._browser_auth_mode.name}")
+                auth_cookies = self._browser_auth_mode.load_cookies()
+                if auth_cookies:
+                    context.add_cookies(auth_cookies)
+                    _LOGGER.info(f"Applied {len(auth_cookies)} cookie(s) from {self._browser_auth_mode.name}")
+
 
             self._init_browser_context(context, trusted_page)
             self._context = context
 
         except StartFailed:
             raise
+        except BrowserAuthError as e:
+            _LOGGER.exception(f"Browser authentication failed: {e}")
+            self.stop()
+            raise StartFailed(f"Browser authentication failed: {e}") from e
         except Exception as e:
             _LOGGER.exception(f"Failed to start and initialize Playwright for NovaAct: {e}")
             self.stop()
             raise StartFailed("Failed to start and initialize Playwright for NovaAct") from e
+
+    @staticmethod
+    def _prepare_for_close(context: BrowserContext) -> None:
+        """Stop background network activity and remove all route handlers.
+
+        Two-phase teardown to prevent errors during ``context.close()``:
+
+        1. **Drain pages** - navigate all pages to ``about:blank`` to
+           stop background network activity (XHR polling, service workers,
+           beacon requests). This eliminates the source of new requests.
+        2. **Drain route handlers** - call
+           ``unroute_all(behavior="wait")`` to wait for any in-flight
+           handler invocations to complete, then remove all routes.
+
+        Both phases are necessary. ``unroute_all("wait")`` alone does
+        not prevent new requests from firing between unroute completion
+        and ``context.close()`` - it only drains handlers already
+        mid-execution. Conversely, ``about:blank`` alone does not wait
+        for handlers that are already processing a request. Together
+        they stop new activity at the source and drain what is already
+        in flight.
+
+        Without this cleanup, ``context.close()`` triggers a burst of
+        network events from closing pages. The SDK's SSL validation
+        hook registers ``context.route("**", ...)`` which intercepts
+        every request, so any in-flight request at close time causes
+        ``CancelledError`` and ``TargetClosedError`` noise.
+
+        The ``about:blank`` navigation uses a timeout to avoid hanging
+        indefinitely on unresponsive pages.
+
+        References:
+            - Route handler race on close (canonical issue, led to
+              ``unroute_all`` API):
+              https://github.com/microsoft/playwright/issues/23781
+            - ``unroute_all`` can hang when page is blocked:
+              https://github.com/microsoft/playwright/issues/38674
+            - ``about:blank`` navigation can hang in headed mode:
+              https://github.com/microsoft/playwright/issues/14047
+            - ``unroute_all`` released in Playwright 1.41:
+              https://github.com/microsoft/playwright/releases/tag/v1.41.0
+            - Greenlet dispatcher (Python-specific):
+              https://github.com/microsoft/playwright-python/issues/2101
+
+        Args:
+            context: The Playwright BrowserContext to clean up.
+        """
+        try:
+            _LOGGER.info("Stopping background network activity before cleanup")
+            for page in context.pages:
+                try:
+                    page.goto(
+                        "about:blank",
+                        wait_until="commit",
+                        timeout=PlaywrightInstanceManager._TEARDOWN_GOTO_TIMEOUT_MS,
+                    )
+                except Exception as exc:
+                    _LOGGER.debug("Failed to navigate page to about:blank: %s", exc)
+            context.unroute_all(behavior="wait")
+        except Exception as exc:
+            _LOGGER.debug("Failed to clean up route handlers: %s", exc)
 
     def stop(self) -> None:
         """Stop and detach the Browser"""
@@ -375,7 +454,26 @@ class PlaywrightInstanceManager:
                         try:
                             os.rename(video_path, new_path)
                         except OSError as e:
-                            _LOGGER.error(f"An Unexpected error occured when renaming {video_path}: {e}")
+                            _LOGGER.error(f"An Unexpected error occurred when renaming {video_path}: {e}")
+
+        # Save session state before closing context.
+        # We intentionally do NOT use storage_state(path=...) here.
+        # The path parameter writes raw unencrypted JSON to disk,
+        # bypassing the provider's save logic. By capturing the state
+        # dict and routing it through save_storage_state(), each
+        # provider controls how and where the data is persisted:
+        #   - S3SessionProvider: S3 with SSE-KMS encryption
+        #   - LocalFileSessionProvider: atomic write with 0o600 perms
+        #   - AgentCoreBrowserSessionProvider: Use AgentCore Profiles
+        if isinstance(self._browser_auth_mode, BrowserSessionProvider) and self._context is not None:
+            try:
+                state = self._context.storage_state()
+                self._browser_auth_mode.save_session(state)
+                _LOGGER.info(f"Session state saved via {self._browser_auth_mode.name}")
+            except Exception as e:
+                _LOGGER.warning(f"Failed to save session state via {self._browser_auth_mode.name}: {e}")
+            finally:
+                self._prepare_for_close(self._context)
 
         _can_close_context = not self._owns_playwright
 

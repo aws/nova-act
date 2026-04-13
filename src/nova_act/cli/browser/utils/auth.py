@@ -20,6 +20,8 @@ import os
 from dataclasses import dataclass
 from enum import Enum
 
+import yaml
+
 from nova_act.cli.core.config import get_browser_cli_config_file, read_config
 
 logger = logging.getLogger(__name__)
@@ -89,7 +91,7 @@ def _read_api_key_from_config() -> str | None:
     """Read API key from ~/.act_cli/browser/config.yaml if it exists."""
     try:
         return read_config().api_key
-    except Exception:
+    except (OSError, yaml.YAMLError):
         logger.debug("Failed to read config file %s", get_browser_cli_config_file(), exc_info=True)
     return None
 
@@ -108,7 +110,7 @@ def has_aws_credentials(profile: str | None) -> bool:
     try:
         session = boto3.Session(profile_name=profile)
         return session.get_credentials() is not None
-    except Exception:
+    except (OSError, ValueError):
         logger.debug("Failed to check AWS credentials", exc_info=True)
         return False
 

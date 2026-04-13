@@ -34,6 +34,7 @@ from datetime import datetime
 from pathlib import Path
 
 import yaml
+from playwright.sync_api import Error as PlaywrightError
 
 from nova_act.cli.core.config import get_log_base_dir
 from nova_act.cli.core.output import (
@@ -61,6 +62,8 @@ _KNOWN_SDK_LOGGER_NAMES = (
 
 _CMD_DIR_PATTERN = re.compile(r"^\d{8}_\d{6}_\w+$")
 _CLI_LOG_SUFFIXES = {".log", ".yaml", ".png", ".txt"}
+
+_logger = _logging.getLogger(__name__)
 
 _current_command_dir: Path | None = None
 
@@ -106,22 +109,30 @@ def suppress_sdk_output() -> Iterator[None]:
     set levels on ALL child loggers, not just the root nova_act logger.
     """
     sdk_loggers = _get_sdk_loggers()
-    old_levels = [(logger, logger.level) for logger in sdk_loggers]
-    for logger in sdk_loggers:
-        logger.setLevel(_logging.CRITICAL)
+    old_levels = [(lgr, lgr.level) for lgr in sdk_loggers]
+    for lgr in sdk_loggers:
+        lgr.setLevel(_logging.CRITICAL)
     old_stdout = sys.stdout
     old_stderr = sys.stderr
     devnull = open(os.devnull, "w")  # noqa: SIM115
+    stderr_buffer = io.StringIO()
     try:
         sys.stdout = devnull
-        sys.stderr = devnull
+        sys.stderr = stderr_buffer
         yield
     finally:
         sys.stdout = old_stdout
         sys.stderr = old_stderr
+        captured = stderr_buffer.getvalue()
+        if captured:
+            if sys.exc_info()[1] is not None:
+                _logger.warning("Captured SDK stderr during failed operation:\n%s", captured)
+            else:
+                _logger.debug("Captured SDK stderr:\n%s", captured)
+        stderr_buffer.close()
         devnull.close()
-        for logger, level in old_levels:
-            logger.setLevel(level)
+        for lgr, level in old_levels:
+            lgr.setLevel(level)
 
 
 def get_log_dir(session_id: str | None) -> Path:
@@ -252,53 +263,57 @@ def capture_command_log(
         Path to the log file
     """
     log_path, cmd_dir = _build_log_path(session_id, command_name)
-    log_file = open(log_path, "w")  # noqa: SIM115
-
-    _write_metadata_header(log_file, command_name, session_id, args)
+    try:
+        log_file = open(log_path, "w")  # noqa: SIM115
+    except OSError as e:
+        _logger.warning("Failed to create log file %s: %s — logging disabled for this command", log_path, e)
+        log_file = open(os.devnull, "w")  # noqa: SIM115
 
     old_stdout = sys.stdout
     old_stderr = sys.stderr
-
-    # Save original stdout so CLI output functions can bypass the tee writer
-    set_original_stdout(old_stdout)
-
-    # Set quiet mode so output functions know to emit only log path
-    set_quiet_mode(quiet)
-
-    # Determine terminal visibility for stdout
-    # Default: suppress SDK trace on terminal (log file only)
-    # Verbose: show full SDK trace on terminal
-    # Quiet: suppress terminal output (same as default, explicit intent)
-    terminal_out = old_stdout if verbose else None
-    terminal_err = old_stderr if verbose else None
-
-    tee_out = _TeeWriter(log_file, terminal_out)  # type: ignore[arg-type]
-    tee_err = _TeeWriter(log_file, terminal_err)  # type: ignore[arg-type]
-
-    # Capture all SDK loggers and save levels before modifying.
-    # SDK loggers use propagate=False with their own StreamHandlers, so we must
-    # set levels on ALL child loggers, not just the root nova_act logger.
-    sdk_loggers = _get_sdk_loggers()
-    old_levels = [(logger, logger.level) for logger in sdk_loggers]
-    if not verbose:
-        for logger in sdk_loggers:
-            logger.setLevel(_logging.CRITICAL)
-
-    sys.stdout = tee_out
-    sys.stderr = tee_err
-
-    # Fix stale StreamHandler references: handlers captured sys.stderr at creation
-    # time, so replacing stderr doesn't redirect their output to the TeeWriter.
+    old_levels: list[tuple[_logging.Logger, int]] = []
     patched_handlers: list[  # type: ignore[type-arg]
         tuple[_logging.StreamHandler, io.TextIOBase | io.TextIOWrapper]
     ] = []
-    for logger in sdk_loggers:
-        patched_handlers += _patch_stream_handlers(logger, old_stderr, tee_err)  # type: ignore[arg-type]
-
-    set_current_log_path(str(log_path))
-    set_current_log_dir(str(cmd_dir))
-    set_current_command_dir(cmd_dir)
     try:
+        _write_metadata_header(log_file, command_name, session_id, args)
+
+        # Save original stdout so CLI output functions can bypass the tee writer
+        set_original_stdout(old_stdout)
+
+        # Set quiet mode so output functions know to emit only log path
+        set_quiet_mode(quiet)
+
+        # Determine terminal visibility for stdout
+        # Default: suppress SDK trace on terminal (log file only)
+        # Verbose: show full SDK trace on terminal
+        # Quiet: suppress terminal output (same as default, explicit intent)
+        terminal_out = old_stdout if verbose else None
+        terminal_err = old_stderr if verbose else None
+
+        tee_out = _TeeWriter(log_file, terminal_out)  # type: ignore[arg-type]
+        tee_err = _TeeWriter(log_file, terminal_err)  # type: ignore[arg-type]
+
+        # Capture all SDK loggers and save levels before modifying.
+        # SDK loggers use propagate=False with their own StreamHandlers, so we must
+        # set levels on ALL child loggers, not just the root nova_act logger.
+        sdk_loggers = _get_sdk_loggers()
+        old_levels = [(logger, logger.level) for logger in sdk_loggers]
+        if not verbose:
+            for logger in sdk_loggers:
+                logger.setLevel(_logging.CRITICAL)
+
+        sys.stdout = tee_out
+        sys.stderr = tee_err
+
+        # Fix stale StreamHandler references: handlers captured sys.stderr at creation
+        # time, so replacing stderr doesn't redirect their output to the TeeWriter.
+        for logger in sdk_loggers:
+            patched_handlers += _patch_stream_handlers(logger, old_stderr, tee_err)  # type: ignore[arg-type]
+
+        set_current_log_path(str(log_path))
+        set_current_log_dir(str(cmd_dir))
+        set_current_command_dir(cmd_dir)
         yield log_path
     finally:
         # NOTE: Do NOT clear log_path here. Commands call echo_success() AFTER
@@ -343,7 +358,7 @@ def capture_failure_screenshot(
         screenshot_bytes = nova_act.page.screenshot()  # type: ignore[attr-defined]
         screenshot_path.write_bytes(screenshot_bytes)
         return str(screenshot_path)
-    except Exception:
+    except (PlaywrightError, OSError):
         return None
 
 

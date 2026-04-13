@@ -5,7 +5,7 @@ boto3-stubs
 cryptography
 fire
 injector
-install_playwright>=0.1.0,<1.0.0
+install-playwright>=0.1.0,<1.0.0
 jsonschema
 mypy-boto3-s3
 numpy

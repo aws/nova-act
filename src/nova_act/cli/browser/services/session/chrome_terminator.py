@@ -14,15 +14,19 @@
 """Chrome process termination."""
 
 import logging
-import os
 import time
 
 import psutil
 
 from nova_act.cli.browser.services.browser_config import DefaultBrowserConfig
-from nova_act.cli.core.process import is_process_running
 
 logger = logging.getLogger(__name__)
+
+
+def _is_chrome_process(process: psutil.Process) -> bool:
+    """Check if a process is a Chrome browser process."""
+    name = process.name().lower()
+    return any(browser_name in name for browser_name in DefaultBrowserConfig.BROWSER_PROCESS_NAMES)
 
 
 class ChromeTerminator:
@@ -34,17 +38,18 @@ class ChromeTerminator:
         Args:
             pid: Process ID to terminate (None if no process)
         """
-        if not pid or not is_process_running(pid):
+        if pid is None:
             return
 
         try:
             process = psutil.Process(pid)
-            if not any(name in process.name().lower() for name in DefaultBrowserConfig.BROWSER_PROCESS_NAMES):
+            if not _is_chrome_process(process):
                 return
 
-            os.kill(pid, DefaultBrowserConfig.CHROME_TERMINATION_SIGNAL)
+            process.send_signal(DefaultBrowserConfig.CHROME_TERMINATION_SIGNAL)
             time.sleep(DefaultBrowserConfig.CHROME_TERMINATION_GRACE_PERIOD_SECONDS)
-            if is_process_running(pid):
-                os.kill(pid, DefaultBrowserConfig.CHROME_FORCE_KILL_SIGNAL)
-        except (ProcessLookupError, PermissionError, psutil.NoSuchProcess, psutil.AccessDenied) as e:
+
+            if process.is_running() and _is_chrome_process(process):
+                process.send_signal(DefaultBrowserConfig.CHROME_FORCE_KILL_SIGNAL)
+        except (psutil.NoSuchProcess, psutil.AccessDenied, ProcessLookupError, PermissionError) as e:
             logger.debug("Failed to terminate Chrome process %s: %s", pid, e)
