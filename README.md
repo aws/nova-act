@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/aws-nova-act-badge.png)](https://mseep.ai/app/aws-nova-act)
+
 # Nova Act SDK
 
 A Python SDK for Amazon Nova Act.
