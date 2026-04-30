@@ -111,7 +111,7 @@ class SessionManager:
         # without calling stop(), the OS closes the TCP socket and Chrome cleans
         # up the DevTools session automatically. Empirical testing (30 rapid-fire
         # subprocess iterations with navigation, JS eval, screenshots, and a11y
-        # reads — all without stop()) showed 0 failures and stable target counts.
+        # reads -- all without stop()) showed 0 failures and stable target counts.
         # Calling stop() is therefore unnecessary for CDP cleanup and is
         # intentionally omitted to avoid risk of hangs on teardown.
 
@@ -340,7 +340,7 @@ class SessionManager:
 
         Used when --browser-profile-path points at Chrome's default data directory
         (or a subdirectory like Default/). Chrome blocks CDP on its own default
-        data dir, so we rsync to a managed copy first — same approach as
+        data dir, so we rsync to a managed copy first -- same approach as
         --use-default-chrome.
 
         Args:
@@ -601,7 +601,7 @@ class SessionManager:
         orphaned_sessions = [s for s in sessions if s.is_orphaned]
         if not orphaned_sessions:
             return
-        orphan_details = [f"  • Session '{s.session_id}' (PID: {s.browser_pid})" for s in orphaned_sessions]
+        orphan_details = [f"  * Session '{s.session_id}' (PID: {s.browser_pid})" for s in orphaned_sessions]
         cleanup_lines = [f"  act browser session close --force {s.session_id}" for s in orphaned_sessions]
         logger.warning(
             "Orphaned browser sessions detected!\n"

@@ -24,7 +24,7 @@ from nova_act.cli.core.json_output import ErrorCode
 from nova_act.cli.core.output import exit_with_error
 
 # Protocols accepted across all URL validation functions
-VALID_URL_PREFIXES = ("http://", "https://", "about:", "app://")
+VALID_URL_PREFIXES = ("http://", "https://", "about:", "app://", "file://")
 
 __all__ = [
     "VALID_URL_PREFIXES",
@@ -54,7 +54,7 @@ def warn_missing_protocol(url: str) -> None:
         prefix_list = ", ".join(VALID_URL_PREFIXES)
         click.echo(
             click.style(
-                f"⚠ Warning: URL '{url}' does not start with a recognized protocol ({prefix_list})",
+                f"[WARN] Warning: URL '{url}' does not start with a recognized protocol ({prefix_list})",
                 fg="yellow",
             )
         )

@@ -42,10 +42,7 @@ class BrowserCookieProvider(ABC):
         ...         # Load cookies from your custom source
         ...         return [{"name": "session", "value": "...", "domain": ".example.com", "path": "/"}]
         >>>
-        >>> with NovaAct(
-        ...     starting_page="https://example.com",
-        ...     browser_auth=MyCustomAuth()
-        ... ) as nova:
+        >>> with NovaAct(starting_page="https://example.com", browser_auth=MyCustomAuth()) as nova:
         ...     nova.act("Navigate to the page")
     """
 

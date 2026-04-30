@@ -52,7 +52,7 @@ class AuthConfig:
     """Resolved authentication configuration.
 
     Attributes:
-        mode: Authentication mode — "api-key" or "aws".
+        mode: Authentication mode -- "api-key" or "aws".
         profile: AWS profile name (only relevant for aws mode).
         region: AWS region (only relevant for aws mode).
         workflow_name: Workflow definition name (only relevant for aws mode).
@@ -104,7 +104,7 @@ def has_aws_credentials(profile: str | None) -> bool:
     try:
         import boto3  # noqa: PLC0415
     except ImportError:
-        logger.debug("boto3 not installed — AWS auth unavailable")
+        logger.debug("boto3 not installed -- AWS auth unavailable")
         return False
 
     try:

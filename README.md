@@ -11,47 +11,48 @@ Amazon Nova Act is available as a new AWS service to build and manage fleets of 
 
 > Please follow the upgrade instructions below:
 
- > ```bash
- > # Upgrade to the latest version
- > pip install --upgrade nova-act
- >
- > # Check your current version
- > pip show nova-act
- > ```
+> ```bash
+> # Upgrade to the latest version
+> pip install --upgrade nova-act
+>
+> # Check your current version
+> pip show nova-act
+> ```
 
 ## Table of contents
-* [Pre-requisites](#pre-requisites)
-* [Nova Act IDE Extension](#quick-set-up-with-ide-extension)
-* [Nova Act Authentication and Installation](#authentication)
-* [Quick Start](#quick-start)
-* [How to prompt Nova Act](#how-to-prompt-act)
-* [Workflows](#workflows)
-* [Extract information from a web page](#extracting-information-from-a-web-page)
-* [Human-in-the-loop (HITL)](#human-in-the-loop-hitl) 
-* [Tools](#tool-use-beyond-the-browser-preview)
-* [Run multiple sessions in parallel](#running-multiple-sessions-in-parallel)
-* [Authentication, cookies, and persisting browser state](#authentication-cookies-and-persistent-browser-state)
-* [Handling sensitive data](#entering-sensitive-information)
-* [Captchas](#captchas)
-* [Search on a website](#search-on-a-website)
-* [File upload and download](#file-upload-and-download)
-* [Working with Browser Dialogs](#working-with-browser-dialogs)
-* [Working with dates](#picking-dates)
-* [Setting the browser user agent](#setting-the-browser-user-agent)
-* [Using a proxy](#using-a-proxy)
-* [Time worked tracking utility](#time-worked-tracking-utility)
-* [Logging and viewing traces](#logging)
-* [Recording a video of a session](#recording-a-session)
-* [Storing Session Data in Amazon S3](#storing-session-data-in-your-amazon-s3-bucket)
-* [Navigating Pages](#navigating-pages)
-* [Viewing headless sessions](#viewing-a-session-that-is-running-in-headless-mode)
-* [Use Nova Act SDK with Amazon Bedrock AgentCore Browser Tool](#use-nova-act-sdk-with-amazon-bedrock-agentcore-browser-tool)
-* [Known limitations](#known-limitations)
-* [Disclosures](#disclosures)
-* [Report a Bug](#report-a-bug)
-* [Reference: Nova Act constructor parameters](#initializing-novaact)
-* [Reference: Actuating the browser](#actuating-the-browser)
-* [Reference: Nova Act CLI](#nova-act-cli)
+
+- [Pre-requisites](#pre-requisites)
+- [Nova Act IDE Extension](#quick-set-up-with-ide-extension)
+- [Nova Act Authentication and Installation](#authentication)
+- [Quick Start](#quick-start)
+- [How to prompt Nova Act](#how-to-prompt-act)
+- [Workflows](#workflows)
+- [Extract information from a web page](#extracting-information-from-a-web-page)
+- [Human-in-the-loop (HITL)](#human-in-the-loop-hitl)
+- [Tools](#tool-use-beyond-the-browser-preview)
+- [Run multiple sessions in parallel](#running-multiple-sessions-in-parallel)
+- [Persisting browser sessions](#persisting-browser-sessions)
+- [Handling sensitive data](#entering-sensitive-information)
+- [Captchas](#captchas)
+- [Search on a website](#search-on-a-website)
+- [File upload and download](#file-upload-and-download)
+- [Working with Browser Dialogs](#working-with-browser-dialogs)
+- [Working with dates](#picking-dates)
+- [Setting the browser user agent](#setting-the-browser-user-agent)
+- [Using a proxy](#using-a-proxy)
+- [Time worked tracking utility](#time-worked-tracking-utility)
+- [Logging and viewing traces](#logging)
+- [Recording a video of a session](#recording-a-session)
+- [Storing Session Data in Amazon S3](#storing-session-data-in-your-amazon-s3-bucket)
+- [Navigating Pages](#navigating-pages)
+- [Viewing headless sessions](#viewing-a-session-that-is-running-in-headless-mode)
+- [Use Nova Act SDK with Amazon Bedrock AgentCore Browser Tool](#use-nova-act-sdk-with-amazon-bedrock-agentcore-browser-tool)
+- [Known limitations](#known-limitations)
+- [Disclosures](#disclosures)
+- [Report a Bug](#report-a-bug)
+- [Reference: Nova Act constructor parameters](#initializing-novaact)
+- [Reference: Actuating the browser](#actuating-the-browser)
+- [Reference: Nova Act CLI](#nova-act-cli)
 
 ## Pre-requisites
 
@@ -70,12 +71,13 @@ Accelerate your development process with the [Nova Act extension](https://github
 
 #### API Key Authentication
 
-Note: When using the Nova Act Playground and/or choosing Nova Act developer tools with API key authentication, access and use are subject to the nova.amazon.com Terms of Use. 
+Note: When using the Nova Act Playground and/or choosing Nova Act developer tools with API key authentication, access and use are subject to the nova.amazon.com Terms of Use.
 
 
 Navigate to https://nova.amazon.com/act and generate an API key.
 
 To save it as an environment variable, execute in the terminal:
+
 ```sh
 export NOVA_ACT_API_KEY="your_api_key"
 ```
@@ -88,149 +90,29 @@ Nova Act also supports authentication using IAM credentials. For details please 
 
 ### Installation
 
+
 ```bash
 pip install nova-act
 ```
 
 Alternatively, you can build `nova-act`. Clone this repo, and then:
+
 ```sh
 pip install .
 ```
 
 #### [Optional] Install Google Chrome
+
 Nova Act works best with Google Chrome but does not have permission to install this browser. You may skip this step if you already have Google Chrome installed or are fine with using Chromium. Otherwise, you can install Google Chrome by running the following command in the same environment where you installed Nova Act. For more information, visit https://playwright.dev/python/docs/browsers#google-chrome--microsoft-edge.
+
 ```bash
 playwright install chrome
 ```
 
 
-### Browser session persistence
-
-The SDK supports saving and restoring browser session state (cookies, localStorage) across NovaAct runs. This enables agents to maintain authenticated sessions without requiring manual login on every run. Three storage backends are available:
-
-- **Local file** - stores session state on disk at `~/.nova-act/sessions/<profile>.json` with restricted file permissions (0o600)
-- **S3** - stores session state in Amazon S3 with SSE-KMS encryption
-- **AgentCore browser profiles** - persists session state server-side via the AgentCore service (no client-side state transfer)
-
-#### Local file
-
-```python
-from nova_act import LocalFileSessionProvider, NovaAct, workflow
-
-@workflow(
-    workflow_definition_name=<your-workflow-definition-name>,
-    model_id="nova-act-latest",
-)
-def main():
-    provider = LocalFileSessionProvider(profile="my-agent")
-    with NovaAct(
-        starting_page="https://example.com",
-        browser_auth=provider,
-    ) as nova:
-        result = nova.act_get("Return the page title.")
-        print(f"Title: {result.response}")
-
-if __name__ == "__main__":
-    main()
-```
-
-#### S3
-
-```python
-from nova_act import NovaAct, S3SessionProvider, workflow
-
-@workflow(
-    workflow_definition_name=<your-workflow-definition-name>,
-    model_id="nova-act-latest",
-)
-def main():
-    provider = S3SessionProvider(
-        profile="my-agent",
-        bucket="my-session-bucket",
-        kms_key_id="alias/my-key",  # optional
-    )
-    with NovaAct(
-        starting_page="https://example.com",
-        browser_auth=provider,
-    ) as nova:
-        result = nova.act_get("Return the page title.")
-        print(f"Title: {result.response}")
-
-if __name__ == "__main__":
-    main()
-```
-
-**Prerequisites:** An S3 bucket with SSE-KMS default encryption and AWS credentials with `s3:GetObject` and `s3:PutObject` permissions.
-
-#### AgentCore browser profiles
-
-```python
-from nova_act import AgentCoreBrowserSessionProvider, NovaAct, workflow
-
-@workflow(
-    workflow_definition_name=<your-workflow-definition-name>,
-    model_id="nova-act-latest",
-)
-def main():
-    provider = AgentCoreBrowserSessionProvider(
-        profile="my-agent",
-        region="us-west-2",  # optional
-    )
-    with NovaAct(
-        starting_page="https://example.com",
-        browser_auth=provider,
-    ) as nova:
-        result = nova.act_get("Return the page title.")
-        print(f"Title: {result.response}")
-
-if __name__ == "__main__":
-    main()
-```
-
-**Prerequisites:** AWS credentials with AgentCore permissions.
-
-> **Note:** AgentCore browser sessions run server-side. To view and interact with the remote browser outside the AWS Console (e.g., for manual login or CAPTCHA solving), deploy the [Nova Act Human Intervention Service](https://github.com/amazon-agi-labs/nova-act-human-intervention). Its UI Takeover pattern streams the live browser session to your local browser via DCV, giving you full mouse and keyboard control.
-
-#### What gets saved and restored
-
-The SDK captures browser state via Playwright's [`context.storage_state()`](https://playwright.dev/python/docs/api/class-browsercontext#browser-context-storage-state). On restore, only cookies are injected (via [`context.add_cookies()`](https://playwright.dev/python/docs/api/class-browsercontext#browser-context-add-cookies)) because the SDK uses a [persistent browser context](https://playwright.dev/python/docs/api/class-browsertype#browser-type-launch-persistent-context) which does not support the `storage_state` parameter.
-
-| Storage type | Saved | Restored | XSS readable | Size limit | Auth significance |
-|-------------|------|----------|-------------|-----------|-------------------|
-| [Cookies](https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies) | Yes | Yes | No, if `HttpOnly` is set | ~4 KB each | Primary auth mechanism. Sent automatically with every request. `HttpOnly` + `Secure` + `SameSite` attributes make cookies the [OWASP-recommended](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html) storage for session tokens. [NIST 800-63B](https://github.com/OWASP/ASVS/issues/553) also recommends against alternatives. |
-| [localStorage](https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage) | Yes | No | Yes | 5 MB | Some SPAs store JWTs here for `Authorization: Bearer` headers. [OWASP warns against this](https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html#local-storage): "a single XSS can steal all data in these objects." Not encrypted at rest. No `HttpOnly` equivalent exists. Not restored currently - the app re-initializes on first load. |
-| [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API) | No | No | Yes | [Up to 80% of disk](https://developer.chrome.com/docs/apps/offline_storage) | Rarely used for auth. Same [XSS exposure as localStorage](https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/12-Testing_Browser_Storage). Primarily a client-side database for offline data and large caches. Excluded from capture to keep saved state small. |
-
-For most authentication flows (OAuth, SAML), **cookies are sufficient** for session restoration. localStorage is saved but not restored - apps re-initialize their client-side state on first load without issue. See [OWASP ASVS V3](https://github.com/OWASP/ASVS/blob/master/4.0/en/0x12-V3-Session-management.md) for session management verification requirements.
-
-#### Alternative: Chrome persistent profile
-
-For single-machine use where you want full browser state persistence (cookies, localStorage, IndexedDB, cache, service workers, extensions), you can use Chrome's built-in profile directory instead of a `BrowserSessionProvider`:
-
-```python
-with NovaAct(
-    starting_page="https://example.com",
-    user_data_dir="~/.nova-act/my-chrome-profile",
-    clone_user_data_dir=False,  # persist changes back to the profile
-) as nova:
-    nova.act("Do something")
-```
-
-This persists everything Chrome normally stores between runs. The tradeoff:
-
-| | `BrowserSessionProvider` | `user_data_dir` |
-|---|---|---|
-| What's persisted | Cookies (saved & restored) + localStorage (saved only) | Full Chrome profile |
-| Shareable across machines | Yes (S3, AgentCore) | No (local only) |
-| Encrypted storage | Yes (S3 SSE-KMS) | No (plain files) |
-| Profile size | Small (JSON with auth state) | Large (full browser cache) |
-| Server-side browsers | Yes (AgentCore) | Not applicable |
-
-Use `user_data_dir` for simple local development. Use `BrowserSessionProvider` when you need remote storage, encryption, or AgentCore integration.
-
 ## Quick Start
 
-*Note: The first time you run NovaAct, it may take 1 to 2 minutes to start. This is because NovaAct needs to [install Playwright modules](https://playwright.dev/python/docs/browsers#install-browsers). Subsequent runs will only take a few seconds to start. This functionality can be toggled off by setting the `NOVA_ACT_SKIP_PLAYWRIGHT_INSTALL` environment variable.*
+_Note: The first time you run NovaAct, it may take 1 to 2 minutes to start. This is because NovaAct needs to [install Playwright modules](https://playwright.dev/python/docs/browsers#install-browsers). Subsequent runs will only take a few seconds to start. This functionality can be toggled off by setting the `NOVA_ACT_SKIP_PLAYWRIGHT_INSTALL` environment variable._
 
 ### Script mode
 
@@ -260,6 +142,7 @@ Type "help", "copyright", "credits" or "license" for more information.
 ```
 
 Please don't interact with the browser when an `act()` is running because the underlying model will not know what you've changed!
+
 > Note: When using interactive mode, `ctrl+x` can exit the agent action leaving the browser intact for another `act()` call. `ctrl+c` does not do this -- it will exit the browser and require a `NovaAct` restart.
 
 ### Async mode
@@ -280,9 +163,10 @@ asyncio.run(main())
 ### Samples
 
 The [samples](./src/nova_act/samples) folder contains several examples of using Nova Act to complete various tasks, including:
-* search for apartments on a real estate website, find each apartment's distance from a train station using a maps website, and combine these into a single result set. [This sample](./src/nova_act/samples/search_apartments_calculate_commute.py) demonstrates running multiple NovaActs in parallel (more detail below).
-* book a flight using data that is provided by a tool, and return the booking number. [This sample](./src/nova_act/samples/booking_with_data_from_tool.py) demonstrates how to implement a python function as a tool that can be used to provide data for the workflow.
-* allows a human to log into an email application, and approve to print the number of emails. [This sample](./src/nova_act/samples/print_number_of_emails.py) demonstrates providing HITL (Human in the loop) callback implementations to incorporate human participation in the workflow.
+
+- search for apartments on a real estate website, find each apartment's distance from a train station using a maps website, and combine these into a single result set. [This sample](./src/nova_act/samples/search_apartments_calculate_commute.py) demonstrates running multiple NovaActs in parallel (more detail below).
+- book a flight using data that is provided by a tool, and return the booking number. [This sample](./src/nova_act/samples/booking_with_data_from_tool.py) demonstrates how to implement a python function as a tool that can be used to provide data for the workflow.
+- allows a human to log into an email application, and approve to print the number of emails. [This sample](./src/nova_act/samples/print_number_of_emails.py) demonstrates providing HITL (Human in the loop) callback implementations to incorporate human participation in the workflow.
 
 For more samples showing how to use Nova Act SDK, please refer to this [Github repository](https://github.com/amazon-agi-labs/nova-act-samples)
 
@@ -295,21 +179,25 @@ Make sure the prompt is direct and spells out exactly what you want Nova Act to 
 **1. Be direct and succinct in what the agent should do**
 
 ❌ DON'T
+
 ```python
 nova.act("Let's see what routes vta offers")
 ```
 
 ✅ DO
+
 ```python
 nova.act("Navigate to the routes tab")
 ```
 
 ❌ DON'T
+
 ```python
 nova.act_get("I want to go and meet a friend. I should figure out when the Orange Line comes next.")
 ```
 
 ✅ DO
+
 ```python
 nova.act_get(f"Find the next departure time for the Orange Line from Government Center after {time}")
 ```
@@ -317,11 +205,13 @@ nova.act_get(f"Find the next departure time for the Orange Line from Government 
 **2. Provide complete instructions**
 
 ❌ DON'T
+
 ```python
 nova.act("book me a hotel that costs less than $100 with the highest star rating")
 ```
 
 ✅ DO
+
 ```python
 nova.act(f"book a hotel for two adults in Houston between {startdate} and {enddate} that costs less than $100 per night with the highest star rating. two queen beds preferred but single king also ok. stop when you get to the enter customer details or payment page.")
 ```
@@ -329,11 +219,13 @@ nova.act(f"book a hotel for two adults in Houston between {startdate} and {endda
 **3. Break up large acts into smaller ones**
 
 ❌ DON'T
+
 ```python
 nova.act("book me a hotel that costs less than $100 with the highest star rating then find the closest car rental and get me car there, finally find a lunch spot nearby and book it at 12:30pm")
 ```
 
 ✅ DO
+
 ```python
 hotel_address = nova.act_get(f"book a hotel for two adults in Houston between {startdate} and {enddate} that costs less than $100 per night with the highest star rating. two queen beds preferred but single king also ok. return the address of the hotel you booked.").response
 nova.act(f“book a restaurant near {hotel_address} at 12:30pm for two people”)
@@ -381,6 +273,7 @@ if name == "main":
 ```
 
 #### Retry handling
+
 By default, when a Nova Act request times out, the Nova Act SDK will retry it once. This can be overridden by passing in a `boto_config` object to the Workflow constructor. You can also use this object to override the default 60 second `read_timeout`. For example, to retry a request 4 times (for a total of 5 attempts) with a 90 second timeout:
 
 ```python
@@ -391,6 +284,7 @@ with Workflow(
     model_id="nova-act-latest"
 ) as workflow:
 ```
+
 Note that retrying the same Nova Act request may result in increased cost if the request ends up executing multiple times. For more information on retries including retry modes, please refer to the [botocore retry documentation](https://botocore.amazonaws.com/v1/documentation/api/latest/reference/config.html).
 
 ### The Decorator
@@ -477,7 +371,7 @@ from nova_act import NovaAct, Workflow
 def multi_threaded_helper(workflow: Workflow):
     with NovaAct(..., workflow=workflow) as nova:
        # nova will have the appropriate workflow run
- 
+
 with Workflow(
     workflow_definition_name="my-workflow",
     model_id="nova-act-latest"
@@ -496,7 +390,7 @@ from nova_act import NovaAct, workflow
 def multi_threaded_helper():
     with NovaAct(...) as nova:
        # nova will have the appropriate workflow run
- 
+
 @workflow(
     workflow_definition_name="my-workflow"
     model_id="nova-act-latest",
@@ -518,7 +412,7 @@ from nova_act import NovaAct, get_current_workflow, workflow
 def multi_threaded_helper(workflow: Workflow):
     with NovaAct(..., workflow=workflow) as nova:
        # nova will have the appropriate workflow run
- 
+
 @workflow(
     workflow_definition_name="my-workflow"
     model_id="nova-act-latest",
@@ -528,9 +422,11 @@ def multi_threaded_workflow():
     t.start()
     t.join()
 
-multi_threaded_workflow()  
+multi_threaded_workflow()
 ```
+
 #### Multi-processing
+
 The `Workflow` construct does not currently support passing between multi-processing because it maintains a boto3 Session and Client as instance variables, and those objects are not [pickle](https://docs.python.org/3/library/pickle.html)-able. Support coming soon!
 
 ### Nova Act CLI
@@ -599,7 +495,7 @@ with NovaAct(starting_page="https://nova.amazon.com/act") as nova:
 
 ### Human-in-the-loop (HITL)
 
-Nova Act's Human-in-the-Loop (HITL) capability enables seamless human supervision within autonomous web workflows. HITL is available in the Nova Act SDK for you to implement in your workflows (not provided as a managed AWS service). When your workflow encounters scenarios requiring human judgment or intervention, HITL can provide tools and user interfaces for supervisors to assist, verify, or take control of the process. 
+Nova Act's Human-in-the-Loop (HITL) capability enables seamless human supervision within autonomous web workflows. HITL is available in the Nova Act SDK for you to implement in your workflows (not provided as a managed AWS service). When your workflow encounters scenarios requiring human judgment or intervention, HITL can provide tools and user interfaces for supervisors to assist, verify, or take control of the process.
 
 #### HITL patterns
 
@@ -630,7 +526,7 @@ from nova_act.tools.human.interface.human_input_callback import (
 
 class MyHumanInputCallbacks(HumanInputCallbacksBase):
     def approve(self, message: str) -> ApprovalResponse:
-        ... 
+        ...
 
     def ui_takeover(self, message: str) -> UiTakeoverResponse:
         ...
@@ -645,7 +541,6 @@ with NovaAct(
 ```
 
 Refer to [this sample](./src/nova_act/samples/print_number_of_emails.py) for a working example.
-
 
 ### Tool Use Beyond the Browser (Preview)
 
@@ -715,25 +610,125 @@ The actuator automatically re-locks the context on the next agent action.
 ### Handling ActErrors
 
 Once the `NovaAct` client is started, it might encounter errors during the `act()` execution. All of these error types are included in the [`nova_act.types.act_errors` module](./src/nova_act/types/act_errors.py), and are organized as follows:
+
 1. `ActAgentError`: Indicates requested prompt failed to complete; users may retry with a different request.
-   * Examples include: `ActAgentFailed` (the agent raised an error because the task was not possible), `ActInvalidModelGenerationError` (model generated output that could not be interpreted), or `ActExceededMaxStepsError` (`act()` failed to complete within the configured maximum number of steps)
+   - Examples include: `ActAgentFailed` (the agent raised an error because the task was not possible), `ActInvalidModelGenerationError` (model generated output that could not be interpreted), or `ActExceededMaxStepsError` (`act()` failed to complete within the configured maximum number of steps)
 1. `ActExecutionError`: Indicates a local error encountered while executing valid output from the agent
-   * Examples include: `ActActuationError` (client encountered an exception while actuating the Browser), or `ActCanceledError` (the user canceled execution).
+   - Examples include: `ActActuationError` (client encountered an exception while actuating the Browser), or `ActCanceledError` (the user canceled execution).
 1. `ActClientError`: Indicates a request to the NovaAct Service was invalid; users may retry with a different request.
-   * Examples include: `ActGuardrailsError` (the request was blocked by our RAI guardrails) or `ActRateLimitExceededError` (request was throttled; rate should be reduced).
+   - Examples include: `ActGuardrailsError` (the request was blocked by our RAI guardrails) or `ActRateLimitExceededError` (request was throttled; rate should be reduced).
 1. `ActServerError`: Indicates the NovaAct Service encountered an error processing the request.
-   * Examples include: `ActInternalServerError` (internal error processing request), `ActBadResponseError` (the service returned a response with unrecognized shape), or `ActServiceUnavailableError` (the service could not be reached.)
+   - Examples include: `ActInternalServerError` (internal error processing request), `ActBadResponseError` (the service returned a response with unrecognized shape), or `ActServiceUnavailableError` (the service could not be reached.)
 
 Users may catch `ActAgentError`s and `ActClientError`s and retry with the appropriate request; for `ActExecutionError`s and `ActServerError`s, please submit an issue to the team to look into, including (1) your SDK version, (2) your platform + operating system, (3) the full error trace, and (4) steps to reproduce.
 
 ### Running multiple sessions in parallel
+
 One `NovaAct` instance can only actuate one browser at a time. However, it is possible to actuate multiple browsers concurrently with multiple `NovaAct` instances! They are quite lightweight. You can use this to parallelize parts of your task, creating a kind of browser use map-reduce for the internet. [This sample](./src/nova_act/samples/search_apartments_calculate_commute.py) shows running multiple sessions in parallel.
 
-### Authentication, cookies, and persistent browser state
+### Persisting browser sessions
 
-Nova Act supports working with authenticated browser sessions by overriding its default settings. By default, when Nova Act runs, it clones the Chromium user data directory and deletes it at the end of the run. To use authenticated sessions, you need to specify an existing directory containing the authenticated sessions, and disable the cloning (which in turn disables deletion of the directory).
+By default, Nova Act starts each run with a clean browser by cloning the Chromium user data directory and deleting it when the session ends. To persist browser state between runs, pass a provider via the `browser_auth` parameter, or point `user_data_dir` at a Chromium profile directory:
 
-Specifically, you need to:
+- **[Local file provider](#local-file)** — saves session state to disk at `~/.nova-act/sessions/<profile>.json`.
+- **[S3 provider](#s3)** — saves session state to Amazon S3 with SSE-KMS encryption.
+- **[AgentCore browser profiles provider](#agentcore-browser-profiles)** — persists browser session state, including cookies and local storage, via fully managed [AgentCore Browser profiles](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/browser-profiles.html).
+- **[Chromium persistent profile](#chromium-persistent-profile)** — uses a local [Chromium profile directory](https://www.chromium.org/developers/creating-and-using-profiles/) to persist everything the browser stores (cookies, local storage, IndexedDB, cache, extensions).
+
+#### Local file
+
+Stores session state at `~/.nova-act/sessions/<profile>.json` with restricted file permissions (0o600). Cookies are saved and restored across runs. [Local storage](https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage) is saved but only restored when `restore_local_storage=True` is passed to the provider (off by default).
+
+```python
+from nova_act import LocalFileSessionProvider, NovaAct, workflow
+
+@workflow(
+    workflow_definition_name=<your-workflow-definition-name>,
+    model_id="nova-act-latest",
+)
+def main():
+    provider = LocalFileSessionProvider(profile="my-agent")
+    with NovaAct(
+        starting_page="https://example.com",
+        browser_auth=provider,
+    ) as nova:
+        result = nova.act_get("Return the page title.")
+        print(f"Title: {result.response}")
+
+if __name__ == "__main__":
+    main()
+```
+
+#### S3
+
+Same behavior as Local file — cookies are saved and restored; local storage is saved but only restored when `restore_local_storage=True` is passed to the provider. State is stored as a JSON object in your S3 bucket, encrypted with [SSE-KMS](https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingKMSEncryption.html). You can pass a customer managed key via `kms_key_id`; when omitted, the bucket's default encryption settings are used.
+
+**Prerequisites:** An S3 bucket with SSE-KMS default encryption and AWS credentials with `s3:GetObject` and `s3:PutObject` permissions.
+
+```python
+from nova_act import NovaAct, S3SessionProvider, workflow
+
+@workflow(
+    workflow_definition_name=<your-workflow-definition-name>,
+    model_id="nova-act-latest",
+)
+def main():
+    provider = S3SessionProvider(
+        profile="my-agent",
+        bucket="my-session-bucket",
+        kms_key_id="alias/my-key",  # optional
+    )
+    with NovaAct(
+        starting_page="https://example.com",
+        browser_auth=provider,
+    ) as nova:
+        result = nova.act_get("Return the page title.")
+        print(f"Title: {result.response}")
+
+if __name__ == "__main__":
+    main()
+```
+
+#### AgentCore browser profiles
+
+[Amazon Bedrock AgentCore Browser](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/browser-tool.html) supports fully managed [browser profiles](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/browser-profiles.html) that persist browser session state, including cookies and local storage. `AgentCoreBrowserSessionProvider` handles creating and resolving profiles, starting remote browser sessions, providing the CDP endpoints for connecting NovaAct, and saving state on exit.
+
+> **Note:** To view and interact with the remote browser outside the AWS Console (e.g., for manual login or CAPTCHA solving), deploy the [Nova Act Human Intervention Service](https://github.com/amazon-agi-labs/nova-act-human-intervention). Its UI Takeover pattern streams the live browser session to your local browser via DCV, giving you full mouse and keyboard control.
+
+**Prerequisites:** AWS credentials with AgentCore permissions.
+
+```python
+from nova_act import AgentCoreBrowserSessionProvider, NovaAct, workflow
+
+@workflow(
+    workflow_definition_name=<your-workflow-definition-name>,
+    model_id="nova-act-latest",
+)
+def main():
+    provider = AgentCoreBrowserSessionProvider(
+        profile="my-agent",
+        region="us-west-2",  # optional
+    )
+    with provider.cdp_session() as (ws_url, headers):
+        with NovaAct(
+            starting_page="https://example.com",
+            cdp_endpoint_url=ws_url,
+            cdp_headers=headers,
+            browser_auth=provider,
+        ) as nova:
+            result = nova.act_get("Return the page title.")
+            print(f"Title: {result.response}")
+
+if __name__ == "__main__":
+    main()
+```
+
+#### Chromium persistent profile
+
+For single-machine use where you want full browser state persistence (cookies, local storage, IndexedDB, cache, service workers, extensions), you can use a Chromium profile directory via `user_data_dir` with `clone_user_data_dir=False`.
+
+To set up a persistent profile:
+
 1. (optional) Create a new local directory for the user data directory For example, `/tmp/user-data-dir`. You can skip this step to use an existing Chromium profile.
 2. specify this directory when instantiating `NovaAct` via the `user_data_dir` parameter
 3. disable cloning this directory when instantiating `NovaAct` by passing in the parameter `clone_user_data_dir=False`
@@ -761,9 +756,37 @@ print(f"User data dir saved to {user_data_dir=}")
 
 The script is included in the installation: `python -m nova_act.samples.setup_chrome_user_data_dir`.
 
+#### What gets saved and restored
+
+The SDK captures browser state via Playwright's [`context.storage_state()`](https://playwright.dev/python/docs/api/class-browsercontext#browser-context-storage-state). On restore, cookies are always injected via [`context.add_cookies()`](https://playwright.dev/python/docs/api/class-browsercontext#browser-context-add-cookies). localStorage can optionally be restored via [`context.add_init_script()`](https://playwright.dev/python/docs/api/class-browsercontext#browser-context-add-init-script) when `restore_local_storage=True` is passed to the session provider (off by default). The SDK uses a [persistent browser context](https://playwright.dev/python/docs/api/class-browsertype#browser-type-launch-persistent-context) which does not support the `storage_state` parameter directly, hence the init script approach for localStorage.
+
+> **Note on localStorage restoration:** the init script runs on every page navigation within the session, not only the first. It restores the snapshot from the previous run. For apps that write to localStorage frequently during a session, values written mid-session may be overwritten if the page is navigated away from and back to the same origin within the same run. In practice this is rarely an issue for auth flows, where localStorage is written once at login.
+
+| Storage type                                                                         | Saved | Restored                | XSS readable             | Size limit                                                                  | Auth significance                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------ | ----- | ----------------------- | ------------------------ | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Cookies](https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies)                 | Yes   | Yes                     | No, if `HttpOnly` is set | ~4 KB each                                                                  | Primary auth mechanism. Sent automatically with every request. `HttpOnly` + `Secure` + `SameSite` attributes make cookies the [OWASP-recommended](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html) storage for session tokens. [NIST 800-63B](https://github.com/OWASP/ASVS/issues/553) also recommends against alternatives. |
+| [localStorage](https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage) | Yes   | Opt-in, via init script | Yes                      | 5 MB                                                                        | Some SPAs store JWTs here for `Authorization: Bearer` headers. [OWASP warns against this](https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html#local-storage): "a single XSS can steal all data in these objects." Not encrypted at rest. No `HttpOnly` equivalent exists.                                                             |
+| [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API)          | No    | No                      | Yes                      | [Up to 80% of disk](https://developer.chrome.com/docs/apps/offline_storage) | Rarely used for auth. Same [XSS exposure as localStorage](https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/12-Testing_Browser_Storage). Primarily a client-side database for offline data and large caches. Excluded from capture to keep saved state small.                            |
+
+For most authentication flows (OAuth, SAML), **cookies are sufficient** for session restoration. See [OWASP ASVS V3](https://github.com/OWASP/ASVS/blob/master/4.0/en/0x12-V3-Session-management.md) for session management verification requirements.
+
+#### Choosing a persistence option
+
+The table below summarizes what each option persists and how they differ:
+
+| Feature                   | Local file                  | S3                       | AgentCore                        | Chromium profile          |
+| ------------------------- | --------------------------- | ------------------------ | -------------------------------- | ------------------------- |
+| Cookies                   | Saved & restored            | Saved & restored         | Saved & restored                 | Persisted                 |
+| Local storage             | Saved; opt-in restore       | Saved; opt-in restore    | Saved & restored                 | Persisted                 |
+| IndexedDB, cache, etc.    | Not captured                | Not captured             | Not captured                     | Persisted                 |
+| Shareable across machines | No                          | Yes                      | Yes                              | No                        |
+| Encrypted storage         | No (0o600 file permissions) | Yes (SSE-KMS)            | Yes (managed by service)         | No (plain files)          |
+| Profile size              | Small (JSON)                | Small (JSON)             | Managed by service               | Large (full browser data) |
+| Configuration             | `browser_auth` parameter    | `browser_auth` parameter | `browser_auth` + `cdp_session()` | `user_data_dir` parameter |
+
 #### Run against the local default Chrome browser
 
-If your local default Chrome browser has extensions or security features you need for sites you need your workflow to access, you can configure the SDK to use the Chrome browser installed on your machine rather than the one managed by the SDK using the `NovaAct` parameters below.
+If your local default Chrome browser has extensions or security features you need for sites your workflow accesses, you can configure the SDK to use the Chrome browser installed on your machine rather than the one managed by the SDK.
 
 > **Important notes:**
 >
@@ -771,15 +794,16 @@ If your local default Chrome browser has extensions or security features you nee
 > - This will quit your default running Chrome and restart it with new arguments. At the end of the session, it will quit Chrome.
 > - If your Chrome browser has many tabs open, consider closing unnecessary ones before running the automation, as Chrome's performance during the restart can be affected by high numbers of open tabs.
 
-Before starting NovaAct with this feature, you must copy the files from your system Chrome user_data_dir to a location of your choice.
-This is necessary as Chrome does not allow CDP connections into instances started with the system default user_data_dir.
+Before starting NovaAct with this feature, you must copy the files from your system Chrome user_data_dir to a location of your choice. This is necessary as Chrome does not allow CDP connections into instances started with the system default user_data_dir.
 
 Manually, this is can be done with:
+
 ```
 rsync -a --exclude="Singleton*" /Users/$USER/Library/Application\ Support/Google/Chrome/ <your choice of location>
 ```
 
 You can also use the convenience function `rsync_from_default_user_data(<your choice of location>)` to create and update that directory as part of your script.
+
 Note that invoking `rsync_from_default_user_data` will overwrite changes in the destination directory and make it an exact mirror of `/Users/$USER/Library/Application\ Support/Google/Chrome/` by overwriting existing files with the same name as in the source and deleting files not in it. If you want to persist profile changes that NovaAct made in the working directory back to your system, you must then mirror the changes back into the system default dir with your own implementation after stopping NovaAct.
 
 When using this feature, you must specify `clone_user_data_dir=False` and pass the desired working dir as `user_data_dir` with the appropriate files populated. This is because `NovaAct` will not be cloning or deleting the `user_data_dir`s for you in this mode.
@@ -820,6 +844,7 @@ NovaAct is initialized with secure default behaviors which you may want to relax
 #### Allow Navigation to Local `file://` URLS
 
 To enable local file navigation, define one or more filepath patterns in `SecurityOptions.allowed_file_open_paths`
+
 ```python
 from nova_act import NovaAct, SecurityOptions
 
@@ -827,6 +852,7 @@ NovaAct(starting_page="file://home/nova-act/site/index.html", SecurityOptions(al
 ```
 
 #### Allow File Uploads
+
 To allow the agent to upload files to websites, define one or more filepath patterns in `SecurityOptions.allowed_file_upload_paths`.
 
 ```python
@@ -836,7 +862,9 @@ NovaAct(starting_page="https://example.com", SecurityOptions(allowed_file_upload
 ```
 
 #### Filepath Structures
+
 The filepath parameters support the following formats:
+
 - `["/home/nova-act/shared/*"]` - Allow from specific directory
 - `["/home/nova-act/shared/file.txt"]` - Allow a specific filepath
 - `["*"]` - Enable for all paths
@@ -911,10 +939,10 @@ download_info.value.save_as("my_downloaded_file")
 > **Important notes**:
 >
 > - The browser will show the file being downloaded to the temporary path defined by Playwright ([see docs](https://playwright.dev/docs/downloads#introduction))
->    - This temporary path is accessible via `download_info.value.path()`
->  - When using `download_info.value.save_as()`:
->    - If a full path is provided (e.g., "/path/to/my_downloaded_file"), the file will be saved there
->    - If only a filename is provided (e.g., "my_downloaded_file"), it will be saved in the current working directory where the Python script was executed from
+>   - This temporary path is accessible via `download_info.value.path()`
+> - When using `download_info.value.save_as()`:
+>   - If a full path is provided (e.g., "/path/to/my_downloaded_file"), the file will be saved there
+>   - If only a filename is provided (e.g., "my_downloaded_file"), it will be saved in the current working directory where the Python script was executed from
 
 To download the current page:
 
@@ -1006,16 +1034,17 @@ nova = NovaAct(
 
 
 ### Logging
+
 By default, `NovaAct` will emit all logs level `logging.INFO` or above. This can be overridden by specifying an integer value under the `NOVA_ACT_LOG_LEVEL` environment variable. Integers should correspond to [Python logging levels](https://docs.python.org/3/library/logging.html#logging-levels).
- 
+
 ### Viewing act traces
- 
+
 After an `act()` finishes, it will output traces of what it did in a self-contained html file. The location of the file is printed in the console trace.
- 
+
 ```sh
 > ** View your act run here: /var/folders/6k/75j3vkvs62z0lrz5bgcwq0gw0000gq/T/tmpk7_23qte_nova_act_logs/15d2a29f-a495-42fb-96c5-0fdd0295d337/act_844b076b-be57-4014-b4d8-6abed1ac7a5e_output.html
 ```
- 
+
 You can change the directory for this by passing in a `logs_directory` argument to `NovaAct`.
 
 ### Time worked tracking utility
@@ -1023,12 +1052,15 @@ You can change the directory for this by passing in a `logs_directory` argument 
 The time_worked utility tracks and reports the approximate time spent by the agent working on tasks, excluding time spent waiting for human input. This helps you understand the actual agent execution time.
 
 #### How It Works
+
 Approximate time worked is calculated using this basic formula:
+
 ```
 time_worked = (end_time - start_time) - human_wait_time
 ```
 
 When an `act()` call completes (successfully or with an error), the following is calculated:
+
 - **Approx. Time Worked**: Total execution time (end time minus start time) minus any time spent waiting for human input
 - **Human Wait Time**: Time spent waiting for `approve()` or `ui_takeover()` callbacks from when the callback is issued to when the agent execution continues
 
@@ -1037,11 +1069,13 @@ When an `act()` call completes (successfully or with an error), the following is
 At the end of each `act()` call, you'll see a time worked summary in the console, as well as in the JSON and HTML reports:
 
 Without human input:
+
 ```
 ⏱️ Approx. Time Worked: 11.8s
 ```
 
 With human input:
+
 ```
 ⏱️  Approx. Time Worked: 28.3s (excluding 4.5s human wait)
 ```
@@ -1051,7 +1085,7 @@ With human input:
 > **Note:** Time worked calculations are approximate and may have inaccuracies due to system timing variations, network latency, or other factors. This metric should be viewed as a utility to help understand agent execution patterns and should not be used for formal time tracking or billing purposes.
 
 ### Recording a session
- 
+
 You can easily record an entire browser session locally by setting the `logs_directory` and specifying `record_video=True` in the constructor for `NovaAct`.
 
 ### Storing Session Data in Your Amazon S3 Bucket
@@ -1084,6 +1118,7 @@ with NovaAct(
 ```
 
 The S3Writer requires the following AWS permissions:
+
 - s3:ListObjects on the bucket and prefix
 - s3:PutObject on the bucket and prefix
 
@@ -1092,6 +1127,7 @@ When the NovaAct session ends, all session files will be automatically uploaded 
 #### S3 Upload Troubleshooting
 
 **No files in S3 bucket?**
+
 - Check logs for "Registered stop hooks" message during initialization
 - Verify your code path actually executes the NovaAct context manager
 
@@ -1105,15 +1141,19 @@ To address these issues, we have implemented a new function, `go_to_url()`, whic
 ### Viewing a session that is running in headless mode
 
 When running the browser in headless mode (`headless: True`), you may need to see how the workflow is progressing as the agent is going through it. To do this:
+
 1. set the following environment variables before starting your Nova Act workflow
+
 ```bash
 export NOVA_ACT_BROWSER_ARGS="--remote-debugging-port=9222"
 ```
+
 2. start your Nova Act workflow as you normally do, with `headless: True`
 3. Open a local browser to `http://localhost:9222/json`
 4. Look for the item of type `page` and copy and paste its `devtoolsFrontendUrl` into the browser
 
 You'll now be observing the activity happening within the headless browser. You can also interact with the browser window as you normally would, which can be helpful for handling captchas. For example, in your Python script:
+
 1. ask Nova Act to check if there is a captcha
 2. if there is, `sleep()` for a period of time. Loop back to step 1. During `sleep()`...
 3. send an email / SMS alert (eg, with [Amazon Simple Notification Service](https://aws.amazon.com/sns/)) containing the `devtoolsFrontendUrl` signaling human intervention is required
@@ -1131,17 +1171,17 @@ See [this blog post](https://aws.amazon.com/blogs/machine-learning/introducing-a
 > **Note**: When the Nova Act SDK and Bedrock AgentCore Browser run on different operating systems (e.g., SDK on MacOS and AgentCore Browser on Linux), keyboard commands may not translate correctly between systems. This impacts certain SDK functions like `agent_type()`, which uses keyboard shortcuts (such as `ControlOrMeta+A` for "select all") that are OS-dependent. This behavior is an expected consequence of the cross-OS integration architecture and should be considered when developing automations that use keyboard input methods.
 
 ## Known limitations
-Our vision for Nova Act is to provide key capabilities to build useful agents at scale. If you encounter limitations with Nova Act — please provide feedback to [nova-act@amazon.com](mailto:nova-act@amazon.com?subject=Nova%20Act%20Bug%20Report) to help us make it better.
 
+Our vision for Nova Act is to provide key capabilities to build useful agents at scale. If you encounter limitations with Nova Act — please provide feedback to [nova-act@amazon.com](mailto:nova-act@amazon.com?subject=Nova%20Act%20Bug%20Report) to help us make it better.
 
 For example:
 
-* `act()` cannot interact with non-browser applications;
-* `act()` cannot interact with the browser window. This means that browser modals such as those requesting access to use your location don't interfere with act() but must be manually acknowledged if desired;
-* Screen size constraints;
-  * Nova Act is optimized for resolutions between `864×1296` and `1536×2304`; and
-  * Performance may degrade outside this range
-  * You can adjust the screen dimensions using `screen_width` and `screen_height` parameters (e.g., `screen_width=1920, screen_height=1080`)
+- `act()` cannot interact with non-browser applications;
+- `act()` cannot interact with the browser window. This means that browser modals such as those requesting access to use your location don't interfere with act() but must be manually acknowledged if desired;
+- Screen size constraints;
+  - Nova Act is optimized for resolutions between `864×1296` and `1536×2304`; and
+  - Performance may degrade outside this range
+  - You can adjust the screen dimensions using `screen_width` and `screen_height` parameters (e.g., `screen_width=1920, screen_height=1080`)
 
 Learn more in the AWS AI Service Card for Amazon Nova Act.
 
@@ -1152,20 +1192,20 @@ Learn more in the AWS AI Service Card for Amazon Nova Act.
 
 The constructor accepts the following:
 
-* `starting_page (str)`: The URL of the starting page; supports both web URLs (`https://`) and local file URLs (`file://`) (required argument)
-  * Note: file URLs require passing `ignore_https_errors=True` to the constructor
-* `headless (bool)`: Whether to launch the browser in headless mode (defaults to `False`)
-* `user_data_dir (str)`: Path to a [user data directory](https://chromium.googlesource.com/chromium/src/+/master/docs/user_data_dir.md#introduction), which stores browser session data like cookies and local storage (defaults to `None`).
-* `nova_act_api_key (str)`: The API key you generated for authentication; required if the `NOVA_ACT_API_KEY` environment variable is not set. If passed, takes precedence over the environment variable.
-* `logs_directory (str)`: The directory where NovaAct will output its logs, run info, and videos (if `record_video` is set to `True`).
-* `record_video (bool))`: Whether to record video and save it to `logs_directory`. Must have `logs_directory` specified for video to record.
-* `proxy (dict)`: Proxy configuration for the browser. Should be a dictionary containing:
-  * `server` (required): The proxy server URL (must start with `http://` or `https://`)
-  * `username` (optional): Username for proxy authentication
-  * `password` (optional): Password for proxy authentication
-  * Note: Proxy is not supported when connecting to a CDP endpoint or using the default Chrome browser
-* `human_input_callbacks` (optional): An implementation of human input callbacks. If not provided, a request for human input tool will not be made.
-* `tools` (optional): A list of client provided tools.
+- `starting_page (str)`: The URL of the starting page; supports both web URLs (`https://`) and local file URLs (`file://`) (required argument)
+  - Note: file URLs require passing `ignore_https_errors=True` to the constructor
+- `headless (bool)`: Whether to launch the browser in headless mode (defaults to `False`)
+- `user_data_dir (str)`: Path to a [user data directory](https://chromium.googlesource.com/chromium/src/+/master/docs/user_data_dir.md#introduction), which stores browser session data like cookies and local storage (defaults to `None`).
+- `nova_act_api_key (str)`: The API key you generated for authentication; required if the `NOVA_ACT_API_KEY` environment variable is not set. If passed, takes precedence over the environment variable.
+- `logs_directory (str)`: The directory where NovaAct will output its logs, run info, and videos (if `record_video` is set to `True`).
+- `record_video (bool))`: Whether to record video and save it to `logs_directory`. Must have `logs_directory` specified for video to record.
+- `proxy (dict)`: Proxy configuration for the browser. Should be a dictionary containing:
+  - `server` (required): The proxy server URL (must start with `http://` or `https://`)
+  - `username` (optional): Username for proxy authentication
+  - `password` (optional): Password for proxy authentication
+  - Note: Proxy is not supported when connecting to a CDP endpoint or using the default Chrome browser
+- `human_input_callbacks` (optional): An implementation of human input callbacks. If not provided, a request for human input tool will not be made.
+- `tools` (optional): A list of client provided tools.
 
 This creates one browser session. You can create as many browser sessions as you wish and run them in parallel but a single session must be single-threaded.
 
@@ -1175,9 +1215,9 @@ This creates one browser session. You can create as many browser sessions as you
 
 `act()` takes a natural language prompt from the user and will actuate on the browser window on behalf of the user to achieve the goal. Arguments:
 
-* `max_steps` (int): Configure the maximum number of steps (browser actuations) `act()` will take before giving up on the task. Use this to make sure the agent doesn't get stuck forever trying different paths. Default is 30.
-* `timeout` (int): Number of seconds timeout for the entire act call. Prefer using `max_steps` as time per step can vary based on model server load and website latency.
-* `observation_delay_ms`: Additional delay in milliseconds before taking an observation of the page. Useful to wait for UI animations to complete.
+- `max_steps` (int): Configure the maximum number of steps (browser actuations) `act()` will take before giving up on the task. Use this to make sure the agent doesn't get stuck forever trying different paths. Default is 30.
+- `timeout` (int): Number of seconds timeout for the entire act call. Prefer using `max_steps` as time per step can vary based on model server load and website latency.
+- `observation_delay_ms`: Additional delay in milliseconds before taking an observation of the page. Useful to wait for UI animations to complete.
 
 Returns an `ActResult`.
 
@@ -1220,7 +1260,7 @@ nova.page.keyboard.type("hello")
 
 Note: When using the Nova Act Playground and/or choosing Nova Act developer tools with API key authentication, access and use are subject to the nova.amazon.com Terms of Use. When choosing Nova Act developer tools with AWS IAM authentication and/or deploying workflows to the Nova Act AWS service, your AWS Service Terms and/or Customer Agreement (or other agreement governing your use of the AWS Service) apply.
 
-1. Nova Act may not always get it right. 
+1. Nova Act may not always get it right.
 2. ⚠️ Please be aware that Nova Act may encounter commands in the content it observes on third party websites, including user-generated content on trusted websites such as social media posts, search results, forum comments, news articles, and document attachments. These unauthorized commands, known as prompt injections, may cause the model to make mistakes or act in a manner that differs from its instructions, such as ignoring your instructions, performing unauthorized actions, or exfiltrating sensitive data. To reduce the risks associated with prompt injections, it is important to monitor Nova Act and review its actions, especially when processing untrusted user-contributed content.
 3. We recommend you do not provide sensitive information to Nova Act, such as account passwords. Note that if you use sensitive information through Playwright calls, the information could be collected in screenshots if it appears unobstructed on the browser when Nova Act is engaged in completing an action. (See Entering sensitive information below.).
 4. When choosing developer tools on nova.amazon.com/act with API key authentication, we collect information on interactions with Nova Act, including in-browser screenshots to develop and improve our services. Email us at nova-act@amazon.com to request deletion of your Nova Act data.
@@ -1229,10 +1269,10 @@ Note: When using the Nova Act Playground and/or choosing Nova Act developer tool
 
 ## Report a Bug
 
-Help us improve! If you notice any issues, please let us know by submitting a bug report via nova-act@amazon.com. 
-
+Help us improve! If you notice any issues, please let us know by submitting a bug report via nova-act@amazon.com.
 
 Be sure to include the following in the email:
+
 - Description of the issue;
 - Session ID, which will have been printed out as a console log message; and
 - Script of the workflow you are using.

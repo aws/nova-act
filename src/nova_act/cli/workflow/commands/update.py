@@ -37,7 +37,7 @@ def _validate_workflow_exists(name: str, region: str, workflow_manager: Workflow
         return workflow.workflow_definition_arn or "Not set"
     except Exception as e:
         raise styled_error_exception(
-            f"Workflow '{name}' not found in configuration.\n" f"Use 'act workflow list' to see available workflows."
+            f"Workflow '{name}' not found in configuration.\nUse 'act workflow list' to see available workflows."
         ) from e
 
 
@@ -58,7 +58,7 @@ def _display_update_success(name: str, region: str, old_arn: str, new_arn: str) 
     console_url = build_nova_act_workflow_console_url(region, workflow_name)
     click.echo(f"  {secondary(text='Console URL:')} {value(text=console_url)}")
     click.echo()
-    success(message=f"✅ Workflow '{name}' updated successfully!")
+    success(message=f"[OK] Workflow '{name}' updated successfully!")
     click.echo(f"Use {command(text=f'act workflow show --name {name}')} for full details.")
     click.echo()
 

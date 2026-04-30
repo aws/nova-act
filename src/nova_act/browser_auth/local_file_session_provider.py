@@ -59,13 +59,23 @@ class LocalFileSessionProvider(BrowserSessionProvider):
             expansion. Defaults to ``~/.nova-act/sessions``.
         profile: Session profile name. Used as the filename
             (``{profile}.json``). Defaults to ``"default"``.
+        restore_local_storage: Whether to restore localStorage on session
+            start in addition to cookies. Disabled by default because
+            most auth flows rely on cookies alone; enable only when the
+            app stores session-critical data in localStorage (e.g. JWTs
+            or refresh tokens). See
+            :meth:`~BrowserSessionProvider.load_local_storage` for
+            caveats before enabling.
     """
 
     def __init__(
         self,
         directory: str | Path = "~/.nova-act/sessions",
         profile: str = "default",
+        *,
+        restore_local_storage: bool = False,
     ) -> None:
+        super().__init__(restore_local_storage=restore_local_storage)
         self._directory = Path(directory).expanduser()
         self._profile = profile
         self._path = self._directory / f"{profile}.json"

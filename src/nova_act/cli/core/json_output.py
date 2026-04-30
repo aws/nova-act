@@ -54,7 +54,7 @@ class JsonResponse:
     """Structured JSON response payload for CLI agent integration.
 
     Attributes:
-        status: Response status — "success" or "error".
+        status: Response status -- "success" or "error".
         data: Response data payload.
         code: Error code (only for error responses).
         message: Error message (only for error responses).

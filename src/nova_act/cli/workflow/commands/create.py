@@ -32,7 +32,7 @@ from nova_act.cli.workflow.utils.console import build_nova_act_workflow_console_
 
 def _display_creation_success(workflow_definition_arn: str | None, name: str, region: str, account_id: str) -> None:
     """Display workflow creation success message and next steps."""
-    success(f"✅ Created workflow '{name}'")
+    success(f"[OK] Created workflow '{name}'")
     click.echo(f"   {secondary(text='Region:')} {value(text=region)}")
     click.echo(f"   {secondary(text='WorkflowDefinition ARN:')} {value(text=workflow_definition_arn or 'None')}")
     if workflow_definition_arn:
@@ -54,6 +54,7 @@ def _display_creation_success(workflow_definition_arn: str | None, name: str, re
 @click.option("--workflow-definition-arn", help="Optional WorkflowDefinition ARN to associate with workflow")
 @click.option("--region", help="Region for WorkflowDefinition (defaults to config default_region)")
 @click.option("--s3-bucket-name", help="Custom S3 bucket name for workflow exports")
+@click.option("--s3-key-prefix", help="S3 key prefix for workflow export configuration")
 @click.option("--skip-s3-creation", is_flag=True, help="Skip automatic S3 bucket creation")
 def create(
     *,
@@ -61,6 +62,7 @@ def create(
     workflow_definition_arn: str | None = None,
     region: str | None = None,
     s3_bucket_name: str | None = None,
+    s3_key_prefix: str | None = None,
     skip_s3_creation: bool = False,
 ) -> None:
     """Register a new workflow in the configuration."""
@@ -84,6 +86,7 @@ def create(
             name=name,
             workflow_definition_arn=workflow_definition_arn,
             s3_bucket_name=s3_bucket_name,
+            s3_key_prefix=s3_key_prefix,
             skip_s3_creation=skip_s3_creation,
         )
 

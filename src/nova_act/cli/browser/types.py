@@ -20,7 +20,7 @@ from dataclasses import dataclass
 class CommandParams:
     """CLI-facing parameter object grouping the ~16 shared options injected by @browser_command_options.
 
-    This is the raw Click option values — NOT the resolved/SDK-facing BrowserOptions.
+    This is the raw Click option values -- NOT the resolved/SDK-facing BrowserOptions.
     """
 
     # Session

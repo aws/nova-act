@@ -69,12 +69,8 @@ class AgentCoreClient:
         self.region = region
         self.session = session or Session()
         config = Config(read_timeout=timeout, retries={"max_attempts": 1})
-        self.control_client = self.session.client(
-            BEDROCK_AGENT_CONTROL_SERVICE, region_name=region, config=config
-        )  # type: ignore[call-overload]
-        self.data_client = self.session.client(
-            BEDROCK_AGENT_DATA_SERVICE, region_name=region, config=config
-        )  # type: ignore[call-overload]
+        self.control_client = self.session.client(BEDROCK_AGENT_CONTROL_SERVICE, region_name=region, config=config)  # type: ignore[call-overload]
+        self.data_client = self.session.client(BEDROCK_AGENT_DATA_SERVICE, region_name=region, config=config)  # type: ignore[call-overload]
 
     def invoke_agent_runtime(self, agent_arn: str, payload: str) -> str:
         """Execute workflow on AgentCore Runtime."""

@@ -131,7 +131,7 @@ def _display_console_link(workflow_definition_arn: str | None, region: str) -> N
         return
     workflow_name = extract_workflow_definition_name_from_arn(workflow_definition_arn)
     console_url = build_nova_act_workflow_console_url(region, workflow_name)
-    click.echo(f"🔗 View in console: {value(console_url)}")
+    click.echo(f"[LINK] View in console: {value(console_url)}")
 
 
 def _perform_workflow_execution(
@@ -140,11 +140,11 @@ def _perform_workflow_execution(
     """Execute the workflow and return the result."""
     click.echo(f"\n{header('Execution Status')}")
     click.echo(secondary("Starting workflow execution..."))
-    warning("⚠ Initial startup may take a few moments")
+    warning("[WARN] Initial startup may take a few moments")
 
     response = client.invoke_agent_runtime(agent_arn=agent_arn, payload=payload)
     time.sleep(10)  # Allow remaining logs to be captured by the LogTailer after invoke response
-    success("✅ Workflow execution completed successfully!")
+    success("[OK] Workflow execution completed successfully!")
     _display_console_link(workflow_definition_arn, region)
     return response
 
@@ -201,8 +201,8 @@ def _start_log_tailing(session: Session, client: AgentCoreClient, agent_arn: str
     runtime_log_group, _ = client.get_agent_log_groups(agent_arn=agent_arn)
     tailer = LogTailer(session=session, region=region, log_group=runtime_log_group)
     tailer.start(callback=_create_log_callback())
-    click.echo(f"\n{secondary('📋 Log tailing enabled - showing logs from')} {value(runtime_log_group)}")
-    click.echo("─" * 60)
+    click.echo(f"\n{secondary('[LOG] Log tailing enabled - showing logs from')} {value(runtime_log_group)}")
+    click.echo("-" * 60)
     return tailer
 
 

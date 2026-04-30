@@ -142,7 +142,7 @@ class SessionCloser:
         """Force close session: attempt lock, warn if busy, then terminate."""
         lock_acquired = self._lock_manager.try_acquire(session_id)
         if not lock_acquired:
-            click.echo(f"Warning: Session '{session_id}' may be in use by another process. " "Force closing anyway.")
+            click.echo(f"Warning: Session '{session_id}' may be in use by another process. Force closing anyway.")
         try:
             self._terminate_browser(session_info)
         finally:
@@ -211,9 +211,7 @@ class SessionCloser:
             try:
                 manager.close_session(session.session_id, force=force)
                 closed_ids.append(session.session_id)
-            except (
-                Exception
-            ) as e:  # noqa: BLE001 — batch operation error boundary; must continue closing remaining sessions
+            except Exception as e:  # noqa: BLE001 -- batch operation error boundary; must continue closing remaining sessions
                 failed_sessions.append(f"{session.session_id}: {e}")
 
         return closed_ids, failed_sessions

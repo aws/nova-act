@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Step tracking — monkey-patch NovaAct for per-step a11y snapshots + steps summary writer."""
+"""Step tracking -- monkey-patch NovaAct for per-step a11y snapshots + steps summary writer."""
 
 from __future__ import annotations
 
@@ -88,7 +88,7 @@ def patch_nova_act_for_step_snapshots(nova_act: NovaAct, snapshots_out: list[lis
     try:
         runner = nova_act.dispatcher._program_runner
     except AttributeError:
-        logger.debug("Cannot patch NovaAct — dispatcher or _program_runner not found")
+        logger.debug("Cannot patch NovaAct -- dispatcher or _program_runner not found")
         return
 
     original_run = runner.run

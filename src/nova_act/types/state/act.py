@@ -18,7 +18,10 @@ import time
 from typing import Dict
 
 # using attrs to finely control mutability of types
-from attrs import define, field
+from attrs import (
+    define,
+    field,
+)
 from attrs.setters import frozen
 
 from nova_act.tools.actuator.interface.actuator import ActionType

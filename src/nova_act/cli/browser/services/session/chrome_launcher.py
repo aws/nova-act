@@ -97,7 +97,7 @@ class ChromeLauncher:
         Chrome's --remote-debugging-port=0 would auto-select, but doesn't reliably
         report the chosen port back to the parent process.
 
-        Note: This is a best-effort check with an inherent TOCTOU race condition —
+        Note: This is a best-effort check with an inherent TOCTOU race condition --
         the port could be claimed by another process between our check and Chrome's
         bind. The caller handles this via try/except around Chrome launch.
 
@@ -253,7 +253,7 @@ class ChromeLauncher:
             pid = int(pid_str)
             return not is_process_running(pid)
         except (OSError, ValueError, IndexError):
-            # Can't determine lock owner — fail-closed to prevent profile corruption
+            # Can't determine lock owner -- fail-closed to prevent profile corruption
             # from concurrent Chrome instances. User can manually remove the lock.
             return False
 
@@ -376,7 +376,7 @@ class ChromeLauncher:
         """Launch Chrome with CDP using a pre-existing user data directory.
 
         Unlike launch_chrome_with_cdp() which resolves profiles internally,
-        this method takes a user_data_dir directly — the caller is responsible
+        this method takes a user_data_dir directly -- the caller is responsible
         for profile resolution and any rsync operations.
 
         Args:

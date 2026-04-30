@@ -89,30 +89,29 @@ async def agent_type(
             return
 
     element_info = await get_element_at_point(page, point["x"], point["y"])
-    if not element_info:
-        return
 
-    # Check for special input types first
-    if element_info["tagName"].lower() == "input":
-        input_type = element_info.get("attributes", {}).get("type", "").lower()
-        if input_type == "color":
-            await handle_color_input(page, element_info, value)
-            return
-        elif input_type == "file":
-            await handle_file_input(
-                page, value, element_info=element_info, allowed_file_upload_paths=allowed_file_upload_paths
-            )
-            return
-        elif input_type == "range":
-            await handle_range_input(page, element_info, value)
-            return
+    if element_info:
+        # Check for special input types first
+        if element_info["tagName"].lower() == "input":
+            input_type = element_info.get("attributes", {}).get("type", "").lower()
+            if input_type == "color":
+                await handle_color_input(page, element_info, value)
+                return
+            elif input_type == "file":
+                await handle_file_input(
+                    page, value, element_info=element_info, allowed_file_upload_paths=allowed_file_upload_paths
+                )
+                return
+            elif input_type == "range":
+                await handle_range_input(page, element_info, value)
+                return
 
-    # Handle native dropdown
-    if await check_if_native_dropdown(page, point["x"], point["y"]):
-        await page.mouse.click(point["x"], point["y"])
-        await page.keyboard.type(value)
-        await blur(point, page)
-        return
+        # Handle native dropdown
+        if await check_if_native_dropdown(page, point["x"], point["y"]):
+            await page.mouse.click(point["x"], point["y"])
+            await page.keyboard.type(value)
+            await blur(point, page)
+            return
 
     # Handle regular text input
     try:

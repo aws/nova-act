@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""qa-plan command — compile Gherkin .feature files into CLI execution plans."""
+"""qa-plan command -- compile Gherkin .feature files into CLI execution plans."""
 
 from __future__ import annotations
 
@@ -42,13 +42,13 @@ def qa_plan(feature_file: str, plan_strategy: str, tags: tuple[str, ...], output
     """Compile a Gherkin .feature file into a CLI execution plan.
 
     Parses FEATURE_FILE and produces a JSON plan mapping Gherkin steps to
-    Nova Act CLI commands. The plan is consumed by an agent — qa-plan does
+    Nova Act CLI commands. The plan is consumed by an agent -- qa-plan does
     NOT execute anything.
 
     Keyword mapping:
-      Given + URL → act browser goto
-      Given/When  → act browser execute
-      Then        → act browser verify
+      Given + URL -> act browser goto
+      Given/When  -> act browser execute
+      Then        -> act browser verify
 
     Examples:
         act browser qa-plan tests/smoke.feature

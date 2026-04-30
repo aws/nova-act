@@ -118,10 +118,6 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
     def pages(self) -> list[Page]:
         return self._playwright_manager.context.pages
 
-    async def get_viewport_size(self) -> DimensionsDict:
-        """Return the current viewport dimensions."""
-        return await viewport_dimensions(self._playwright_manager.main_page)
-
     @_check_ssl_error
     async def agent_click(
         self,
@@ -261,3 +257,7 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
             "timestamp_ms": int(datetime.now(timezone.utc).timestamp() * 1000),
             "userAgent": user_agent,
         }
+
+    async def get_viewport_size(self) -> DimensionsDict:
+        """Return the current viewport dimensions."""
+        return await viewport_dimensions(self._playwright_manager.main_page)

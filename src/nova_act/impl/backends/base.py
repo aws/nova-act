@@ -15,8 +15,7 @@ from __future__ import annotations
 
 import uuid
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import Generic, Literal, Optional, TypeVar, cast
+from typing import Literal, cast
 
 from pydantic import JsonValue
 
@@ -37,29 +36,28 @@ from nova_act.types.state.act import Act
 from nova_act.types.state.step import Step, StepWithProgram
 from nova_act.types.workflow_run import WorkflowRun
 
-T = TypeVar("T", bound="Endpoints")
 
+class Backend(ABC):
+    """Abstract base class for Nova Act SDK backends.
 
-@dataclass
-class Endpoints:
-    api_url: str
+    A Backend encapsulates the transport, authentication, and request/response
+    handling needed to drive a Nova Act workflow against a specific endpoint.
 
+    Each backend is responsible for:
 
-@dataclass
-class ApiKeyEndpoints(Endpoints):
-    keygen_url: str
-    valid_api_key_length: int = 36
+    1. Validating its authentication configuration at construction time
+       (see ``validate_auth``).
+    2. Executing agent steps against the appropriate endpoints with backend-specific
+       request/response handling (see ``step``).
+    3. Creating sessions and acts (see ``create_session``, ``create_act``).
+    4. Optionally emitting telemetry about acts and the execution environment.
 
+    Backends are typically created via ``BackendFactory.create_backend`` or indirectly
+    via ``Workflow``, which selects the correct backend based on the provided
+    authentication strategy.
+    """
 
-
-
-class Backend(ABC, Generic[T]):
-
-    def __init__(
-        self,
-    ) -> None:
-        self.endpoints = self.resolve_endpoints(
-        )
+    def __init__(self) -> None:
         self.validate_auth()
 
     @staticmethod
@@ -107,13 +105,6 @@ class Backend(ABC, Generic[T]):
         obtaining credentials.
         """
 
-    @classmethod
-    @abstractmethod
-    def resolve_endpoints(
-        cls,
-    ) -> T:
-        pass
-
     @abstractmethod
     def create_session(self, workflow_run: WorkflowRun | None) -> str:
         """Create a session. Must be implemented by concrete backends."""
@@ -136,7 +127,7 @@ class Backend(ABC, Generic[T]):
         """Send environment telemetry. By default, do not send any."""
 
 
-class AwlBackend(Backend[T]):
+class AwlBackend(Backend):
     """Legacy Backends which pass AWL + AST."""
 
     def step(self, act: Act, call_results: list[CallResult], tool_map: dict[str, ActionType] = {}) -> StepWithProgram:

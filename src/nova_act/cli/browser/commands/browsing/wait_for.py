@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Wait-for command — poll until a condition is met on the current page."""
+"""Wait-for command -- poll until a condition is met on the current page."""
 
 from __future__ import annotations
 
@@ -60,7 +60,7 @@ def wait_for(
     Each poll is one inference call that checks whether CONDITION is true.
 
     \b
-    ⚠ Cost: Each poll = 1 inference call. A 30s timeout with 5s interval = up to 6 calls.
+    [WARN] Cost: Each poll = 1 inference call. A 30s timeout with 5s interval = up to 6 calls.
 
     Examples:
         act browser wait-for "the loading spinner is gone" --session-id my-session

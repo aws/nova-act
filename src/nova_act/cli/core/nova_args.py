@@ -14,7 +14,10 @@
 """Utilities for parsing and validating NovaAct constructor arguments from CLI."""
 
 import inspect
+import json
 from typing import get_type_hints
+
+from pydantic import BaseModel
 
 from nova_act import NovaAct
 
@@ -82,9 +85,20 @@ def coerce_type(value: str, target_type: type) -> object:
     if target_type is str:
         return value
 
+    # Handle Pydantic BaseModel subclasses (e.g. SecurityOptions)
+    if isinstance(target_type, type) and issubclass(target_type, BaseModel):
+        model_cls: type[BaseModel] = target_type
+        try:
+            data = json.loads(value)
+            return model_cls.model_validate(data)
+        except Exception as e:
+            raise ValueError(
+                f"Cannot convert '{value}' to {target_type.__name__}: expected a valid JSON object. {e}"
+            ) from e
+
     # For other types, attempt direct conversion
     try:
-        return target_type(value)
+        return target_type(value)  # type: ignore[call-arg]  # mypy over-narrows after BaseModel check
     except Exception as e:
         raise ValueError(f"Cannot convert '{value}' to {target_type.__name__}: {e}")
 
@@ -140,7 +154,7 @@ def _validate_param_name(key: str, valid_params: dict[str, inspect.Parameter]) -
     if key not in valid_params:
         valid_names = ", ".join(sorted(valid_params.keys()))
         raise ValueError(
-            f"Invalid argument '{key}' for NovaAct constructor or methods.\n" f"Valid arguments: {valid_names}"
+            f"Invalid argument '{key}' for NovaAct constructor or methods.\nValid arguments: {valid_names}"
         )
 
 

@@ -56,9 +56,7 @@ def _close_single_session(manager: SessionManager, session_id: str, force: bool)
             ],
             error_code=ErrorCode.BROWSER_ERROR,
         )
-    except (
-        Exception
-    ) as e:  # noqa: BLE001 — top-level CLI error boundary; catches anything not handled by specific handlers above
+    except Exception as e:  # noqa: BLE001 -- top-level CLI error boundary; catches anything not handled by specific handlers above
         exit_with_error(
             f"Unexpected error closing session '{session_id}'",
             str(e),

@@ -199,7 +199,9 @@ def format_paint(paint: list[PaintTiming]) -> list[str]:
         label = (
             "First Paint"
             if name == "first-paint"
-            else "First Contentful Paint" if name == "first-contentful-paint" else name
+            else "First Contentful Paint"
+            if name == "first-contentful-paint"
+            else name
         )
         lines.append(f"  {label} .. {start:.0f} ms")
     return lines

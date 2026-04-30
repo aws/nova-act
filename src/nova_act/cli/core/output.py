@@ -51,10 +51,10 @@ _verbose_mode: ContextVar[bool] = ContextVar("_verbose_mode", default=False)
 # Quiet mode context var
 _quiet_mode: ContextVar[bool] = ContextVar("_quiet_mode", default=False)
 
-# Log path context var — set by capture_command_log, read by output functions
+# Log path context var -- set by capture_command_log, read by output functions
 _current_log_path: ContextVar[str | None] = ContextVar("_current_log_path", default=None)
 
-# Log dir context var — set by capture_command_log, read by output functions
+# Log dir context var -- set by capture_command_log, read by output functions
 _current_log_dir: ContextVar[str | None] = ContextVar("_current_log_dir", default=None)
 
 
@@ -109,7 +109,7 @@ def format_success(message: str, details: Mapping[str, object] | None = None) ->
         Formatted success string
     """
     theme = get_active_theme()
-    lines = [theme.apply_success(f"✓ {message}")]
+    lines = [theme.apply_success(f"[OK] {message}")]
     if details:
         for key, val in details.items():
             lines.append(f"  {secondary(f'{key}:')} {value(str(val))}")
@@ -129,14 +129,14 @@ def format_error(message: str, reason: str, suggestions: list[str] | None = None
     """
     theme = get_active_theme()
     lines = [
-        theme.apply_error(f"✗ {message}"),
+        theme.apply_error(f"[FAIL] {message}"),
         f"  {secondary('Reason:')} {reason}",
     ]
     if suggestions:
         lines.append("")
         lines.append(f"  {secondary('Suggestions:')}")
         for suggestion in suggestions:
-            lines.append(f"  • {suggestion}")
+            lines.append(f"  * {suggestion}")
     return "\n".join(lines)
 
 
@@ -151,7 +151,7 @@ def format_info(message: str, details: Mapping[str, object] | None = None) -> st
         Formatted info string
     """
     theme = get_active_theme()
-    lines = [theme.apply_info(f"• {message}")]
+    lines = [theme.apply_info(f"* {message}")]
     if details:
         for key, val in details.items():
             lines.append(f"  {secondary(f'{key}:')} {value(str(val))}")
@@ -177,7 +177,7 @@ def echo_success(message: str, details: Mapping[str, object] | None = None) -> N
 
 
 def _echo_success_quiet(log_path: str | None) -> None:
-    """Output success in quiet mode — log_dir only."""
+    """Output success in quiet mode -- log_dir only."""
     log_dir = _get_log_dir()
     if log_dir:
         click.echo(f"log_dir: {log_dir}", file=get_cli_stdout())
@@ -186,7 +186,7 @@ def _echo_success_quiet(log_path: str | None) -> None:
 
 
 def _echo_success_verbose(message: str, details: Mapping[str, object] | None, log_path: str | None) -> None:
-    """Output success in verbose mode — formatted with styling."""
+    """Output success in verbose mode -- formatted with styling."""
     out = get_cli_stdout()
     click.echo(format_success(message, details), file=out)
     log_dir = _get_log_dir()
@@ -197,7 +197,7 @@ def _echo_success_verbose(message: str, details: Mapping[str, object] | None, lo
 
 
 def _echo_success_default(details: Mapping[str, object] | None, log_path: str | None) -> None:
-    """Output success in default mode — YAML-like compact."""
+    """Output success in default mode -- YAML-like compact."""
     out = get_cli_stdout()
     click.echo("status: success", file=out)
     if details:
@@ -251,7 +251,7 @@ def exit_with_error(
 
 
 def _exit_error_quiet(out: TextIO, log_path: str | None) -> None:
-    """Output error in quiet mode — log_dir only."""
+    """Output error in quiet mode -- log_dir only."""
     log_dir = _get_log_dir()
     if log_dir:
         click.echo(f"log_dir: {log_dir}", file=out)
@@ -278,7 +278,7 @@ def _exit_error_verbose(
     details: Mapping[str, object] | None,
     log_path: str | None,
 ) -> None:
-    """Output error in verbose mode — formatted with styling."""
+    """Output error in verbose mode -- formatted with styling."""
     click.echo(format_error(title, message, suggestions=suggestions), file=out)
     if details:
         for key, val in details.items():
@@ -296,7 +296,7 @@ def _exit_error_default(
     details: Mapping[str, object] | None,
     log_path: str | None,
 ) -> None:
-    """Output error in default mode — YAML-like compact."""
+    """Output error in default mode -- YAML-like compact."""
     click.echo("status: error", file=out)
     click.echo(f"code: {error_code.value}", file=out)
     click.echo(f"message: {message}", file=out)

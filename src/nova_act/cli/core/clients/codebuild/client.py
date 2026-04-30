@@ -84,7 +84,7 @@ class CodeBuildClient:
         try:
             self.client.create_project(
                 name=project_name,
-                # Placeholder source — start_build() overrides this via sourceLocationOverride
+                # Placeholder source -- start_build() overrides this via sourceLocationOverride
                 source={"type": "S3", "location": "placeholder/placeholder.zip", "buildspec": buildspec},
                 artifacts={"type": "NO_ARTIFACTS"},
                 environment={

@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Ask command — read-only question about the current page."""
+"""Ask command -- read-only question about the current page."""
 
 from __future__ import annotations
 
@@ -60,7 +60,7 @@ def ask(
 ) -> None:
     """Ask a read-only question about the current page.
 
-    Does not interact with the page — observation only.
+    Does not interact with the page -- observation only.
 
     Examples:
         act browser ask "What is the main heading?" --session-id my-session

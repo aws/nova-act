@@ -72,7 +72,7 @@ def setup(
             config_file.unlink()
             echo_success("Config cleared", details={"config": str(config_file)})
         else:
-            echo_success("No config file found — nothing to clear")
+            echo_success("No config file found -- nothing to clear")
         return
 
     # If no flags provided, prompt for API key interactively

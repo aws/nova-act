@@ -83,9 +83,7 @@ class ActMetadata:
                 time_worked_str = _format_duration(self.time_worked_s)
                 if self.human_wait_time_s > 0:
                     human_wait_str = _format_duration(self.human_wait_time_s)
-                    time_worked_line = (
-                        f"    time_worked = {time_worked_str} " f"(excluding {human_wait_str} human wait)\n"
-                    )
+                    time_worked_line = f"    time_worked = {time_worked_str} (excluding {human_wait_str} human wait)\n"
                 else:
                     time_worked_line = f"    time_worked = {time_worked_str}\n"
             except (TypeError, AttributeError):

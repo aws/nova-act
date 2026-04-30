@@ -95,7 +95,7 @@ def get_or_create_session(
     if session_info is not None and session_info.nova_act_instance:
         return session_info
 
-    # Session is missing or stale — clean up and create a new one.
+    # Session is missing or stale -- clean up and create a new one.
     logger.info(
         "Session '%s' is stale (no live browser instance). Force-closing and creating fresh session.", session_id
     )
@@ -187,7 +187,7 @@ def patch_active_tab(nova_act: NovaAct, session_info: SessionInfo) -> None:
     """
     idx = session_info.active_tab_index
     if idx == 0:
-        return  # Default behavior — no patch needed
+        return  # Default behavior -- no patch needed
 
     try:
         pm = nova_act._actuator._playwright_manager  # type: ignore[attr-defined]
@@ -243,7 +243,7 @@ def locked_session(manager: SessionManager, session_info: SessionInfo, session_i
         # measurable stability benefit.
 
 
-from nova_act.cli.browser.utils.orientation import (  # noqa: E402 — deferred import
+from nova_act.cli.browser.utils.orientation import (  # noqa: E402 -- deferred import
     auto_orientation,
     emit_observe,
     emit_steps_summary,
@@ -271,7 +271,7 @@ def _handle_post_command(
     if steps_meta:
         orientation.update(steps_meta)
 
-    # Emit orientation metadata to stdout (JSON only — default mode log_dir is handled by echo_success)
+    # Emit orientation metadata to stdout (JSON only -- default mode log_dir is handled by echo_success)
     if orientation and is_json_mode():
         out = get_cli_stdout()
         click.echo(_json.dumps({"orientation": orientation}), file=out)
@@ -357,9 +357,7 @@ def command_session(
             _cmd_start = datetime.now()
             try:
                 yield nova_act
-            except (
-                Exception
-            ) as exc:  # noqa: BLE001 — top-level command error boundary; re-raises after screenshot capture
+            except Exception as exc:  # noqa: BLE001 -- top-level command error boundary; re-raises after screenshot capture
                 if not params.no_screenshot_on_failure:
                     screenshot_path = capture_failure_screenshot(nova_act, params.session_id, command_name)
                     if screenshot_path:
@@ -416,7 +414,7 @@ def prepare_session(
 def _emit_auth_fallback_warning(auth_config: AuthConfig, auth_mode: str | None) -> None:
     """Warn when auto-detect silently fell back to AWS credentials."""
     if auth_mode is None and auth_config.mode == AuthMode.AWS:
-        click.echo("⚠ API key not set — falling back to AWS credentials", err=True)
+        click.echo("[WARN] API key not set -- falling back to AWS credentials", err=True)
 
 
 def _emit_disk_warning() -> None:

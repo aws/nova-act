@@ -79,7 +79,7 @@ def _merge_workflows(
 
 def _status_display(status: str) -> str:
     """Format status for display."""
-    icons = {STATUS_SYNCED: "●", STATUS_REMOTE: "☁", STATUS_LOCAL: "◌"}
+    icons = {STATUS_SYNCED: "(*)", STATUS_REMOTE: "(cloud)", STATUS_LOCAL: "(o)"}
     return f"{icons.get(status, '?')} {status}"
 
 
@@ -104,7 +104,7 @@ def _display_merged_table(merged: List[MergedWorkflow]) -> None:
 
     # Header
     click.echo(f"  {'NAME':<{name_width}}  {'STATUS':<10}  {'CREATED'}")
-    click.echo(f"  {'─' * name_width}  {'─' * 10}  {'─' * 10}")
+    click.echo(f"  {'-' * name_width}  {'-' * 10}  {'-' * 10}")
 
     for wf in merged:
         status_str = _status_display(wf.status)
@@ -124,9 +124,9 @@ def _filter_workflows(merged: List[MergedWorkflow], *, show_local: bool, show_re
 def _display_footer() -> None:
     """Display footer with legend and command reference."""
     click.echo()
-    click.echo(secondary("  ● synced  — exists both locally and in AWS"))
-    click.echo(secondary("  ☁ remote  — exists only in AWS (not local)"))
-    click.echo(secondary("  ◌ local   — exists only locally (not yet deployed)"))
+    click.echo(secondary("  (*) synced  -- exists both locally and in AWS"))
+    click.echo(secondary("  (cloud) remote  -- exists only in AWS (not local)"))
+    click.echo(secondary("  (o) local   -- exists only locally (not yet deployed)"))
     click.echo()
     click.echo(f"  Use {command('act workflow show -n <name>')} for detailed information.")
     click.echo()
@@ -168,7 +168,7 @@ def list(region: str | None = None, show_local: bool = False, show_remote: bool 
         remote_workflows = workflow_manager.list_remote_workflows()
     except Exception as e:
         logger.debug(f"Failed to fetch remote workflows: {e}")
-        warning(f"⚠ Could not fetch remote workflows: {e}")
+        warning(f"[WARN] Could not fetch remote workflows: {e}")
         click.echo(secondary("  Showing local workflows only."))
         click.echo()
 

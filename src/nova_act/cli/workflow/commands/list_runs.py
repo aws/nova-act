@@ -56,7 +56,7 @@ def _display_runs_table(runs: list[WorkflowRunSummary], name: str) -> None:
     status_width = max(len(r.status) for r in runs)
 
     click.echo(f"  {'ID':<{id_width}}  {'STATUS':<{status_width}}  {'STARTED':<20}  DURATION")
-    click.echo(f"  {'─' * id_width}  {'─' * status_width}  {'─' * 20}  {'─' * 10}")
+    click.echo(f"  {'-' * id_width}  {'-' * status_width}  {'-' * 20}  {'-' * 10}")
 
     for run in runs:
         run_id = run.workflowRunId[:8]

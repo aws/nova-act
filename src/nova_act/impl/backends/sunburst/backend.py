@@ -13,41 +13,26 @@
 # limitations under the License.
 from typing_extensions import Final
 
-from nova_act.impl.backends.base import ApiKeyEndpoints
 from nova_act.impl.backends.burst.backend import BurstBackend
 from nova_act.impl.backends.sunburst.client import SunburstClient
-from nova_act.types.errors import AuthError
-from nova_act.util.logging import create_warning_box
 
 DEFAULT_WORKFLOW_DEFN_NAME: Final[str] = "default"
 
 
-class SunburstBackend(BurstBackend[ApiKeyEndpoints]):
+class SunburstBackend(BurstBackend[SunburstClient]):
     def __init__(
         self,
         api_key: str,
     ) -> None:
         self._api_key = api_key
 
-        super().__init__(
+        self._client = SunburstClient(
+            api_key,
         )
-
-    def _create_client(self, endpoints: ApiKeyEndpoints) -> SunburstClient:
-        return SunburstClient(endpoints, self._api_key)
+        super().__init__()
 
     def get_auth_warning_message_for_backend(self, message: str) -> str:
-        return create_warning_box([message, "", f"Please ensure you are using a key from: {self.endpoints.keygen_url}"])
-
-    @classmethod
-    def resolve_endpoints(
-        cls,
-    ) -> ApiKeyEndpoints:
-        api_url = "https://api.nova.amazon.com"
-        keygen_url = "https://nova.amazon.com/dev-apis"
-
-
-        return ApiKeyEndpoints(api_url=api_url, keygen_url=keygen_url)
+        return self._client.get_auth_warning_message(message)
 
     def validate_auth(self) -> None:
-        if len(self._api_key) != self.endpoints.valid_api_key_length:
-            raise AuthError(self.get_auth_warning_message("Invalid API key length"))
+        self._client.validate_api_key(self._api_key)

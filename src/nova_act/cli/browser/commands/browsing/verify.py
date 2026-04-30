@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Verify command — assert a condition on the current page with CI-friendly exit codes."""
+"""Verify command -- assert a condition on the current page with CI-friendly exit codes."""
 
 from __future__ import annotations
 
@@ -60,7 +60,7 @@ def verify(
     """Assert a condition on the current page. Exit code 0 on pass, 1 on fail.
 
     Uses AI to determine if ASSERTION is true on the page. Returns structured
-    pass/fail with evidence — ideal for CI/CD pipelines and test scripts.
+    pass/fail with evidence -- ideal for CI/CD pipelines and test scripts.
 
     Examples:
         act browser verify "the login button is visible" --session-id my-session

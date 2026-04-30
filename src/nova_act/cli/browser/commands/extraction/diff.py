@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Diff command — observe page state before and after an action."""
+"""Diff command -- observe page state before and after an action."""
 
 from __future__ import annotations
 

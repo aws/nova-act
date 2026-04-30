@@ -106,6 +106,7 @@ class WorkflowManager:
         name: str,
         workflow_definition_arn: str | None = None,
         s3_bucket_name: str | None = None,
+        s3_key_prefix: str | None = None,
         skip_s3_creation: bool = False,
     ) -> WorkflowInfo:
         """Create workflow with WorkflowDefinition, handling all ARN resolution logic."""
@@ -115,12 +116,15 @@ class WorkflowManager:
             logger.info(f"Workflow '{name}' already exists, checking WorkflowDefinition")
             workflow = self.get_workflow(name=name)
             return self._recover_workflow_definition_if_needed(
-                workflow=workflow, s3_bucket_name=s3_bucket_name, skip_s3_creation=skip_s3_creation
+                workflow=workflow,
+                s3_bucket_name=s3_bucket_name,
+                s3_key_prefix=s3_key_prefix,
+                skip_s3_creation=skip_s3_creation,
             )
 
         if workflow_definition_arn is None:
             resolved_arn = self._ensure_workflow_definition_exists(
-                name=name, s3_bucket_name=s3_bucket_name, skip_s3_creation=skip_s3_creation
+                name=name, s3_bucket_name=s3_bucket_name, s3_key_prefix=s3_key_prefix, skip_s3_creation=skip_s3_creation
             )
         else:
             self._validate_workflow_name_matches_arn(
@@ -132,7 +136,7 @@ class WorkflowManager:
         return self._save_workflow_to_state(name=name, workflow_definition_arn=resolved_arn)
 
     def _ensure_workflow_definition_exists(
-        self, name: str, s3_bucket_name: str | None, skip_s3_creation: bool
+        self, name: str, s3_bucket_name: str | None, s3_key_prefix: str | None, skip_s3_creation: bool
     ) -> str | None:
         """Ensure WorkflowDefinition exists in AWS, creating if missing.
 
@@ -142,6 +146,7 @@ class WorkflowManager:
         Args:
             name: Workflow name
             s3_bucket_name: Optional S3 bucket for exports
+            s3_key_prefix: Optional S3 key prefix for exports
             skip_s3_creation: Skip S3 bucket creation
 
         Returns:
@@ -152,6 +157,7 @@ class WorkflowManager:
                 name=name,
                 description="Workflow created via CLI",
                 s3_bucket_name=s3_bucket_name,
+                s3_key_prefix=s3_key_prefix,
                 skip_s3_creation=skip_s3_creation,
             )
         except Exception as e:
@@ -163,7 +169,7 @@ class WorkflowManager:
                 return None
 
     def _recover_workflow_definition_if_needed(
-        self, workflow: WorkflowInfo, s3_bucket_name: str | None, skip_s3_creation: bool
+        self, workflow: WorkflowInfo, s3_bucket_name: str | None, s3_key_prefix: str | None, skip_s3_creation: bool
     ) -> WorkflowInfo:
         """Recover missing WorkflowDefinition ARN if needed.
 
@@ -173,6 +179,7 @@ class WorkflowManager:
         Args:
             workflow: Workflow to check and recover
             s3_bucket_name: Optional S3 bucket for exports
+            s3_key_prefix: Optional S3 key prefix for exports
             skip_s3_creation: Skip S3 bucket creation
 
         Returns:
@@ -183,7 +190,10 @@ class WorkflowManager:
 
         logger.info(f"Workflow '{workflow.name}' missing WorkflowDefinition, attempting recovery")
         resolved_arn = self._ensure_workflow_definition_exists(
-            name=workflow.name, s3_bucket_name=s3_bucket_name, skip_s3_creation=skip_s3_creation
+            name=workflow.name,
+            s3_bucket_name=s3_bucket_name,
+            s3_key_prefix=s3_key_prefix,
+            skip_s3_creation=skip_s3_creation,
         )
 
         if resolved_arn:
@@ -264,7 +274,7 @@ class WorkflowManager:
             request = GetWorkflowDefinitionRequest(workflowDefinitionName=workflow_name)
             client.get_workflow_definition(request=request)
             logger.info(f"Validated WorkflowDefinition exists: {workflow_definition_arn}")
-            success("✓ Workflow definition validated")
+            success("[OK] Workflow definition validated")
         except Exception as e:
             raise WorkflowError(f"WorkflowDefinition {workflow_definition_arn} does not exist in AWS: {e}") from e
 
@@ -279,14 +289,17 @@ class WorkflowManager:
         logger.info(f"Deleted workflow '{name}' from account '{self.account_id}', region '{self.region}'")
 
     def ensure_workflow_for_deployment(
-        self, name: str | None, s3_bucket_name: str | None, skip_s3_creation: bool
+        self, name: str | None, s3_bucket_name: str | None, s3_key_prefix: str | None, skip_s3_creation: bool
     ) -> str:
         """Ensure workflow exists for deployment, creating temporary one if needed."""
         workflow_name = name or f"workflow-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
 
         if not name:
             self._register_temporary_workflow(
-                workflow_name=workflow_name, s3_bucket_name=s3_bucket_name, skip_s3_creation=skip_s3_creation
+                workflow_name=workflow_name,
+                s3_bucket_name=s3_bucket_name,
+                s3_key_prefix=s3_key_prefix,
+                skip_s3_creation=skip_s3_creation,
             )
         else:
             self._validate_workflow_exists(name=workflow_name)
@@ -328,6 +341,7 @@ class WorkflowManager:
         name: str,
         description: str | None = None,
         s3_bucket_name: str | None = None,
+        s3_key_prefix: str | None = None,
         skip_s3_creation: bool = False,
     ) -> str:
         """Create a workflow definition using AWS nova-act service."""
@@ -337,18 +351,20 @@ class WorkflowManager:
         # Create export config unless explicitly skipped
         export_config = None
         if not skip_s3_creation:
-            export_config = self._create_export_config(custom_bucket_name=s3_bucket_name)
+            export_config = self._create_export_config(custom_bucket_name=s3_bucket_name, s3_key_prefix=s3_key_prefix)
 
         request = CreateWorkflowDefinitionRequest(name=name, description=description, exportConfig=export_config)
         response = client.create_workflow_definition(request=request)
-        success("✓ Workflow definition created")
+        success("[OK] Workflow definition created")
         return getattr(
             response,
             "arn",
             construct_workflow_definition_arn(name=name, region=self.region, account_id=self.account_id),
         )
 
-    def _create_export_config(self, custom_bucket_name: str | None = None) -> ExportConfig | None:
+    def _create_export_config(
+        self, custom_bucket_name: str | None = None, s3_key_prefix: str | None = None
+    ) -> ExportConfig | None:
         """Create export config with S3 bucket."""
         try:
             if custom_bucket_name:
@@ -357,8 +373,8 @@ class WorkflowManager:
                 s3_client = S3Client(session=self.session, region=self.region)
                 if s3_client.bucket_exists(bucket_name=custom_bucket_name):
                     logger.info(f"Skipping creating existing custom S3 bucket: {custom_bucket_name}")
-                    success("✓ Using existing S3 bucket")
-                    return ExportConfig(s3BucketName=custom_bucket_name)
+                    success("[OK] Using existing S3 bucket")
+                    return ExportConfig(s3BucketName=custom_bucket_name, s3KeyPrefix=s3_key_prefix)
                 else:
                     logger.warning(f"Custom bucket {custom_bucket_name} not found, creating default")
 
@@ -367,8 +383,8 @@ class WorkflowManager:
             bucket_name = bucket_manager.ensure_default_bucket()
 
             if bucket_name:
-                success(f"✓ S3 bucket ready: {bucket_name}")
-                return ExportConfig(s3BucketName=bucket_name)
+                success(f"[OK] S3 bucket ready: {bucket_name}")
+                return ExportConfig(s3BucketName=bucket_name, s3KeyPrefix=s3_key_prefix)
 
             raise ExecutionError("Failed to create S3 bucket")
         except Exception as e:
@@ -376,18 +392,22 @@ class WorkflowManager:
             raise
 
     def _register_temporary_workflow(
-        self, workflow_name: str, s3_bucket_name: str | None, skip_s3_creation: bool
+        self, workflow_name: str, s3_bucket_name: str | None, s3_key_prefix: str | None, skip_s3_creation: bool
     ) -> None:
         """Register temporary workflow for quick-deploy."""
         if not skip_s3_creation:
-            self._create_workflow_with_s3(workflow_name=workflow_name, s3_bucket_name=s3_bucket_name)
+            self._create_workflow_with_s3(
+                workflow_name=workflow_name, s3_bucket_name=s3_bucket_name, s3_key_prefix=s3_key_prefix
+            )
         else:
             self.create_workflow(name=workflow_name)
 
-    def _create_workflow_with_s3(self, workflow_name: str, s3_bucket_name: str | None) -> None:
+    def _create_workflow_with_s3(
+        self, workflow_name: str, s3_bucket_name: str | None, s3_key_prefix: str | None
+    ) -> None:
         """Create workflow definition with S3 bucket."""
         workflow_definition_arn = self._ensure_workflow_definition_exists(
-            name=workflow_name, s3_bucket_name=s3_bucket_name, skip_s3_creation=False
+            name=workflow_name, s3_bucket_name=s3_bucket_name, s3_key_prefix=s3_key_prefix, skip_s3_creation=False
         )
         self.create_workflow(name=workflow_name, workflow_definition_arn=workflow_definition_arn)
 

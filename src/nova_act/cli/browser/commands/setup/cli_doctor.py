@@ -29,9 +29,9 @@ from nova_act.cli.core.output import get_cli_stdout
 __all__ = ["CheckResult", "CLIDoctor"]
 
 _STATUS_ICONS = {
-    "pass": click.style("✓", fg="green"),
-    "fail": click.style("✗", fg="red"),
-    "info": click.style("ℹ", fg="yellow"),
+    "pass": click.style("[OK]", fg="green"),
+    "fail": click.style("[FAIL]", fg="red"),
+    "info": click.style("[INFO]", fg="yellow"),
 }
 
 
@@ -85,7 +85,7 @@ class CLIDoctor:
         json_success(result, log_path=str(log_path), log_dir=str(log_path.parent))
 
     def run(self, verbose: bool) -> None:
-        """Full orchestration: log capture → checks → output."""
+        """Full orchestration: log capture -> checks -> output."""
         with capture_command_log(
             "doctor",
             session_id=None,

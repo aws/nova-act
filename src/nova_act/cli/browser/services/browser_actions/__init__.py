@@ -11,10 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""BrowserActions package — pure capability logic extracted from CLI commands.
+"""BrowserActions package -- pure capability logic extracted from CLI commands.
 
 Takes a NovaAct instance and exposes every browser capability as a method.
-No Click, no output formatting, no logging — pure logic only.
+No Click, no output formatting, no logging -- pure logic only.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
 
 class BrowserActions(NavigationMixin, ExplorationMixin, InteractionMixin, InspectionMixin, TabOperationsMixin):
-    """Pure browser capability logic — no CLI, no output formatting, no logging."""
+    """Pure browser capability logic -- no CLI, no output formatting, no logging."""
 
     def __init__(self, nova_act: NovaAct) -> None:
         self._nova_act = nova_act

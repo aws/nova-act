@@ -49,7 +49,7 @@ def _parse_properties(properties: str | None) -> tuple[str, ...]:
     requested = tuple(p.strip() for p in properties.split(","))
     invalid = [p for p in requested if p not in ALL_PROPERTIES]
     if invalid:
-        raise click.BadParameter(f"Invalid properties: {', '.join(invalid)}. " f"Allowed: {', '.join(ALL_PROPERTIES)}")
+        raise click.BadParameter(f"Invalid properties: {', '.join(invalid)}. Allowed: {', '.join(ALL_PROPERTIES)}")
     return requested
 
 

@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Execute command — primary delegation interface for multi-step browser plans."""
+"""Execute command -- primary delegation interface for multi-step browser plans."""
 
 from __future__ import annotations
 
@@ -60,7 +60,7 @@ def execute(
     """Delegate a multi-step browser plan to the visual intelligence agent.
 
     This is the primary delegation command. Pass a full natural language plan
-    describing everything the agent should do in the browser — multiple steps,
+    describing everything the agent should do in the browser -- multiple steps,
     navigation, interactions, and assertions can all be included in a single call.
     The agent executes the entire plan sequentially.
 

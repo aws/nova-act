@@ -17,11 +17,12 @@ import functools
 import os
 from contextvars import ContextVar
 from types import MappingProxyType
-from typing import Any, Callable, Type, Union
+from typing import TYPE_CHECKING, Any, Callable, Type, Union
 
 from boto3 import Session
 from botocore.config import Config
 from typing_extensions import TypedDict
+
 
 from nova_act.impl.backends.starburst.backend import StarburstBackend
 from nova_act.impl.backends.sunburst.backend import DEFAULT_WORKFLOW_DEFN_NAME, SunburstBackend

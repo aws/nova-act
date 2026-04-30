@@ -166,7 +166,7 @@ def browser_command_options(func: F) -> F:  # type: ignore[explicit-any]
     """Composite decorator for all browser commands (browsing/ + extraction/).
 
     Combines: common_browser_options, common_session_options, auth_options,
-    json_option, quiet_option, verbose_option, no_screenshot_on_failure — in the correct Click application order.
+    json_option, quiet_option, verbose_option, no_screenshot_on_failure -- in the correct Click application order.
     """
     func = click.option(
         "--observe",

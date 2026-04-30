@@ -39,13 +39,13 @@ class StyledGroup(click.Group):
         run_named_cmd = 'act workflow run --name my-workflow --payload \'{"key": "value"}\''
         deploy_region_cmd = "act workflow deploy --name my-workflow --region us-west-2"
 
-        return f"""{header('Usage:')} act workflow [OPTIONS] COMMAND [ARGS]...
+        return f"""{header("Usage:")} act workflow [OPTIONS] COMMAND [ARGS]...
 
-{header('Workflow management commands for AWS AgentCore deployment.')}
+{header("Workflow management commands for AWS AgentCore deployment.")}
 
 Manage Python workflows from creation to deployment and execution on AWS AgentCore Runtime.
 
-{header('QUICK START:')}
+{header("QUICK START:")}
 
     # Deploy any Python script directly
     {secondary(deploy_script_cmd)}
@@ -53,14 +53,14 @@ Manage Python workflows from creation to deployment and execution on AWS AgentCo
     # Run deployed workflow
     {secondary(run_cmd)}
 
-{header('WORKFLOW LIFECYCLE:')}
+{header("WORKFLOW LIFECYCLE:")}
 
-    {header('1. create')}  - Register workflow in configuration
-    {header('2. deploy')}  - Build container and deploy to AWS
-    {header('3. run')}     - Execute deployed workflow
-    {header('4. list')}    - Show all configured workflows
+    {header("1. create")}  - Register workflow in configuration
+    {header("2. deploy")}  - Build container and deploy to AWS
+    {header("3. run")}     - Execute deployed workflow
+    {header("4. list")}    - Show all configured workflows
 
-{header('EXAMPLES:')}
+{header("EXAMPLES:")}
 
     # Quick deploy a single script
     {secondary(deploy_single_cmd)}
@@ -78,10 +78,10 @@ Manage Python workflows from creation to deployment and execution on AWS AgentCo
     # Multi-region deployment
     {secondary(deploy_region_cmd)}
 
-{header('Options:')}
+{header("Options:")}
   --help  Show this message and exit.
 
-{header('Commands:')}
+{header("Commands:")}
   create  Register a new workflow in the configuration.
   delete  Delete a workflow from configuration and optionally remove AWS...
   deploy  Deploy workflow to agentcore service with clarified execution...
@@ -95,14 +95,14 @@ Manage Python workflows from creation to deployment and execution on AWS AgentCo
         run_cmd = 'act workflow run --name <generated-name> --payload \'{"input": "data"}\''
         help_cmd = "act workflow --help"
 
-        return f"""{header('Usage:')} act [OPTIONS] COMMAND [ARGS]...
+        return f"""{header("Usage:")} act [OPTIONS] COMMAND [ARGS]...
 
-{header('Nova Act CLI')} - Deploy Python workflows to AWS AgentCore Runtime.
+{header("Nova Act CLI")} - Deploy Python workflows to AWS AgentCore Runtime.
 
 A streamlined CLI for deploying Python scripts and projects to AWS AgentCore
 with automatic containerization, ECR management, and multi-region support.
 
-{header('QUICK START:')}
+{header("QUICK START:")}
 
     # Deploy any Python script in one command
     {secondary(deploy_cmd)}
@@ -110,32 +110,32 @@ with automatic containerization, ECR management, and multi-region support.
     # Run the deployed workflow
     {secondary(run_cmd)}
 
-{header('FEATURES:')}
+{header("FEATURES:")}
 
-    - {header('Quick deploy')}: Deploy scripts without pre-configuration
-    - {header('Auto-containerization')}: Automatic Docker image building
-    - {header('ECR management')}: Automatic repository creation and image pushing
-    - {header('IAM integration')}: Automatic role creation and management
-    - {header('Multi-region')}: Deploy to any AWS region
-    - {header('Workflow tracking')}: Persistent configuration management
+    - {header("Quick deploy")}: Deploy scripts without pre-configuration
+    - {header("Auto-containerization")}: Automatic Docker image building
+    - {header("ECR management")}: Automatic repository creation and image pushing
+    - {header("IAM integration")}: Automatic role creation and management
+    - {header("Multi-region")}: Deploy to any AWS region
+    - {header("Workflow tracking")}: Persistent configuration management
 
-{header('REQUIREMENTS:')}
+{header("REQUIREMENTS:")}
 
     - AWS CLI configured with appropriate permissions
     - Docker installed and running
     - Python 3.10+ environment
     - IAM permissions for ECR, AgentCore, and IAM operations
 
-{header('CONFIGURATION:')}
+{header("CONFIGURATION:")}
 
 Workflows are stored in region-specific directories under {secondary(str(get_state_dir()))} with support for
 multiple regions and deployment tracking.
 
 For detailed command help, use: {secondary(help_cmd)}
 
-{header('Options:')}
+{header("Options:")}
   --version  Show the version and exit.
   --help     Show this message and exit.
 
-{header('Commands:')}
+{header("Commands:")}
   workflow     Workflow management commands for AWS AgentCore deployment."""

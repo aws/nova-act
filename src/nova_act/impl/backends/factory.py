@@ -13,18 +13,14 @@
 # limitations under the License.
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, NamedTuple, Optional, TypeVar, Union
+from typing import TYPE_CHECKING, NamedTuple, Optional, Union
 
-from nova_act.impl.backends.base import Endpoints
 
 from nova_act.impl.backends.starburst.backend import StarburstBackend
 from nova_act.impl.backends.sunburst.backend import SunburstBackend
 from nova_act.types.errors import AuthError
 from nova_act.types.workflow import Workflow
 from nova_act.util.logging import create_warning_box
-
-# TypeVar for Backend that can work with any Endpoints subtype
-T = TypeVar("T", bound=Endpoints)
 
 # Type alias for any concrete backend type that can be returned by the factory
 NovaActBackend = Union[

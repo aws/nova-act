@@ -78,6 +78,13 @@ class S3SessionProvider(BrowserSessionProvider):
             When ``None``, uses the bucket's default encryption.
         region: AWS region for the S3 client. Defaults to the
             boto3 default region.
+        restore_local_storage: Whether to restore localStorage on session
+            start in addition to cookies. Disabled by default because
+            most auth flows rely on cookies alone; enable only when the
+            app stores session-critical data in localStorage (e.g. JWTs
+            or refresh tokens). See
+            :meth:`~BrowserSessionProvider.load_local_storage` for
+            caveats before enabling.
     """
 
     def __init__(
@@ -88,7 +95,9 @@ class S3SessionProvider(BrowserSessionProvider):
         key_prefix: str = "nova-act-sessions/",
         kms_key_id: str | None = None,
         region: str | None = None,
+        restore_local_storage: bool = False,
     ) -> None:
+        super().__init__(restore_local_storage=restore_local_storage)
         self._bucket = bucket
         self._profile = profile
         self._key_prefix = key_prefix

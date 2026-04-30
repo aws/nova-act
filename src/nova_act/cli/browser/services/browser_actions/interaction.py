@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Interaction capabilities — execute, ask, fill_form, verify, wait_for."""
+"""Interaction capabilities -- execute, ask, fill_form, verify, wait_for."""
 
 from __future__ import annotations
 
@@ -81,11 +81,9 @@ _ASK_PROMPT = (
 )
 
 _FILL_FORM_NO_SUBMIT = (
-    "Fill in the form on this page with the following information: {form_data}. " "Do NOT submit the form."
+    "Fill in the form on this page with the following information: {form_data}. Do NOT submit the form."
 )
-_FILL_FORM_SUBMIT = (
-    "Fill in the form on this page with the following information: {form_data}. " "Then submit the form."
-)
+_FILL_FORM_SUBMIT = "Fill in the form on this page with the following information: {form_data}. Then submit the form."
 
 _VERIFY_ASSERTION_PROMPT = (
     "Determine if the following is true on this page: {assertion}. "
@@ -130,7 +128,8 @@ class InteractionMixin:
                     self._nova_act.page.locator(target).first.click()
                 elif resolved.element is not None:
                     self._nova_act.page.get_by_role(
-                        resolved.element.role, name=resolved.element.name  # type: ignore[arg-type]
+                        resolved.element.role,  # type: ignore[arg-type]
+                        name=resolved.element.name,
                     ).click()
                 else:
                     return None
@@ -141,7 +140,7 @@ class InteractionMixin:
 
     def click(self, target: str, focus: str | None = None, timeout: int = 30, **method_args: object) -> ClickResult:
         """Click a specific element. Tries fast path (Playwright) first, falls back to AI."""
-        # --- Fast path: intent resolution → Playwright click ---
+        # --- Fast path: intent resolution -> Playwright click ---
         fast_result = self._try_fast_click(target)
         if fast_result is not None:
             return fast_result
@@ -204,7 +203,8 @@ class InteractionMixin:
                         failed[key] = value
                         continue
                     self._nova_act.page.get_by_role(
-                        resolved.element.role, name=resolved.element.name  # type: ignore[arg-type]
+                        resolved.element.role,  # type: ignore[arg-type]
+                        name=resolved.element.name,
                     ).fill(value)
                     filled_count += 1
                 except PlaywrightError:
@@ -355,7 +355,7 @@ class InteractionMixin:
     ) -> TypeResult:
         """Type text into a target element or the currently focused element.
 
-        Fast path: resolve target via intent resolution → Playwright fill/type.
+        Fast path: resolve target via intent resolution -> Playwright fill/type.
         AI fallback: act() with natural language prompt.
         """
         # Fast path: type into focused element
@@ -390,7 +390,8 @@ class InteractionMixin:
                     else:
                         with transition_tracker(self._nova_act.page) as tracker:
                             locator = self._nova_act.page.get_by_role(
-                                resolution.element.role, name=resolution.element.name  # type: ignore[arg-type]
+                                resolution.element.role,  # type: ignore[arg-type]
+                                name=resolution.element.name,
                             )
                             if append:
                                 locator.type(text)

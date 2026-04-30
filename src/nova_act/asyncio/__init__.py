@@ -56,10 +56,6 @@ from nova_act.types.features import SecurityOptions
 from nova_act.types.guardrail import GuardrailDecision, GuardrailInputState
 from nova_act.types.workflow import Workflow, get_current_workflow, workflow
 from nova_act.util.jsonschema import BOOL_SCHEMA, STRING_SCHEMA
-from nova_act.util.logging import make_trace_logger
-
-_TRACE_LOGGER = make_trace_logger()
-_TRACE_LOGGER.info("The async version of Nova Act is currently in preview.\n")
 
 __all__ = [
     "NovaAct",

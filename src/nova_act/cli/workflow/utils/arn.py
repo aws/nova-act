@@ -31,7 +31,7 @@ def extract_agent_id_from_arn(agent_arn: str) -> str:
         Agent ID extracted from ARN
 
     Example:
-        >>> extract_agent_id_from_arn('arn:aws:bedrock:us-east-1:123456789012:agent/ABCD1234')
+        >>> extract_agent_id_from_arn("arn:aws:bedrock:us-east-1:123456789012:agent/ABCD1234")
         'ABCD1234'
     """
     return agent_arn.split("/")[-1]

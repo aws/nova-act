@@ -36,7 +36,7 @@ def _has_dead_pid(session: SessionInfo) -> bool:
     indicating the session is safe to prune regardless of TTL.
     """
     if session.browser_pid is None:
-        return True  # No PID means browser is gone — safe to prune
+        return True  # No PID means browser is gone -- safe to prune
     try:
         process = psutil.Process(session.browser_pid)
         return not process.is_running()

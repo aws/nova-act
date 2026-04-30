@@ -19,8 +19,8 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from nova_act.__version__ import VERSION
-from nova_act.impl.backends.base import Endpoints
 from nova_act.impl.backends.burst.client import BurstClient
+from nova_act.impl.backends.burst.errors import NovaActServiceError, translate_nova_act_service_error
 from nova_act.impl.backends.burst.types import (
     CreateActRequest,
     CreateActResponse,
@@ -36,18 +36,6 @@ from nova_act.impl.backends.burst.types import (
     UpdateWorkflowRunResponse,
 )
 from nova_act.impl.backends.common import get_client_source
-from nova_act.types.act_errors import (
-    ActAPIError,
-    ActBadRequestError,
-    ActClientError,
-    ActDailyQuotaExceededError,
-    ActGuardrailsError,
-    ActInternalServerError,
-    ActInvalidModelGenerationError,
-    ActRequestThrottledError,
-    ActServerError,
-)
-from nova_act.types.errors import AuthError
 from nova_act.util.logging import setup_logging
 
 _LOGGER = setup_logging(__name__)
@@ -134,8 +122,13 @@ def _validate_user_agent_extra(config: Config) -> None:
 
 
 class StarburstClient(BurstClient):
-    def __init__(self, endpoints: Endpoints, boto_session: Session, boto_config: Config | None):
-        self._endpoints = endpoints
+    def __init__(
+        self,
+        boto_session: Session,
+        boto_config: Config | None,
+    ):
+        self._resolve_endpoints(
+        )
         self._client_source = get_client_source().value
 
         if boto_config is not None:
@@ -151,12 +144,16 @@ class StarburstClient(BurstClient):
         # Set correct user_agent_extra
         config.user_agent_extra = DEFAULT_USER_AGENT_EXTRA  # type: ignore[attr-defined]
 
-        self._nova_act_client = boto_session.client(
-            service_name="nova-act", endpoint_url=endpoints.api_url, config=config
-        )
+        self._nova_act_client = boto_session.client(service_name="nova-act", endpoint_url=self._api_url, config=config)
 
         # Add event handler to inject X-Client-Source header
         self._nova_act_client.meta.events.register("before-call", self._add_client_source_header)
+
+    def _resolve_endpoints(
+        self,
+    ) -> None:
+        self._api_url = "https://nova-act.us-east-1.amazonaws.com/"
+
 
     def _add_client_source_header(self, params: dict[str, object], **kwargs: object) -> None:
         """Add X-Client-Source header to all requests."""
@@ -221,154 +218,5 @@ class StarburstClient(BurstClient):
     @staticmethod
     def _translate_client_error(error: ClientError) -> Exception:
         """Translate boto3 ClientError to appropriate SDK error type."""
-
-        raw_response = str(error.response)
-        error_code = error.response.get("Error", {}).get("Code", "Unknown")
-        error_message = error.response.get("message", str(error))
-        error_reason = error.response.get("reason", "")
-
-        request_id = error.response.get("ResponseMetadata", {}).get("RequestId")
-        status_code = error.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
-
-        if error_code == "AccessDeniedException":
-            return AuthError(f"Access denied: {error_message}")
-
-        elif error_code == "ValidationException":
-            # Include field details if available
-            field_list = error.response.get("fieldList", [])
-            field_details = ""
-            if field_list and isinstance(field_list, list):
-                field_details = " Fields: " + ", ".join(
-                    [f"{f.get('name', '')}: {f.get('message', '')}" for f in field_list if isinstance(f, dict)]
-                )
-            full_message = f"Validation failed: {error_message}"
-            if error_reason:
-                full_message += f" (Reason: {error_reason})"
-            full_message += field_details
-
-            if "GuardrailIntervened" == error_reason:
-                return ActGuardrailsError(
-                    request_id=request_id,
-                    status_code=status_code,
-                    message=full_message,
-                    raw_response=raw_response,
-                )
-
-            return ActBadRequestError(
-                request_id=request_id,
-                status_code=status_code,
-                message=full_message,
-                raw_response=raw_response,
-            )
-
-        elif error_code == "ResourceNotFoundException":
-            # Include resource details if available
-            resource_id = error.response.get("resourceId", "")
-            resource_type = error.response.get("resourceType", "")
-            resource_details = ""
-            if resource_id:
-                resource_details += f" Resource ID: {resource_id}"
-            if resource_type:
-                resource_details += f" Resource Type: {resource_type}"
-            full_message = f"Resource not found: {error_message}{resource_details}"
-            return ActBadRequestError(
-                request_id=request_id,
-                status_code=status_code,
-                message=full_message,
-                raw_response=raw_response,
-            )
-
-        elif error_code == "ThrottlingException":
-            # Extract structured fields from error response
-            service_code = error.response.get("serviceCode", "")
-            quota_code = error.response.get("quotaCode", "")
-            # retryAfterSeconds is in HTTP headers per service model
-            retry_after_seconds = error.response.get("ResponseMetadata", {}).get("HTTPHeaders", {}).get("Retry-After")
-
-            # Build comprehensive message
-            full_message = f"Request throttled: {error_message}"
-
-            if service_code:
-                full_message += f" Service: {service_code}"
-            if quota_code:
-                full_message += f" Quota: {quota_code}"
-            if retry_after_seconds:
-                full_message += f" Retry after {retry_after_seconds} seconds"
-
-            return ActRequestThrottledError(
-                request_id=request_id,
-                status_code=status_code,
-                message=full_message,
-                raw_response=raw_response,
-            )
-
-        elif error_code == "ServiceQuotaExceededException":
-            # Include quota details if available
-            quota_code = error.response.get("quotaCode", "")
-            service_code = error.response.get("serviceCode", "")
-            resource_id = error.response.get("resourceId", "")
-            resource_type = error.response.get("resourceType", "")
-            quota_details = ""
-            if quota_code:
-                quota_details += f" Quota Code: {quota_code}"
-            if service_code:
-                quota_details += f" Service: {service_code}"
-            if resource_id:
-                quota_details += f" Resource ID: {resource_id}"
-            if resource_type:
-                quota_details += f" Resource Type: {resource_type}"
-            full_message = f"Service quota exceeded: {error_message}{quota_details}"
-            return ActDailyQuotaExceededError(
-                request_id=request_id,
-                status_code=status_code,
-                message=full_message,
-                raw_response=raw_response,
-            )
-
-        elif error_code == "InternalServerException":
-            # Check if this is an InvalidModelGeneration or RequestTokenLimitExceeded error
-            if error_reason in ("InvalidModelGeneration", "RequestTokenLimitExceeded"):
-                return ActInvalidModelGenerationError(
-                    message=str(error_message),
-                    raw_response=raw_response,
-                )
-
-            # Include retry information and reason if available
-            retry_after = error.response.get("ResponseMetadata", {}).get("HTTPHeaders", {}).get("Retry-After")
-            full_message = f"Internal server error: {error_message}"
-            if error_reason:
-                full_message += f" Reason: {error_reason}"
-            if retry_after:
-                full_message += f" Retry after {retry_after} seconds"
-            return ActInternalServerError(
-                request_id=request_id,
-                status_code=status_code,
-                message=full_message,
-                raw_response=raw_response,
-            )
-
-        else:
-            message = f"Unknown error ({error_code}): {error_message}"
-            # If we have an HTTP status code, group unknown errors as Server/Client
-            if isinstance(status_code, int):
-                if 500 <= status_code < 600:
-                    return ActServerError(
-                        request_id=request_id,
-                        status_code=status_code,
-                        message=message,
-                        raw_response=raw_response,
-                    )
-                elif 400 <= status_code < 500:
-                    return ActClientError(
-                        request_id=request_id,
-                        status_code=status_code,
-                        message=message,
-                        raw_response=raw_response,
-                    )
-            # Otherwise, default to generic ActAPIError for unknown error types
-            return ActAPIError(
-                request_id=request_id,
-                status_code=status_code,
-                message=message,
-                raw_response=raw_response,
-            )
+        service_error = NovaActServiceError.from_client_error(error)
+        return translate_nova_act_service_error(service_error)

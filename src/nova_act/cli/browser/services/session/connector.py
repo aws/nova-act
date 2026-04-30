@@ -86,13 +86,26 @@ class NovaActConnector:
         """
         nova_act: NovaAct | None = None
         try:
+            # Auto-generate SecurityOptions for file:// URLs if not already provided
+            if starting_page and starting_page.startswith("file://") and "security_options" not in nova_args:
+                import os  # noqa: PLC0415
+                from urllib.parse import urlparse  # noqa: PLC0415
+                from urllib.request import url2pathname  # noqa: PLC0415
+
+                from nova_act import SecurityOptions  # noqa: PLC0415
+
+                abs_path = url2pathname(urlparse(starting_page).path)
+                parent_dir = os.path.dirname(abs_path)
+                nova_args["security_options"] = SecurityOptions(allowed_file_open_paths=[f"{parent_dir}/*"])
+                logger.info("Auto-generated SecurityOptions for file:// URL: allowed=%s/*", parent_dir)
+
             constructor_args = self._build_constructor_args(session_info, nova_args, auth_config)
             nova_act = self._initialize(constructor_args)
             self._navigate_to_starting_page(nova_act, starting_page)
 
             session_info.nova_act_instance = nova_act
             session_info.state = SessionState.STARTED
-        except Exception as e:  # noqa: BLE001 — session connection error boundary; multiple heterogeneous operations
+        except Exception as e:  # noqa: BLE001 -- session connection error boundary; multiple heterogeneous operations
             if nova_act is not None:
                 with contextlib.suppress(Exception):
                     nova_act.stop()
@@ -120,7 +133,7 @@ class NovaActConnector:
             nova_act = self._initialize(constructor_args)
             session_info.nova_act_instance = nova_act
             session_info.state = SessionState.STARTED
-        except Exception as e:  # noqa: BLE001 — session reconnection error boundary; multiple heterogeneous operations
+        except Exception as e:  # noqa: BLE001 -- session reconnection error boundary; multiple heterogeneous operations
             self.cleanup_workflow()
             self._handle_failure(session_info, e)
             sid = session_info.session_id
@@ -204,7 +217,7 @@ class NovaActConnector:
         if self._exit_stack is not None:
             try:
                 self._exit_stack.close()
-            except Exception:  # noqa: BLE001 — cleanup boundary; must not let workflow teardown failures propagate
+            except Exception:  # noqa: BLE001 -- cleanup boundary; must not let workflow teardown failures propagate
                 logger.debug("Failed to clean up workflow", exc_info=True)
             finally:
                 self._exit_stack = None
@@ -213,7 +226,7 @@ class NovaActConnector:
     def _ensure_workflow_definition(workflow_name: str, boto_kwargs: BotoSessionKwargs) -> None:
         """Create workflow definition in AWS if it doesn't exist.
 
-        Idempotent — silently succeeds if the definition already exists (ConflictException).
+        Idempotent -- silently succeeds if the definition already exists (ConflictException).
         Logs a warning and continues on other failures, letting the SDK surface its own error.
         """
         try:
@@ -223,7 +236,7 @@ class NovaActConnector:
             from nova_act.cli.core.clients.nova_act.client import NovaActClient  # noqa: PLC0415
             from nova_act.cli.core.clients.nova_act.types import CreateWorkflowDefinitionRequest  # noqa: PLC0415
         except ImportError:
-            logger.debug("boto3 or nova_act client not available — skipping workflow definition auto-creation")
+            logger.debug("boto3 or nova_act client not available -- skipping workflow definition auto-creation")
             return
 
         try:
@@ -238,9 +251,7 @@ class NovaActConnector:
                 logger.debug("Workflow definition '%s' already exists", workflow_name)
             else:
                 logger.warning("Could not auto-create workflow definition '%s': %s", workflow_name, e)
-        except (
-            Exception
-        ) as e:  # noqa: BLE001 — fallback after specific ClientError handler; catches any non-ClientError from boto/SDK
+        except Exception as e:  # noqa: BLE001 -- fallback; catches any non-ClientError from boto/SDK
             logger.warning("Could not auto-create workflow definition '%s': %s", workflow_name, e)
 
     def _initialize(self, constructor_args: dict[str, object]) -> NovaAct:

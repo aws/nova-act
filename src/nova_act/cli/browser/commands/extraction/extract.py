@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Extract command — delegate data extraction plans to the browser agent."""
+"""Extract command -- delegate data extraction plans to the browser agent."""
 
 from __future__ import annotations
 
@@ -74,7 +74,7 @@ def extract(
     """Extract structured data from the browser, potentially across multiple steps.
 
     Describe what data you need and how to find it as a natural language plan.
-    The agent will navigate, interact, and extract — all from a single prompt.
+    The agent will navigate, interact, and extract -- all from a single prompt.
     Use --schema to constrain the output to a specific type (bool, string, or JSON).
 
     Examples:

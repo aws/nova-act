@@ -94,7 +94,7 @@ def resolve(target: str, command_type: str, page: "Page") -> ResolvedTarget:
                 if elem.ref.lower() == fmt.value.lower():
                     return ResolvedTarget(path=ResolutionPath.FAST, element=elem, confidence=100.0, match_method="ref")
             return ResolvedTarget(path=ResolutionPath.SMART, match_method="ref_not_found")
-        # CSS selector — fast path directly
+        # CSS selector -- fast path directly
         return ResolvedTarget(path=ResolutionPath.FAST, confidence=100.0, match_method="selector")
 
     # Tier 2 & 3: Need snapshot

@@ -72,7 +72,7 @@ def evaluate(
     """Evaluate a JavaScript expression in the current page context.
 
     \b
-    ⚠️  SECURITY WARNING: This executes arbitrary JavaScript in the page context.
+    [WARN]  SECURITY WARNING: This executes arbitrary JavaScript in the page context.
     Only use expressions you trust. Malicious JS can access cookies, session
     tokens, and page data.
 

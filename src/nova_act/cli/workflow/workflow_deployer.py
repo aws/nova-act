@@ -47,6 +47,7 @@ class WorkflowDeployer:
         build_dir: str | None = None,
         overwrite_build_dir: bool = False,
         s3_bucket_name: str | None = None,
+        s3_key_prefix: str | None = None,
         skip_s3_creation: bool = False,
         remote_build: bool = False,
     ):
@@ -65,6 +66,7 @@ class WorkflowDeployer:
             build_dir: Build output directory path (optional)
             overwrite_build_dir: Overwrite existing build directory if True
             s3_bucket_name: S3 bucket name for deployment artifacts (optional)
+            s3_key_prefix: S3 key prefix for workflow export configuration (optional)
             skip_s3_creation: Skip S3 bucket creation if True
             remote_build: Build container image remotely using AWS CodeBuild if True
         """
@@ -80,6 +82,7 @@ class WorkflowDeployer:
         self.build_dir = build_dir
         self.overwrite_build_dir = overwrite_build_dir
         self.s3_bucket_name = s3_bucket_name
+        self.s3_key_prefix = s3_key_prefix
         self.skip_s3_creation = skip_s3_creation
         self.remote_build = remote_build
         self.logger = logging.getLogger(__name__)
@@ -94,9 +97,12 @@ class WorkflowDeployer:
 
         info("Preparing workflow configuration...")
         workflow_name = workflow_manager.ensure_workflow_for_deployment(
-            name=self.workflow_name, s3_bucket_name=self.s3_bucket_name, skip_s3_creation=self.skip_s3_creation
+            name=self.workflow_name,
+            s3_bucket_name=self.s3_bucket_name,
+            s3_key_prefix=self.s3_key_prefix,
+            skip_s3_creation=self.skip_s3_creation,
         )
-        success(f"✓ Workflow '{workflow_name}' ready for deployment")
+        success(f"[OK] Workflow '{workflow_name}' ready for deployment")
 
         # Resolve build directory: use custom if provided, otherwise use state directory
         resolved_build_dir = self.build_dir
@@ -129,7 +135,7 @@ class WorkflowDeployer:
             source_dir=self.source_dir,
             build_dir=resolved_build_dir,
         )
-        success("✓ Deployment state updated")
+        success("[OK] Deployment state updated")
 
         return workflow_manager.get_workflow(workflow_name)
 
