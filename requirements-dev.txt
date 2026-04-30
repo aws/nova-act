@@ -4,3 +4,4 @@ twine
 wheel
 mypy
 boto3-stubs
+libcst

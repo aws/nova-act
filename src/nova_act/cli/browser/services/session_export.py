@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Session export business logic — pure data transformation and file I/O."""
+"""Session export business logic -- pure data transformation and file I/O."""
 
 from __future__ import annotations
 

@@ -22,8 +22,8 @@ from rapidfuzz import fuzz
 
 from nova_act.cli.browser.services.intent_resolution.snapshot import SnapshotElement
 
-# Tier 1 patterns — require unambiguous CSS syntax signals (structural heuristic).
-# Bare HTML tag names ("button", "search", "menu") are NOT matched — they fall through
+# Tier 1 patterns -- require unambiguous CSS syntax signals (structural heuristic).
+# Bare HTML tag names ("button", "search", "menu") are NOT matched -- they fall through
 # to Tier 2/3 name matching, which is strictly better for single-word inputs.
 _CSS_SELECTOR_RE = re.compile(r"^[#.\[]|^[a-z]+[\[.#:]", re.IGNORECASE)
 _SNAPSHOT_REF_RE = re.compile(r"^e\d+$", re.IGNORECASE)

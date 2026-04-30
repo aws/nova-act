@@ -152,7 +152,7 @@ class CdpEndpointManager:
             RuntimeError: If endpoint is not reachable or invalid
         """
         http_url = swap_ws_to_http(endpoint)
-        # Strip any browser path (e.g., /devtools/browser/abc123) — /json/version
+        # Strip any browser path (e.g., /devtools/browser/abc123) -- /json/version
         # must be queried at the root: http://host:port/json/version
         parsed = urlparse(http_url)
         base_url = urlunparse((parsed.scheme, parsed.netloc, "", "", "", ""))

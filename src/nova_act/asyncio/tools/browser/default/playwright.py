@@ -19,9 +19,8 @@ from typing import Any
 
 import requests
 from install_playwright import install
-from playwright.async_api import BrowserContext
+from playwright.async_api import BrowserContext, Page, Route, async_playwright
 from playwright.async_api import Error as PlaywrightError
-from playwright.async_api import Page, Route, async_playwright
 
 from nova_act.asyncio.tools.browser.default.playwright_instance_options import PlaywrightInstanceOptions
 from nova_act.browser_auth.browser_session_provider import BrowserSessionProvider
@@ -132,6 +131,8 @@ class PlaywrightInstanceManager:
                 context = await self._playwright.chromium.launch_persistent_context(
                     self._user_data_dir, **context_options
                 )
+                if self._go_to_url_timeout is not None:
+                    context.set_default_navigation_timeout(self._go_to_url_timeout)
                 return context
             except PlaywrightError:
                 _LOGGER.warning(
@@ -208,7 +209,18 @@ class PlaywrightInstanceManager:
         try:
             # Start a new playwright instance if one was not provided by the user
             if self._playwright is None:
-                self._playwright = await async_playwright().start()
+                if True:  # pragma: async
+                    self._playwright = await async_playwright().start()
+                else:
+                    try:
+                        self._playwright = await async_playwright().start()
+                    except RuntimeError as e:
+                        if "It looks like you are using Playwright Sync API inside the asyncio loop" in str(e):
+                            raise StartFailed(
+                                "Each NovaAct must have its own execution context. "
+                                "To parallelize, dedicate one thread per NovaAct instance."
+                            ) from e
+                        raise
 
             if self._use_default_chrome_browser:
                 # Launch the default browser with a debug port and a freshly copied user data dir.
@@ -348,6 +360,28 @@ class PlaywrightInstanceManager:
 
                 context = await self._launch_browser(context_options)
                 trusted_page = context.pages[0]
+
+            # Apply authentication cookies BEFORE navigating to starting page
+            if self._browser_auth_mode is not None:
+                _LOGGER.info(f"Loading session state from {self._browser_auth_mode.name}")
+                auth_cookies = self._browser_auth_mode.load_cookies()
+                if auth_cookies:
+                    await context.add_cookies(auth_cookies)
+                    _LOGGER.info(f"Applied {len(auth_cookies)} cookie(s) from {self._browser_auth_mode.name}")
+
+                # Restore localStorage via an init script so values are available
+                # before any page scripts execute on the first navigation.
+                if (
+                    isinstance(self._browser_auth_mode, BrowserSessionProvider)
+                    and self._browser_auth_mode.restore_local_storage
+                ):
+                    origins = self._browser_auth_mode.load_local_storage()
+                    if origins:
+                        await context.add_init_script(BrowserSessionProvider.make_local_storage_init_script(origins))
+                        _LOGGER.info(
+                            f"Registered localStorage init script for {len(origins)} origin(s) "
+                            f"via {self._browser_auth_mode.name}"
+                        )
 
 
             await self._init_browser_context(context, trusted_page)

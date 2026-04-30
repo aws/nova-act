@@ -38,7 +38,7 @@ class CheckResult:
 
 
 class CLIDoctorService:
-    """Pure business logic for doctor diagnostic checks — no CLI dependencies."""
+    """Pure business logic for doctor diagnostic checks -- no CLI dependencies."""
 
     def _check_chrome(self) -> CheckResult:
         """Check if Chrome/Chromium is installed and detectable."""

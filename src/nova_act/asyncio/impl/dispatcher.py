@@ -113,7 +113,17 @@ def _handle_act_fail(
 
 
 def _calculate_time_worked(start_time: float | None, end_time: float | None, human_wait_time_s: float) -> float | None:
-    """Calculate time worked with error handling."""
+    """Calculate time worked with error handling.
+
+    Args:
+        start_time: Act start timestamp in seconds since epoch
+        end_time: Act end timestamp in seconds since epoch
+        human_wait_time_s: Total time spent waiting for human input in seconds
+
+    Returns:
+        Time worked in seconds (total duration minus human wait time), or None if timestamps are missing.
+        Returns 0.0 if duration is negative or human wait time exceeds total duration.
+    """
     if start_time is None or end_time is None:
         return None
 
@@ -137,7 +147,11 @@ def _calculate_time_worked(start_time: float | None, end_time: float | None, hum
 
 
 def _log_time_worked(metadata: ActMetadata) -> None:
-    """Log time worked to console with styling."""
+    """Log time worked to console with styling.
+
+    Args:
+        metadata: ActMetadata containing time worked information
+    """
     if metadata.time_worked_s is None:
         return
 
@@ -148,7 +162,7 @@ def _log_time_worked(metadata: ActMetadata) -> None:
 
     if metadata.human_wait_time_s > 0:
         human_wait_str = _format_duration(metadata.human_wait_time_s)
-        message = f"⏱️  Approx. Time Worked: {time_worked_str} " f"(excluding {human_wait_str} human wait)"
+        message = f"⏱️  Approx. Time Worked: {time_worked_str} (excluding {human_wait_str} human wait)"
     else:
         message = f"⏱️  Approx. Time Worked: {time_worked_str}"
 
@@ -261,6 +275,7 @@ class ActDispatcher:
                 awl_program = decode_awl_raw_program(step_object.model_output.awl_raw_program)
                 trace_log_lines(awl_program)
 
+
                 # Handle pause/cancel conditions
                 while control.state == ControlState.PAUSED:
                     await asyncio.sleep(0.1)
@@ -286,7 +301,7 @@ class ActDispatcher:
                     # Client wants to redirect the agent to try a different action
                     trace_log_lines("AgentRedirect: " + e.error_and_correction)
 
-                if return_result := program_result.has_return():
+                if return_result := (program_result.has_return() or program_result.is_return()):
                     result = return_result.return_value
                     act.complete(str(result) if result is not None else None)
                     break

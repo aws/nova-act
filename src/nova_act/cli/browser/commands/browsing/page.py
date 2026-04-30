@@ -113,8 +113,7 @@ def page(
 
         if method_name in BLOCKED_METHODS:
             raise click.UsageError(
-                f"Method '{method_name}' is blocked for safety. "
-                f"Blocked methods: {', '.join(sorted(BLOCKED_METHODS))}"
+                f"Method '{method_name}' is blocked for safety. Blocked methods: {', '.join(sorted(BLOCKED_METHODS))}"
             )
 
         if not hasattr(active_page, method_name):

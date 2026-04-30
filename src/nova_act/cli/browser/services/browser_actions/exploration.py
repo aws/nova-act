@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Exploration capabilities — explore and search."""
+"""Exploration capabilities -- explore and search."""
 
 from __future__ import annotations
 
@@ -70,11 +70,11 @@ _FOCUSED_EXPLORE_PROMPTS = [
         "Click into any relevant sections or links about {focus}."
     ),
     (
-        "Continue exploring — look for additional details, sub-pages, or hidden content about: {focus}. "
+        "Continue exploring -- look for additional details, sub-pages, or hidden content about: {focus}. "
         "Expand any collapsed sections."
     ),
     (
-        "Dig deeper — follow any remaining links or navigation related to: {focus}. "
+        "Dig deeper -- follow any remaining links or navigation related to: {focus}. "
         "Check sidebars, footers, or secondary menus."
     ),
 ]
@@ -84,10 +84,10 @@ _BROAD_EXPLORE_PROMPTS = [
         "Click into the most important section or link you haven't explored yet."
     ),
     (
-        "Continue exploring — navigate to another major section of this site. "
+        "Continue exploring -- navigate to another major section of this site. "
         "Check the main navigation menu for unvisited areas."
     ),
-    ("Dig deeper — explore any remaining important sections, sub-pages, " "or content areas you haven't covered yet."),
+    ("Dig deeper -- explore any remaining important sections, sub-pages, or content areas you haven't covered yet."),
 ]
 _FOCUSED_OBSERVE_PROMPT = (
     "Describe what you now see after exploring. "
@@ -102,7 +102,7 @@ _BROAD_OBSERVE_PROMPT = (
 
 _SEARCH_PROMPT = (
     "Find the following on this website: {query}. "
-    "Use site search, navigation menus, or page scanning — whatever works best. "
+    "Use site search, navigation menus, or page scanning -- whatever works best. "
     "Report whether you found it, where it is, and a brief summary."
 )
 
@@ -228,7 +228,7 @@ class ExplorationMixin:
         best_priority = 4  # lower is better
         for elem in elements:
             if elem.role == "searchbox":
-                return elem  # highest priority — return immediately
+                return elem  # highest priority -- return immediately
             if elem.role == "textbox" and "search" in elem.name.lower() and best_priority > 2:
                 best, best_priority = elem, 2
             elif elem.role == "button" and "search" in elem.name.lower() and best_priority > 3:

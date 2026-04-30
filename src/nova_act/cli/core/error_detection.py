@@ -66,7 +66,7 @@ def is_docker_running() -> bool:
 def get_credential_error_message() -> str:
     """Generate AWS credentials not found message with setup steps."""
     return (
-        "❌ AWS Credentials Not Found\n\n"
+        "[FAIL] AWS Credentials Not Found\n\n"
         "The Nova Act CLI requires AWS credentials to deploy and manage workflows.\n\n"
         "How to configure credentials:\n"
         "  1. AWS CLI: aws configure\n"
@@ -87,7 +87,7 @@ def get_permission_error_message(
     permission_text = f"  - {permission}\n\n" if permission else ""
 
     return (
-        f"❌ AWS Permission Denied: {operation}\n\n"
+        f"[FAIL] AWS Permission Denied: {operation}\n\n"
         f"Operation: deploying workflow '{workflow_name}'\n"
         f"Region: {region}\n"
         f"Account: {account_id}\n\n"
@@ -102,18 +102,18 @@ def get_permission_error_message(
 def get_docker_not_running_message() -> str:
     """Generate Docker daemon not running message with startup steps."""
     return (
-        "❌ Docker Build Failed: Docker Not Running\n\n"
+        "[FAIL] Docker Build Failed: Docker Not Running\n\n"
         "The CLI uses Docker to build workflow container images.\n\n"
         "Problem: Cannot connect to Docker daemon\n\n"
         "To fix:\n"
         "  1. Start Docker Desktop (macOS/Windows)\n"
-        "     → Open Docker Desktop application\n"
+        "     -> Open Docker Desktop application\n"
         "  \n"
         "  2. Start Docker daemon (Linux)\n"
-        "     → sudo systemctl start docker\n"
+        "     -> sudo systemctl start docker\n"
         "  \n"
         "  3. Verify Docker is running:\n"
-        "     → docker ps\n\n"
+        "     -> docker ps\n\n"
         "Install Docker: https://docs.docker.com/get-docker/"
     )
 
@@ -121,18 +121,18 @@ def get_docker_not_running_message() -> str:
 def get_docker_build_failed_message(build_path: str) -> str:
     """Generate Docker build failed message with debugging steps."""
     return (
-        f"❌ Docker Build Failed\n\n"
+        f"[FAIL] Docker Build Failed\n\n"
         f"Build directory: {build_path}\n\n"
         "Problem: Docker build command failed\n\n"
         "Common causes:\n"
         "  1. Dockerfile syntax error\n"
-        "     → Check build directory for Dockerfile\n"
+        "     -> Check build directory for Dockerfile\n"
         "  \n"
         "  2. Missing dependencies in requirements.txt\n"
-        "     → Verify all packages are available on PyPI\n"
+        "     -> Verify all packages are available on PyPI\n"
         "  \n"
         "  3. Network issues downloading base image\n"
-        "     → Check internet connection\n\n"
+        "     -> Check internet connection\n\n"
         f"Build artifacts preserved in: {build_path}\n"
         f"To debug: cd {build_path} && docker build -t test ."
     )
@@ -141,7 +141,7 @@ def get_docker_build_failed_message(build_path: str) -> str:
 def get_entry_point_missing_main_message(entry_point_path: Path) -> str:
     """Generate missing main() function message with example."""
     return (
-        f"❌ Invalid Entry Point: Missing main() Function\n\n"
+        f"[FAIL] Invalid Entry Point: Missing main() Function\n\n"
         f"File: {entry_point_path}\n\n"
         "AgentCore workflows require an entry point function that receives the workflow payload.\n\n"
         "Expected structure:\n"
@@ -166,7 +166,7 @@ def get_entry_point_missing_main_message(entry_point_path: Path) -> str:
 def get_entry_point_missing_parameter_message(entry_point_path: Path) -> str:
     """Generate main() missing parameter message with fix steps."""
     return (
-        f"❌ Invalid Entry Point: main() Missing Parameter\n\n"
+        f"[FAIL] Invalid Entry Point: main() Missing Parameter\n\n"
         f"File: {entry_point_path}\n\n"
         "The main() function must accept at least one parameter for the workflow payload.\n\n"
         "Expected:\n"
@@ -174,7 +174,7 @@ def get_entry_point_missing_parameter_message(entry_point_path: Path) -> str:
         "      # Your workflow logic\n"
         '      return {"result": "success"}\n\n'
         "Current:\n"
-        "  def main():  # ❌ Missing parameter\n\n"
+        "  def main():  # [FAIL] Missing parameter\n\n"
         "To fix:\n"
         "  1. Add a parameter to main(): def main(payload):\n"
         "  2. Or skip validation: --skip-entrypoint-validation"
@@ -185,7 +185,7 @@ def get_workflow_not_found_message(name: str, region: str, account_id: str, avai
     """Generate workflow not found message with available options."""
     if not available_workflows:
         return (
-            f"❌ Workflow Not Found: '{name}'\n\n"
+            f"[FAIL] Workflow Not Found: '{name}'\n\n"
             f"Region: {region}\n"
             f"Account: {account_id}\n\n"
             "No workflows are configured in this region.\n\n"
@@ -203,7 +203,7 @@ def get_workflow_not_found_message(name: str, region: str, account_id: str, avai
 
     workflows_list = "\n  - ".join(available_workflows)
     return (
-        f"❌ Workflow Not Found: '{name}'\n\n"
+        f"[FAIL] Workflow Not Found: '{name}'\n\n"
         f"Region: {region}\n"
         f"Account: {account_id}\n\n"
         f"Available workflows in this region:\n  - {workflows_list}\n\n"
@@ -219,7 +219,7 @@ def get_workflow_not_found_message(name: str, region: str, account_id: str, avai
 def get_state_corrupted_message(state_file: Path, error: str) -> str:
     """Generate state file corrupted message with recovery steps."""
     return (
-        f"❌ Configuration State Corrupted\n\n"
+        f"[FAIL] Configuration State Corrupted\n\n"
         f"The CLI stores workflow configuration locally but the state file is corrupted.\n\n"
         f"Location: {state_file}\n\n"
         "To fix:\n"
@@ -240,7 +240,7 @@ def get_state_corrupted_message(state_file: Path, error: str) -> str:
 def get_state_write_failed_message(state_file: Path, error: str) -> str:
     """Generate state write failed message with troubleshooting."""
     return (
-        f"❌ Configuration State Write Failed\n\n"
+        f"[FAIL] Configuration State Write Failed\n\n"
         f"The CLI could not save workflow configuration.\n\n"
         f"Location: {state_file}\n\n"
         "To fix:\n"

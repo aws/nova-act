@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Navigation capabilities — goto and navigate with verification."""
+"""Navigation capabilities -- goto and navigate with verification."""
 
 from __future__ import annotations
 
@@ -42,16 +42,16 @@ logger = logging.getLogger(__name__)
 _NAV_PROMPT = "{instruction}"
 _VERIFY_PROMPT = (
     "I just asked the browser to: {instruction}. "
-    "Look at the current page and determine if the action was successful — "
+    "Look at the current page and determine if the action was successful -- "
     "did the page change as expected? "
     "Answer true if yes, false if not."
 )
 
 _SCROLL_PROMPT = (
-    "Scroll the page to find: {target}. " "Only scroll — do NOT click links, navigate, type, or submit forms."
+    "Scroll the page to find: {target}. Only scroll -- do NOT click links, navigate, type, or submit forms."
 )
 _SCROLL_VERIFY_PROMPT = (
-    "Is the following content currently visible on the page: {target}? " "Answer true if yes, false if not."
+    "Is the following content currently visible on the page: {target}? Answer true if yes, false if not."
 )
 
 
@@ -118,7 +118,8 @@ class NavigationMixin:
                     self._nova_act.page.locator(target).first.scroll_into_view_if_needed()
                 elif resolved.element is not None:
                     self._nova_act.page.get_by_role(
-                        resolved.element.role, name=resolved.element.name  # type: ignore[arg-type]
+                        resolved.element.role,  # type: ignore[arg-type]
+                        name=resolved.element.name,
                     ).scroll_into_view_if_needed()
                 else:
                     return None
@@ -135,7 +136,7 @@ class NavigationMixin:
         **method_args: object,
     ) -> ScrollToResult:
         """Scroll to target content. Tries fast path (Playwright) first, falls back to AI loop."""
-        # --- Fast path: intent resolution → Playwright scroll ---
+        # --- Fast path: intent resolution -> Playwright scroll ---
         fast_transition = self._try_fast_scroll(target)
         if fast_transition is not None:
             return ScrollToResult(reached=True, target=target, attempts=0, transition=fast_transition)

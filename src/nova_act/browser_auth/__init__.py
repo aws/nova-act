@@ -23,6 +23,7 @@ Cookie-only provider:
     ...     @property
     ...     def name(self) -> str:
     ...         return "MyAuth"
+    ...
     ...     def load_cookies(self) -> list[SetCookieParam]:
     ...         return [{"name": "session", "value": "...", "domain": ".example.com", "path": "/"}]
 

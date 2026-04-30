@@ -71,6 +71,7 @@ def _handle_docker_error(build_dir: str | None) -> None:
 @click.option("--build-dir", help="Custom local directory in which deployment build files will be written")
 @click.option("--overwrite-build-dir", is_flag=True, help="Overwrite existing build directory without prompting")
 @click.option("--s3-bucket-name", help="Custom S3 bucket name for workflow exports")
+@click.option("--s3-key-prefix", help="S3 key prefix for workflow export configuration")
 @click.option("--skip-s3-creation", is_flag=True, help="Skip automatic S3 bucket creation")
 @click.option(
     "--remote-build",
@@ -88,6 +89,7 @@ def deploy(
     build_dir: str | None,
     overwrite_build_dir: bool,
     s3_bucket_name: str | None,
+    s3_key_prefix: str | None,
     skip_s3_creation: bool,
     remote_build: bool,
 ) -> None:
@@ -127,6 +129,7 @@ def deploy(
             build_dir=build_dir,
             overwrite_build_dir=overwrite_build_dir,
             s3_bucket_name=s3_bucket_name,
+            s3_key_prefix=s3_key_prefix,
             skip_s3_creation=skip_s3_creation,
             remote_build=remote_build,
         )
@@ -161,7 +164,7 @@ def _display_deployment_results(workflow_info: WorkflowInfo, region: str) -> Non
     """Display deployment results with styling and next steps."""
     click.echo()
     click.echo()
-    success("🚀 Deployment successful!")
+    success("[OK] Deployment successful!")
     click.echo()
     click.echo(header("Deployment Details:"))
     click.echo(f"  {secondary('Name:')}       {value(workflow_info.name)}")

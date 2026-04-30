@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Session recorder — automatic manifest of every command executed in a session."""
+"""Session recorder -- automatic manifest of every command executed in a session."""
 
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ class SessionRecorder:
     """Records every command invocation in a session as a JSON manifest.
 
     The manifest is written to the session's log directory and updated
-    after each command completes. No explicit start/stop — recording is
+    after each command completes. No explicit start/stop -- recording is
     always active.
     """
 
@@ -146,7 +146,7 @@ class SessionRecorder:
             raise
 
 
-# Module-level registry: session_id → SessionRecorder
+# Module-level registry: session_id -> SessionRecorder
 _recorder_registry: dict[str, SessionRecorder] = {}
 
 

@@ -14,7 +14,7 @@
 """Configuration management for CLI paths and config I/O.
 
 Single source of truth for all CLI directory paths and config file operations.
-All CLI paths live under ~/.act_cli — browser CLI under ~/.act_cli/browser,
+All CLI paths live under ~/.act_cli -- browser CLI under ~/.act_cli/browser,
 workflow CLI under ~/.act_cli directly.
 """
 

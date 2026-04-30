@@ -11,13 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""CLI stdout management — shared by output.py and json_output.py to avoid circular imports."""
+"""CLI stdout management -- shared by output.py and json_output.py to avoid circular imports."""
 
 import sys
 from contextvars import ContextVar
 from typing import TextIO
 
-# Original stdout — set by capture_command_log so CLI output bypasses the tee writer
+# Original stdout -- set by capture_command_log so CLI output bypasses the tee writer
 _original_stdout: ContextVar[TextIO | None] = ContextVar("_original_stdout", default=None)
 
 

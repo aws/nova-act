@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Session export command — thin CLI wrapper delegating to session_export service."""
+"""Session export command -- thin CLI wrapper delegating to session_export service."""
 
 from __future__ import annotations
 
@@ -78,7 +78,7 @@ def export(
     commands = manifest["commands"]
 
     if report:
-        # Build export data (no base64 embedding — we copy files instead)
+        # Build export data (no base64 embedding -- we copy files instead)
         payload = _build_export(manifest, include_screenshots=False)
         report_dir = Path(output_dir) if output_dir else Path(f"./{session_id}_report")
         report_path = _build_report(payload, report_dir)
@@ -97,7 +97,7 @@ def export(
         return
 
     if include_screenshots:
-        click.echo("⚠ --include-screenshots embeds image data as base64. Output may be very large.", err=True)
+        click.echo("[WARN] --include-screenshots embeds image data as base64. Output may be very large.", err=True)
 
     payload = _build_export(manifest, include_screenshots)
 

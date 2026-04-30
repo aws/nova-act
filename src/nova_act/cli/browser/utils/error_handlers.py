@@ -224,8 +224,7 @@ def _handle_keyboard_interrupt(session_id: str) -> None:
         )
         sys.exit(130)
     click.echo(
-        f"\nInterrupted. Session '{session_id}' preserved "
-        f"— use 'act browser session close {session_id}' to clean up."
+        f"\nInterrupted. Session '{session_id}' preserved -- use 'act browser session close {session_id}' to clean up."
     )
     if log_path:
         from pathlib import Path
@@ -321,9 +320,7 @@ def handle_common_errors(func: F) -> F:  # type: ignore[explicit-any]
                 suggestions=["Check file and directory permissions", "Run with appropriate user privileges"],
                 error_code=ErrorCode.FILE_ERROR,
             )
-        except (
-            Exception
-        ) as e:  # noqa: BLE001 — top-level CLI error boundary; catches anything not handled by specific handlers above
+        except Exception as e:  # noqa: BLE001 -- top-level CLI error boundary; catches anything not handled by specific handlers above
             details = _get_failure_details(e)
             if _handle_sdk_error(e, details):
                 return None

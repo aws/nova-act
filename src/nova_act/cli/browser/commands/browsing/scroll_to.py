@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Scroll-to command — scroll to a target section on the current page."""
+"""Scroll-to command -- scroll to a target section on the current page."""
 
 from __future__ import annotations
 
@@ -63,10 +63,10 @@ def scroll_to(
     """Scroll to a target section or content on the current page.
 
     Iteratively scrolls and verifies whether the target content is visible.
-    Does NOT navigate to other pages — scrolling only.
+    Does NOT navigate to other pages -- scrolling only.
 
     \b
-    ⚠ Cost: Each attempt = 2 inference calls (scroll + verify). Default 5 attempts = up to 10 calls.
+    [WARN] Cost: Each attempt = 2 inference calls (scroll + verify). Default 5 attempts = up to 10 calls.
 
     Examples:
         act browser scroll-to "the pricing section" --session-id my-session

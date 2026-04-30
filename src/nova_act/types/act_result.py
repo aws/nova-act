@@ -66,10 +66,10 @@ class ActResult:
 
         # If there are custom fields, add them before the metadata
         if custom_fields:
-            return f"{self.__class__.__name__}(\n" f"    {custom_fields}\n" f"    metadata = {metadata_str}\n" f")"
+            return f"{self.__class__.__name__}(\n    {custom_fields}\n    metadata = {metadata_str}\n)"
 
         # If no custom fields, just show the metadata
-        return f"{self.__class__.__name__}(\n" f"    metadata = {metadata_str}\n" f")"
+        return f"{self.__class__.__name__}(\n    metadata = {metadata_str}\n)"
 
 
 

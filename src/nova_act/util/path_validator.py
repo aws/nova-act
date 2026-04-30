@@ -13,6 +13,8 @@
 # limitations under the License.
 import os
 from pathlib import Path
+from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 from nova_act.types.act_errors import ActActuationError
 from nova_act.types.errors import InvalidURL
@@ -36,11 +38,10 @@ def validate_file_url(candidate_url: str, allowed_paths: list[str]) -> None:
     - "/path/to/file.txt" matches exact file
     """
 
-    # Strip file: prefix, leaving leading "//" slashes if present
-    if candidate_url.startswith("file:"):
-        candidate_path = candidate_url[5:]
-    else:
+    if not candidate_url.startswith("file:"):
         raise InvalidURL(f"Given url is not a file:// URL: '{candidate_url}'")
+
+    candidate_path = _file_url_to_native_path(candidate_url)
 
     try:
         _validate_file_access_path(
@@ -87,10 +88,8 @@ class _FileAccessError(Exception):
 
 
 def _validate_file_access_path(candidate_path: str, allowed_paths: list[str], operation: str, param_name: str) -> None:
-
     # Skip if the given list of allowed paths is empty
     if allowed_paths:
-
         # Universal wildcard allows all uploads
         if "*" in allowed_paths:
             return
@@ -166,6 +165,35 @@ def validate_allowed_paths(allowed_paths: list[str]) -> None:
             str(normalized)
         except Exception as e:
             raise ValueError(f"Invalid allowed path: '{path}'. Error: {e}") from e
+
+
+def _file_url_to_native_path(file_url: str) -> str:
+    """
+    Convert a file:// URL to an OS-native filesystem path.
+
+    Correctly handles Windows drive letters (e.g. "file:///C:/foo" -> "C:\\foo") and
+    POSIX paths (e.g. "file:///tmp/foo" -> "/tmp/foo"), including malformed URLs with
+    extra leading slashes (e.g. "file:////tmp/foo" -> "/tmp/foo").
+
+    Note: once the minimum supported Python version is 3.13, this can be replaced
+    with pathlib.Path.from_uri().
+
+    Args:
+        file_url: A file:// URL
+
+    Returns:
+        OS-native filesystem path string
+    """
+    # Extract the path component from the file:// URL.
+    url_path = urlparse(file_url).path
+
+    # Collapse any leading duplicate slashes down to a single slash. urlparse leaves
+    # them behind for malformed URLs with extra slashes (e.g. "file:////tmp/foo"
+    # parses to "//tmp/foo"), which would otherwise break path matching.
+    while url_path.startswith("//"):
+        url_path = url_path[1:]
+
+    return url2pathname(url_path)
 
 
 def _normalize_path(path: str) -> Path:

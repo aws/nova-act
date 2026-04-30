@@ -14,7 +14,6 @@
 from boto3 import Session
 from botocore.config import Config
 
-from nova_act.impl.backends.base import Endpoints
 from nova_act.impl.backends.burst.backend import BurstBackend
 from nova_act.impl.backends.starburst.client import StarburstClient
 from nova_act.types.errors import IAMAuthError
@@ -23,7 +22,7 @@ from nova_act.util.logging import setup_logging
 _LOGGER = setup_logging(__name__)
 
 
-class StarburstBackend(BurstBackend[Endpoints]):
+class StarburstBackend(BurstBackend[StarburstClient]):
     def __init__(
         self,
         boto_session: Session,
@@ -32,11 +31,11 @@ class StarburstBackend(BurstBackend[Endpoints]):
         self._boto_session = boto_session
         self._boto_config = boto_config
 
-        super().__init__(
+        self._client = StarburstClient(
+            boto_session,
+            boto_config,
         )
-
-    def _create_client(self, endpoints: Endpoints) -> StarburstClient:
-        return StarburstClient(endpoints, self._boto_session, self._boto_config)
+        super().__init__()
 
     def validate_auth(self) -> None:
         self._validate_boto_session()
@@ -71,14 +70,3 @@ class StarburstBackend(BurstBackend[Endpoints]):
 
     def get_auth_warning_message_for_backend(self, message: str) -> str:
         return message
-
-    @classmethod
-    def resolve_endpoints(
-        cls,
-        backend_stage: str | None = None,
-        backend_api_url_override: str | None = None,
-    ) -> Endpoints:
-        api_url = "https://nova-act.us-east-1.amazonaws.com/"
-
-
-        return Endpoints(api_url=api_url)

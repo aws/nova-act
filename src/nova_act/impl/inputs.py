@@ -239,7 +239,6 @@ def _validate_chrome_user_data_dir_ok_for_cdp(user_data_dir: str) -> None:
 def validate_base_parameters(
     starting_page: str | None,
     use_existing_page: bool,
-    backend_url: str,
     user_data_dir: str | None,
     profile_directory: str | None,
     logs_directory: str | None,
@@ -261,8 +260,6 @@ def validate_base_parameters(
             url=starting_page, allowed_file_open_paths=allowed_file_open_paths, state_guardrail=state_guardrail
         )
         validate_url_ssl_certificate(ignore_https_errors, starting_page)
-
-    validate_url(backend_url)
 
     if use_default_chrome_browser:
         if sys.platform != "darwin":

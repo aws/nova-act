@@ -198,7 +198,7 @@ class _TeeWriter:
         if self.original is not None:
             self.original.flush()
 
-    # Support fileno() for compatibility — delegate to original or raise
+    # Support fileno() for compatibility -- delegate to original or raise
     def fileno(self) -> int:
         if self.original is not None and hasattr(self.original, "fileno"):
             return self.original.fileno()
@@ -266,7 +266,7 @@ def capture_command_log(
     try:
         log_file = open(log_path, "w")  # noqa: SIM115
     except OSError as e:
-        _logger.warning("Failed to create log file %s: %s — logging disabled for this command", log_path, e)
+        _logger.warning("Failed to create log file %s: %s -- logging disabled for this command", log_path, e)
         log_file = open(os.devnull, "w")  # noqa: SIM115
 
     old_stdout = sys.stdout
@@ -383,7 +383,7 @@ def cleanup_session_logs(session_id: str) -> None:
 
     for item in list(log_dir.iterdir()):
         if item.is_dir() and _CMD_DIR_PATTERN.match(item.name):
-            # CLI command subdirectory — remove entirely
+            # CLI command subdirectory -- remove entirely
             shutil.rmtree(item, ignore_errors=True)
         elif item.is_file() and item.suffix in _CLI_LOG_SUFFIXES:
             # Legacy flat files from before per-command subdirs
@@ -393,4 +393,4 @@ def cleanup_session_logs(session_id: str) -> None:
     try:
         log_dir.rmdir()  # only succeeds if empty
     except OSError:
-        pass  # subdirectories remain — expected
+        pass  # subdirectories remain -- expected

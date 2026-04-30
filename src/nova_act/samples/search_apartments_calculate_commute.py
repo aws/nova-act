@@ -112,7 +112,6 @@ def main(
         starting_page=apartment_url,
         headless=headless,
     ) as nova:
-
         nova.act(
             "Close any cookie banners. "
             f"Search for apartments near {transit_city}, "

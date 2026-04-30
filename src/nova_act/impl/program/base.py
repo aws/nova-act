@@ -29,6 +29,7 @@ class Call(FrozenBaseModel):
     kwargs: dict[str, JsonValue]
     id: str
     is_tool: bool = False
+    is_return: bool = False
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,9 @@ class ProgramResult:
 
     def has_observation(self) -> CallResult | None:
         return next((r for r in self.call_results if r.call.name == "takeObservation"), None)
+
+    def is_return(self) -> CallResult | None:
+        return next((r for r in self.call_results if r.call.is_return), None)
 
 
 @dataclass(frozen=True)

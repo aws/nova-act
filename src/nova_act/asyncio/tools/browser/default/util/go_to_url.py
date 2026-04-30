@@ -20,7 +20,6 @@ from nova_act.util.url import validate_url
 async def go_to_url(
     url: str, page: Page, allowed_file_open_paths: list[str] = [], state_guardrail: GuardrailCallable | None = None
 ) -> None:
-
     # Navigate to the URL, after validating
     await page.goto(
         validate_url(

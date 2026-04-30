@@ -125,4 +125,4 @@ def get_client_source() -> ClientSource:
     try:
         return ClientSource(raw)
     except ValueError:
-        raise ValueError(f"Invalid NOVA_ACT_CLIENT_SOURCE={raw}. " f"Must be one of {[c.value for c in ClientSource]}")
+        raise ValueError(f"Invalid NOVA_ACT_CLIENT_SOURCE={raw}. Must be one of {[c.value for c in ClientSource]}")

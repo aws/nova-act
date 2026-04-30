@@ -69,6 +69,7 @@ def resize_image(screenshot_data_url: str, dimensions: DimensionsDict) -> str:
             (dimensions["width"], dimensions["height"]),
             Image.Resampling.LANCZOS,
         )
+
         # Convert the resized image back to a data URL
         return convert_image_to_data_url(resized_image, "jpeg", 90)
     except Exception as e:
@@ -99,6 +100,7 @@ async def take_screenshot_as_data_url(
         type=format_type,
         quality=quality if format_type == "jpeg" else None,
     )
+
     # Convert the bytes to a base64 string
     base64_str = base64.b64encode(screenshot_bytes).decode("utf-8")
 
@@ -132,6 +134,7 @@ def compare_images(image1_data_url: str, image2_data_url: str, threshold: int = 
             min_height = min(image1.size[1], image2.size[1])
             image1 = image1.resize((min_width, min_height), Image.Resampling.LANCZOS)
             image2 = image2.resize((min_width, min_height), Image.Resampling.LANCZOS)
+
         # Convert images to the same mode if they differ
         if image1.mode != image2.mode:
             # Convert to a common mode (RGB is usually a good choice)
@@ -156,8 +159,8 @@ def compare_images(image1_data_url: str, image2_data_url: str, threshold: int = 
 
         # Calculate the percentage of different pixels
         percentage_diff: float = (diff_pixels / total_pixels) * 100.0
-
         return percentage_diff
+
     except Exception as e:
         raise RuntimeError(f"Unable to compare images: {str(e)}")
 
@@ -203,6 +206,7 @@ def crop_image_with_box(image_data: Union[str, Image.Image], box_string: str, in
         new_top = max(0, top - height_increase)
         new_right = min(image.width, right + width_increase)
         new_bottom = min(image.height, bottom + height_increase)
+
         # Validate that the crop box is within the image dimensions
         width, height = image.size
         if new_left >= width or new_top >= height or new_right > width or new_bottom > height:
@@ -210,9 +214,9 @@ def crop_image_with_box(image_data: Union[str, Image.Image], box_string: str, in
                 f"Crop box ({new_top}, {new_left}, {new_bottom}, {new_right}) "
                 f"exceeds image dimensions ({width}x{height})"
             )
+
         # Crop the image using the adjusted box coordinates
         cropped_image = image.crop((new_left, new_top, new_right, new_bottom))
-
         return cropped_image
 
     except ValueError:

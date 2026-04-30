@@ -108,7 +108,7 @@ class NetworkCaptureService:
         Args:
             url_filter: Glob pattern to match against URL (e.g. "*api*").
             method: HTTP method filter (e.g. "GET", "POST").
-            status: Status filter — exact code ("200"), range ("4xx", "5xx"),
+            status: Status filter -- exact code ("200"), range ("4xx", "5xx"),
                     or comparison (">=400").
             limit: Max entries to return (from most recent).
         """

@@ -216,7 +216,7 @@ def transition_tracker(page: Page) -> Iterator[TransitionTracker]:
 
 
 # ---------------------------------------------------------------------------
-# Observe — opt-in page layout description (separate act_get call)
+# Observe -- opt-in page layout description (separate act_get call)
 # ---------------------------------------------------------------------------
 
 OBSERVE_PROMPT = (

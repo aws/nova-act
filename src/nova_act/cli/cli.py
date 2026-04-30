@@ -16,12 +16,12 @@
 try:
     import click  # noqa: F401
 except ImportError:
-    raise ImportError("To use the Nova Act CLI, install with the [cli] extra: " "pip install --upgrade nova-act[cli]")
+    raise ImportError("To use the Nova Act CLI, install with the [cli] extra: pip install --upgrade nova-act[cli]")
 
 try:
     import yaml  # noqa: F401
 except ImportError:
-    raise ImportError("To use the Nova Act CLI, install with the [cli] extra: " "pip install --upgrade nova-act[cli]")
+    raise ImportError("To use the Nova Act CLI, install with the [cli] extra: pip install --upgrade nova-act[cli]")
 
 import os
 

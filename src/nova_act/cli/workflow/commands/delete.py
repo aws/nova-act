@@ -60,9 +60,9 @@ def _delete_agentcore_runtime(workflow: WorkflowInfo, session: Session, region: 
 
         agentcore_client = AgentCoreClient(session=session, region=region)
         agentcore_client.delete_agent_runtime(agent_runtime_arn=workflow.deployments.agentcore.deployment_arn)
-        click.echo(f"  {secondary('✓ Deleted AgentCore runtime')}")
+        click.echo(f"  {secondary('[OK] Deleted AgentCore runtime')}")
     except Exception as e:
-        warning(f"  ⚠ Failed to delete AgentCore runtime: {e}")
+        warning(f"  [WARN] Failed to delete AgentCore runtime: {e}")
 
 
 def _delete_workflow_definition(workflow: WorkflowInfo, session: Session, region: str) -> None:
@@ -78,9 +78,9 @@ def _delete_workflow_definition(workflow: WorkflowInfo, session: Session, region
         nova_act_client.delete_workflow_definition(
             request=DeleteWorkflowDefinitionRequest(workflowDefinitionName=workflow.name)
         )
-        click.echo(f"  {secondary('✓ Deleted WorkflowDefinition')}")
+        click.echo(f"  {secondary('[OK] Deleted WorkflowDefinition')}")
     except Exception as e:
-        warning(f"  ⚠ Failed to delete WorkflowDefinition: {e}")
+        warning(f"  [WARN] Failed to delete WorkflowDefinition: {e}")
 
 
 def _cleanup_aws_resources(workflow: WorkflowInfo, session: Session, region: str) -> None:
@@ -130,7 +130,7 @@ def delete(name: str, region: str | None = None, force: bool = False, cleanup: b
 
         # Remove from local config
         workflow_manager.delete_workflow(name=name)
-        success(f"✅ Removed '{name}' from configuration")
+        success(f"[OK] Removed '{name}' from configuration")
         click.echo()
 
     except (WorkflowError, ConfigurationError) as e:

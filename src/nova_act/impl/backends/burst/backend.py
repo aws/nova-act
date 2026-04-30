@@ -13,13 +13,12 @@
 # limitations under the License.
 import json
 import time
-from abc import abstractmethod
 from datetime import datetime, timezone
-from typing import Literal, TypeVar
+from typing import Generic, Literal, TypeVar
 
 from strands.types.tools import ToolSpec
 
-from nova_act.impl.backends.base import Backend, Endpoints
+from nova_act.impl.backends.base import Backend
 from nova_act.impl.backends.burst.client import BurstClient
 from nova_act.impl.backends.burst.types import (
     ActErrorData,
@@ -47,23 +46,14 @@ from nova_act.types.workflow_run import WorkflowRun
 from nova_act.util.logging import setup_logging
 
 _LOGGER = setup_logging(__name__)
-T = TypeVar("T", bound=Endpoints)
 
 S_TO_MS = 1000  # Seconds to milliseconds conversion factor
 
+T = TypeVar("T", bound=BurstClient)
 
-class BurstBackend(Backend[T]):
-    def __init__(
-        self,
-    ) -> None:
-        super().__init__(
-        )
 
-        self._client = self._create_client(self.endpoints)
-
-    @abstractmethod
-    def _create_client(self, endpoints: T) -> BurstClient:
-        """Create a client"""
+class BurstBackend(Backend, Generic[T]):
+    _client: T
 
     @staticmethod
     def _calls_to_awl_program(calls: Calls) -> str:
@@ -74,7 +64,7 @@ class BurstBackend(Backend[T]):
                 if isinstance(call.input, list):
                     # Actions
                     formatted_input = [f'"{value}"' if isinstance(value, str) else str(value) for value in call.input]
-                    calls_as_awl.append(f'{call.name}({", ".join(formatted_input)});')
+                    calls_as_awl.append(f"{call.name}({', '.join(formatted_input)});")
                 elif isinstance(call.input, dict):
                     # Tools
                     calls_as_awl.append(f'tool({{"name": "{call.name}", "input": {json.dumps(call.input)}}});')

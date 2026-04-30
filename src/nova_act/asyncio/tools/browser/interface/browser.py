@@ -111,8 +111,6 @@ class BrowserActionProvider:
         elif "<bbox>" in box or "</bbox>" in box:
             raise ValueError(f"Malformed bbox format: {box}")
 
-        dims = await self.actuator.get_viewport_size()
-        width, height = dims["width"], dims["height"]
         parts = box.split(",")
         if len(parts) != 4:
             raise ValueError(f"Expected 4 coordinates, got {len(parts)}: {box}")
@@ -123,6 +121,8 @@ class BrowserActionProvider:
         for c in coords:
             if c < 0 or c > 1000:
                 raise ValueError(f"All coordinates must be in [0, 1000], got: {box}")
+        dims = await self.actuator.get_viewport_size()
+        width, height = dims["width"], dims["height"]
         left = math.floor(coords[0] * width / 1000)
         top = math.floor(coords[1] * height / 1000)
         right = math.ceil(coords[2] * width / 1000)
@@ -142,6 +142,8 @@ class BrowserActionProvider:
                 Each coordinate must be an integer in [0, 1000], normalized to the current screenshot
                 (0 = left/top edge, 1000 = right/bottom edge). Require left <= right and top <= bottom.
                 You must include "<bbox>...</bbox>" wrappers.
+            click_type: The type of click. Can be of left, left-double, and right
+            click_options: The options for a click.
         """
         box = await self._normalize_box_to_absolute(box)
         return await self.actuator.agent_click(box, click_type, click_options)
@@ -173,6 +175,7 @@ class BrowserActionProvider:
                 Each coordinate must be an integer in [0, 1000], normalized to the current screenshot
                 (0 = left/top edge, 1000 = right/bottom edge). Require left <= right and top <= bottom.
                 You must include "<bbox>...</bbox>" wrappers.
+            value: scroll amount
         """
         box = await self._normalize_box_to_absolute(box)
         return await self.actuator.agent_scroll(direction, box, value)

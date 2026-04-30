@@ -65,7 +65,7 @@ class Thinker:
         while not self._stop_event.is_set():
             prefix = self._make_prefix(with_state_emoji=True)
             prefix_without_emoji = self._make_prefix(with_state_emoji=False)
-            clear_msg = f'\r{prefix}{" " * MAX_DOTS}'
+            clear_msg = f"\r{prefix}{' ' * MAX_DOTS}"
 
             # If there are logs to process
             if self.logs_queue:
@@ -85,7 +85,7 @@ class Thinker:
                 # Clear the line
                 self.logger.info(clear_msg)
                 # Print the new dots
-                msg = f'\r{prefix}{"." * count}'
+                msg = f"\r{prefix}{'.' * count}"
                 self.logger.info(msg)
                 count = (count % MAX_DOTS) + 1
                 time.sleep(0.5)
@@ -113,7 +113,7 @@ class Thinker:
             self._thread.join()
             # Print final state and move to next line
             prefix = self._make_prefix(with_state_emoji=True)
-            self.logger.info(f'\r{" " * (len(prefix) + MAX_DOTS)}\r{prefix}...\n')
+            self.logger.info(f"\r{' ' * (len(prefix) + MAX_DOTS)}\r{prefix}...\n")
         self.logger.handlers = self.original_handlers
         _current_thinker.set(None)
 

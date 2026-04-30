@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Snapshot command — capture accessibility tree with sequential refs."""
+"""Snapshot command -- capture accessibility tree with sequential refs."""
 
 from __future__ import annotations
 

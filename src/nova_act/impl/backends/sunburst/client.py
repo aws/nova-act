@@ -19,7 +19,6 @@ from typing import Literal
 import requests
 
 from nova_act.__version__ import VERSION
-from nova_act.impl.backends.base import ApiKeyEndpoints
 from nova_act.impl.backends.burst.client import BurstClient
 from nova_act.impl.backends.burst.types import (
     CreateActRequest,
@@ -49,23 +48,42 @@ from nova_act.types.act_errors import (
     ActServerError,
 )
 from nova_act.types.act_result import ActGetResult
-from nova_act.types.errors import NovaActError
+from nova_act.types.errors import AuthError, NovaActError
 from nova_act.types.state.act import Act
-from nova_act.util.logging import setup_logging
+from nova_act.util.logging import create_warning_box, setup_logging
 
 _LOGGER = setup_logging(__name__)
 
 
 class SunburstClient(BurstClient):
-    def __init__(self, endpoints: ApiKeyEndpoints, api_key: str) -> None:
-        self._endpoints = endpoints
+    def __init__(
+        self,
+        api_key: str,
+    ) -> None:
+        self._resolve_endpoints(
+        )
 
         self._api_key = api_key
         self._client_source = get_client_source().value
 
+    def _resolve_endpoints(
+        self,
+    ) -> None:
+        self._api_url = "https://api.nova.amazon.com"
+        self._keygen_url = "https://nova.amazon.com/dev-apis"
+        self._valid_api_key_length = 36
+
+
+    def get_auth_warning_message(self, message: str) -> str:
+        return create_warning_box([message, "", f"Please ensure you are using a key from: {self._keygen_url}"])
+
+    def validate_api_key(self, api_key: str) -> None:
+        if len(api_key) != self._valid_api_key_length:
+            raise AuthError(self.get_auth_warning_message("Invalid API key length"))
+
     def create_act(self, request: CreateActRequest) -> CreateActResponse:
         url: str = (
-            f"{self._endpoints.api_url}/agent/workflow-definitions/{request.workflow_definition_name}"
+            f"{self._api_url}/agent/workflow-definitions/{request.workflow_definition_name}"
             f"/workflow-runs/{request.workflow_run_id}/sessions/{request.session_id}/acts"
         )
         payload = request.model_dump(
@@ -81,7 +99,7 @@ class SunburstClient(BurstClient):
 
     def create_session(self, request: CreateSessionRequest) -> CreateSessionResponse:
         url = (
-            f"{self._endpoints.api_url}/agent/workflow-definitions/{request.workflow_definition_name}"
+            f"{self._api_url}/agent/workflow-definitions/{request.workflow_definition_name}"
             f"/workflow-runs/{request.workflow_run_id}/sessions"
         )
         payload = request.model_dump(
@@ -96,7 +114,7 @@ class SunburstClient(BurstClient):
         return CreateSessionResponse.model_validate(data)
 
     def create_workflow_run(self, request: CreateWorkflowRunRequest) -> CreateWorkflowRunResponse:
-        url = f"{self._endpoints.api_url}/agent/workflow-definitions/{request.workflow_definition_name}/workflow-runs"
+        url = f"{self._api_url}/agent/workflow-definitions/{request.workflow_definition_name}/workflow-runs"
         payload = request.model_dump(by_alias=True, exclude={"workflow_definition_name"}, exclude_none=True)
 
         response = requests.put(url=url, headers=self._headers, json=payload)
@@ -109,7 +127,7 @@ class SunburstClient(BurstClient):
 
     def invoke_act_step(self, request: InvokeActStepRequest) -> InvokeActStepResponse:
         url = (
-            f"{self._endpoints.api_url}/agent/workflow-definitions/{request.workflow_definition_name}"
+            f"{self._api_url}/agent/workflow-definitions/{request.workflow_definition_name}"
             f"/workflow-runs/{request.workflow_run_id}/sessions/{request.session_id}/acts/{request.act_id}/invoke-step"
         )
         payload = request.model_dump(
@@ -158,7 +176,7 @@ class SunburstClient(BurstClient):
         }
 
         try:
-            url = self._endpoints.api_url + "/agent/telemetry"
+            url = self._api_url + "/agent/telemetry"
             response = requests.post(url=url, json=payload, headers=self._headers)
             if response.status_code != 200:
                 _LOGGER.debug("Failed to send act telemetry: %s", response.text)
@@ -192,7 +210,7 @@ class SunburstClient(BurstClient):
         }
 
         try:
-            url = self._endpoints.api_url + "/agent/telemetry"
+            url = self._api_url + "/agent/telemetry"
             response = requests.post(url=url, json=payload, headers=self._headers)
             if response.status_code != 200:
                 _LOGGER.debug("Failed to send environment telemetry: %s", response.text)
@@ -202,7 +220,7 @@ class SunburstClient(BurstClient):
 
     def update_act(self, request: UpdateActRequest) -> UpdateActResponse:
         url = (
-            f"{self._endpoints.api_url}/agent/workflow-definitions/{request.workflow_definition_name}"
+            f"{self._api_url}/agent/workflow-definitions/{request.workflow_definition_name}"
             f"/workflow-runs/{request.workflow_run_id}/sessions/{request.session_id}/acts/{request.act_id}"
         )
         payload = request.model_dump(
@@ -220,7 +238,7 @@ class SunburstClient(BurstClient):
 
     def update_workflow_run(self, request: UpdateWorkflowRunRequest) -> UpdateWorkflowRunResponse:
         url = (
-            f"{self._endpoints.api_url}/agent/workflow-definitions/{request.workflow_definition_name}"
+            f"{self._api_url}/agent/workflow-definitions/{request.workflow_definition_name}"
             f"/workflow-runs/{request.workflow_run_id}"
         )
         payload = request.model_dump(
@@ -246,7 +264,6 @@ class SunburstClient(BurstClient):
 
     @staticmethod
     def _translate_response_error(response: requests.Response) -> Exception:
-
         request_id = response.headers.get("x-amz-rid", "")
 
 

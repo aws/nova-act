@@ -52,8 +52,12 @@ from nova_act.tools.human.interface.human_input_callback import (
     HumanInputCallbacksBase,
 )
 
-
-from nova_act.browser_auth import BrowserAuth
+# isort: off
+# isort: on
+from nova_act.asyncio.types.hooks import StopHook
+from nova_act.browser_auth import (
+    BrowserAuth,
+)
 from nova_act.impl.backends.factory import BackendFactory
 from nova_act.types.act_errors import ActError, ActInvalidModelGenerationError
 from nova_act.types.act_result import ActGetResult, ActResult
@@ -69,14 +73,17 @@ from nova_act.types.errors import (
 from nova_act.types.events import EventType, LogType
 from nova_act.types.features import PreviewFeatures, SecurityOptions
 from nova_act.types.guardrail import GuardrailCallable
-from nova_act.types.hooks import StopHook
 from nova_act.types.state.act import Act
 from nova_act.types.workflow import Workflow, get_current_workflow
 from nova_act.types.workflow_run import WorkflowRun
-from nova_act.util.constants import NOVA_ACT_KEYGEN_URL
+from nova_act.util.constants import (
+    NOVA_ACT_KEYGEN_URL,
+)
 from nova_act.util.decode_string import decode_awl_raw_program
 from nova_act.util.error_messages import get_missing_workflow_definition_error, get_no_authentication_error
-from nova_act.util.event_handler import EventHandler
+from nova_act.util.event_handler import (
+    EventHandler,
+)
 from nova_act.util.jsonschema import (
     STRING_SCHEMA,
     add_schema_to_prompt,
@@ -323,6 +330,7 @@ class NovaAct:
         if not is_local:
             self._validate_authentication(scripted_api_key=nova_act_api_key)
 
+
         self._backend, self._workflow = BackendFactory.create_backend(
             api_key=self._nova_act_api_key,
             workflow=self._workflow,
@@ -331,7 +339,6 @@ class NovaAct:
         validate_base_parameters(
             starting_page=self._starting_page,
             use_existing_page=bool(cdp_endpoint_url and cdp_use_existing_page),
-            backend_url=self._backend.endpoints.api_url,
             profile_directory=profile_directory,
             user_data_dir=user_data_dir,
             screen_width=screen_width,
@@ -444,24 +451,28 @@ class NovaAct:
 
 
         if isinstance(actuator, type):
-            if issubclass(actuator, DefaultNovaLocalBrowserActuator):
-                if actuator is not DefaultNovaLocalBrowserActuator:
-                    _LOGGER.warning(
-                        f"Using a custom actuator: {actuator.__name__}\n"
-                        "Deviations from NovaAct's standard observation"
-                        " and I/O formats may impact model performance"
-                    )
-                _LOGGER.debug(f"Using a DefaultNovaLocalBrowserActuator: {actuator.__name__}")
-                _save_dom = self._replayable
-                self._actuator = actuator(
+            if not issubclass(actuator, ActuatorBase):
+                raise ValidationFailed("Please subclass ActuatorBase if passing a custom actuator by type")
+            if actuator is not DefaultNovaLocalBrowserActuator:
+                _LOGGER.warning(
+                    f"Using a custom actuator: {actuator.__name__}\n"
+                    "Deviations from NovaAct's standard observation"
+                    " and I/O formats may impact model performance"
+                )
+            _LOGGER.debug(f"Using actuator type: {actuator.__name__}")
+            _save_dom = self._replayable
+            try:
+                self._actuator = actuator(  # type: ignore[call-arg, unused-ignore]
                     playwright_options=playwright_options,
                     state_guardrail=state_guardrail,
                     save_dom=_save_dom,
                 )
-            else:
+            except TypeError as e:
                 raise ValidationFailed(
-                    "Please subclass DefaultNovaLocalBrowserActuator if passing a custom actuator by type"
-                )
+                    f"Could not auto-construct {actuator.__name__}. "
+                    "Pass an actuator instance instead, or ensure __init__ accepts "
+                    "(playwright_options, state_guardrail, save_dom)."
+                ) from e
         else:
             _LOGGER.warning(
                 f"Using a user-defined actuator instance: {type(actuator).__name__}\n"
@@ -644,6 +655,7 @@ class NovaAct:
         if not self.started or self._session_id is None:
             raise ClientNotStarted("Run start() to start the client before running go_to_url")
 
+
         if not isinstance(self._actuator, BrowserActuatorBase):
             raise ValidationFailed(
                 "The 'go_to_url(...)' method is only available if the provided actuator is of type BrowserActuatorBase"
@@ -683,8 +695,7 @@ class NovaAct:
                 os.mkdir(_session_logs_directory)
             except Exception as e:
                 _LOGGER.error(
-                    f"Failed to create directory: {_session_logs_directory} with Error: {e} "
-                    f"of type {type(e).__name__}"
+                    f"Failed to create directory: {_session_logs_directory} with Error: {e} of type {type(e).__name__}"
                 )
         return _session_logs_directory
 
@@ -728,11 +739,18 @@ class NovaAct:
             actuator_type: Literal["custom", "playwright"]
             actuator_type = "playwright" if isinstance(self._actuator, DefaultNovaLocalBrowserActuator) else "custom"
 
-            self._backend.send_environment_telemetry(
-                session_id=self._session_id,
-                actuator_type=actuator_type,
-                sdk_variant="ASYNC",
-            )
+            if True:  # pragma: async
+                self._backend.send_environment_telemetry(
+                    session_id=self._session_id,
+                    actuator_type=actuator_type,
+                    sdk_variant="ASYNC",
+                )
+            else:
+                self._backend.send_environment_telemetry(
+                    session_id=self._session_id,
+                    actuator_type=actuator_type,
+                    sdk_variant="SYNC",
+                )
 
             await self._actuator.start(
                 starting_page=self._starting_page, session_logs_directory=self._session_logs_directory
@@ -782,7 +800,7 @@ class NovaAct:
         """Call all registered stop hooks."""
         for hook in self._stop_hooks:
             try:
-                hook.on_stop(self)  # type: ignore[arg-type]
+                hook.on_stop(self)
             except Exception as e:
                 _LOGGER.error(f"Error in stop hook {hook}: {e}", exc_info=True)
 
@@ -1012,7 +1030,7 @@ class NovaAct:
             replayable=self._replayable,
         )
         if len(prompt) > MAX_ACT_TRACE_LEN:
-            prompt_trace = f"...{prompt[:MAX_ACT_TRACE_LEN-3]}"
+            prompt_trace = f"...{prompt[: MAX_ACT_TRACE_LEN - 3]}"
         else:
             prompt_trace = prompt
         trace_log_lines(decode_awl_raw_program(f'act("{prompt_trace}")'))

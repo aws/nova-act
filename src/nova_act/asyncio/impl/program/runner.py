@@ -99,12 +99,15 @@ class ProgramRunner:
                     assert self.actuator is not None  # for mypy
                     await self.actuator.unlock_context()
 
-                return_value_or_coroutine = call.target(**call.source.kwargs)
-                # If the target is async, await the coroutine
-                if hasattr(return_value_or_coroutine, "__await__"):
-                    return_value = await return_value_or_coroutine
+                if True:  # pragma: async
+                    return_value_or_coroutine = call.target(**call.source.kwargs)
+                    # If the target is async, await the coroutine
+                    if hasattr(return_value_or_coroutine, "__await__"):
+                        return_value = await return_value_or_coroutine
+                    else:
+                        return_value = return_value_or_coroutine
                 else:
-                    return_value = return_value_or_coroutine
+                    return_value = call.target(**call.source.kwargs)
 
                 # Re-lock context after tool execution
                 if needs_unlocked_context:

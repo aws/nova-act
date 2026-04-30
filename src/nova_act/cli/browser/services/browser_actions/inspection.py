@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Inspection capabilities — extract, get_content, screenshot, query_dom, get_styles, evaluate_js, diff."""
+"""Inspection capabilities -- extract, get_content, screenshot, query_dom, get_styles, evaluate_js, diff."""
 
 from __future__ import annotations
 

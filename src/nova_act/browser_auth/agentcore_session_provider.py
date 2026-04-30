@@ -116,6 +116,7 @@ class AgentCoreBrowserSessionProvider(BrowserSessionProvider):
         region: str = "us-east-1",
         cache_dir: str | Path = _CACHE_DIR,
     ) -> None:
+        super().__init__()
         self._profile = profile
         self._region = region
         self._cache_dir = Path(cache_dir).expanduser()
@@ -287,7 +288,7 @@ class AgentCoreBrowserSessionProvider(BrowserSessionProvider):
         """Call SaveBrowserSessionProfile on the data plane."""
         if not self._browser_identifier or not self._session_id:
             raise BrowserAuthError(
-                "Cannot save AgentCore profile: session not bound. " "Call bind_session() or use cdp_session() first."
+                "Cannot save AgentCore profile: session not bound. Call bind_session() or use cdp_session() first."
             )
         try:
             client = self._make_data_plane_client()
