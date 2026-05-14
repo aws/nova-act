@@ -168,6 +168,13 @@ class ChromeLauncher:
         if not os.access(executable_path, os.X_OK):
             raise RuntimeError(f"Browser executable is not executable: {executable_path}")
 
+        # On Windows, running `chrome.exe --version` when Chrome is already running
+        # opens a new browser window instead of printing version info. Check the
+        # executable path first to avoid this side effect.
+        path_lower = executable_path.lower()
+        if any(indicator in path_lower for indicator in ["chrome", "chromium", "edge"]):
+            return
+
         try:
             result = subprocess.run(
                 [executable_path, "--version"],
@@ -175,7 +182,7 @@ class ChromeLauncher:
                 text=True,
                 timeout=DefaultBrowserConfig.BROWSER_VERSION_CHECK_TIMEOUT_SECONDS,
             )
-            version_output = result.stdout.lower()
+            version_output = (result.stdout + result.stderr).lower()
             is_chromium = any(indicator in version_output for indicator in ["chrome", "chromium", "edge"])
             if not is_chromium:
                 raise RuntimeError(f"Browser is not Chromium-based: {executable_path}")
