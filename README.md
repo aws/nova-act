@@ -872,7 +872,7 @@ The filepath parameters support the following formats:
 
 ### State Guardrails
 
-State guardrails allow you to control which URLs the agent can visit during execution. You can provide a callback function that inspects the browser state after each observation and decides whether to allow or block continued execution. If blocked, `act()` will raise `ActStateGuardrailError`. This is useful for preventing the agent from navigating to unauthorized domains or sensitive pages.
+State guardrails allow you to control which URLs the agent can perform actions on during execution. You can provide a callback function that inspects the browser state after each observation and decides whether to allow or block continued execution. If blocked, `act()` will raise `ActStateGuardrailError`. This is useful for preventing the agent from performing actions in unauthorized domains or sensitive pages, if any is visited.
 
 ```python
 from nova_act import NovaAct, GuardrailDecision, GuardrailInputState
