@@ -34,7 +34,7 @@ from nova_act.impl.backends.burst.types import (
     UpdateWorkflowRunRequest,
     UpdateWorkflowRunResponse,
 )
-from nova_act.impl.backends.common import assert_json_response, get_client_source
+from nova_act.impl.backends.common import DEFAULT_REQUEST_TIMEOUT, assert_json_response, get_client_source
 from nova_act.types.act_errors import (
     ActAPIError,
     ActBadRequestError,
@@ -90,7 +90,7 @@ class SunburstClient(BurstClient):
             by_alias=True, exclude={"session_id", "workflow_definition_name", "workflow_run_id"}, exclude_none=True
         )
 
-        response = requests.put(url=url, headers=self._headers, json=payload)
+        response = requests.put(url=url, headers=self._headers, json=payload, timeout=DEFAULT_REQUEST_TIMEOUT)
         if response.status_code != requests.codes.created:
             raise type(self)._translate_response_error(response)
 
@@ -106,7 +106,7 @@ class SunburstClient(BurstClient):
             by_alias=True, exclude={"workflow_definition_name", "workflow_run_id"}, exclude_none=True
         )
 
-        response = requests.put(url=url, headers=self._headers, json=payload)
+        response = requests.put(url=url, headers=self._headers, json=payload, timeout=DEFAULT_REQUEST_TIMEOUT)
         if response.status_code != requests.codes.created:
             raise type(self)._translate_response_error(response)
 
@@ -117,7 +117,7 @@ class SunburstClient(BurstClient):
         url = f"{self._api_url}/agent/workflow-definitions/{request.workflow_definition_name}/workflow-runs"
         payload = request.model_dump(by_alias=True, exclude={"workflow_definition_name"}, exclude_none=True)
 
-        response = requests.put(url=url, headers=self._headers, json=payload)
+        response = requests.put(url=url, headers=self._headers, json=payload, timeout=DEFAULT_REQUEST_TIMEOUT)
         if response.status_code != requests.codes.created:
             raise type(self)._translate_response_error(response)
 
@@ -136,7 +136,7 @@ class SunburstClient(BurstClient):
             exclude_none=True,
         )
 
-        response = requests.put(url=url, headers=self._headers, json=payload)
+        response = requests.put(url=url, headers=self._headers, json=payload, timeout=DEFAULT_REQUEST_TIMEOUT)
         if response.status_code != requests.codes.ok:
             raise type(self)._translate_response_error(response)
 
@@ -177,7 +177,7 @@ class SunburstClient(BurstClient):
 
         try:
             url = self._api_url + "/agent/telemetry"
-            response = requests.post(url=url, json=payload, headers=self._headers)
+            response = requests.post(url=url, json=payload, headers=self._headers, timeout=DEFAULT_REQUEST_TIMEOUT)
             if response.status_code != 200:
                 _LOGGER.debug("Failed to send act telemetry: %s", response.text)
         except Exception as e:
@@ -211,7 +211,7 @@ class SunburstClient(BurstClient):
 
         try:
             url = self._api_url + "/agent/telemetry"
-            response = requests.post(url=url, json=payload, headers=self._headers)
+            response = requests.post(url=url, json=payload, headers=self._headers, timeout=DEFAULT_REQUEST_TIMEOUT)
             if response.status_code != 200:
                 _LOGGER.debug("Failed to send environment telemetry: %s", response.text)
         except Exception as e:
@@ -229,7 +229,7 @@ class SunburstClient(BurstClient):
             exclude_none=True,
         )
 
-        response = requests.put(url=url, headers=self._headers, json=payload)
+        response = requests.put(url=url, headers=self._headers, json=payload, timeout=DEFAULT_REQUEST_TIMEOUT)
         if response.status_code != requests.codes.ok:
             raise type(self)._translate_response_error(response)
 
@@ -245,7 +245,7 @@ class SunburstClient(BurstClient):
             by_alias=True, exclude={"workflow_definition_name", "workflow_run_id"}, exclude_none=True
         )
 
-        response = requests.put(url=url, headers=self._headers, json=payload)
+        response = requests.put(url=url, headers=self._headers, json=payload, timeout=DEFAULT_REQUEST_TIMEOUT)
         if response.status_code != requests.codes.ok:
             raise type(self)._translate_response_error(response)
 

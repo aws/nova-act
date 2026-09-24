@@ -28,6 +28,7 @@ from nova_act.types.state.act import Act
 # Request timeout constants
 DEFAULT_REQUEST_CONNECT_TIMEOUT = 30  # 30s
 DEFAULT_REQUEST_READ_TIMEOUT = 5 * 60  # 5min
+DEFAULT_REQUEST_TIMEOUT = 60  # 60s overall requests timeout (retry HLD prereq 1)
 
 
 def assert_json_response(  # type: ignore[explicit-any]
