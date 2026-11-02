@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 from deprecated import deprecated
-from typing_extensions import Callable, Type
+from typing_extensions import Callable
 
 from nova_act.types.act_metadata import ActMetadata
 from nova_act.types.errors import NovaActError
@@ -24,10 +24,10 @@ from nova_act.types.errors import NovaActError
 MAX_CHARS = 500
 
 
-def set_default_message(default_message: str) -> Callable[[Type[ActError]], Type[ActError]]:
+def set_default_message(default_message: str) -> Callable[[type[ActError]], type[ActError]]:
     """Set the default message of an ActError subclass."""
 
-    def decorator(cls: Type[ActError]) -> Type[ActError]:
+    def decorator(cls: type[ActError]) -> type[ActError]:
         cls._DEFAULT_MESSAGE = default_message
         return cls
 

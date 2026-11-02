@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 import click
 import yaml
 
-from nova_act.cli.browser.services.intent_resolution.snapshot import SnapshotElement, flatten_snapshot
+from nova_act.cli.browser.services.intent_resolution.snapshot import SnapshotElement, snapshot_elements
 from nova_act.cli.browser.utils.decorators import (
     browser_command_options,
     pack_command_params,
@@ -121,8 +121,7 @@ def snapshot(
 
     with command_session("snapshot", prep.manager, prep.session_info, params, log_args={"output": output}) as nova_act:
         output = resolve_output_path(output, SNAPSHOT_OUTPUT.filename, SNAPSHOT_OUTPUT.ext)
-        tree = get_active_page(nova_act, prep.session_info).accessibility.snapshot()
-        elements = flatten_snapshot(tree)
+        elements = snapshot_elements(get_active_page(nova_act, prep.session_info))
         records = [asdict(e) for e in elements]
         content = yaml.dump(records, default_flow_style=False, sort_keys=False)
         size = write_output_file(output, content)

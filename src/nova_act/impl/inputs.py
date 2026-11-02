@@ -252,6 +252,7 @@ def validate_base_parameters(
     proxy: dict[str, str] | None = None,
     state_guardrail: GuardrailCallable | None = None,
     ignore_screen_dims_check: bool = False,
+    skip_ssl_precheck: bool = False,
 ) -> None:
     if not use_existing_page:
         if starting_page is None:
@@ -259,7 +260,8 @@ def validate_base_parameters(
         validate_url(
             url=starting_page, allowed_file_open_paths=allowed_file_open_paths, state_guardrail=state_guardrail
         )
-        validate_url_ssl_certificate(ignore_https_errors, starting_page)
+        if not skip_ssl_precheck:
+            validate_url_ssl_certificate(ignore_https_errors, starting_page)
 
     if use_default_chrome_browser:
         if sys.platform != "darwin":

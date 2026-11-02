@@ -56,8 +56,10 @@ Amazon Nova Act is available as a new AWS service to build and manage fleets of 
 
 ## Pre-requisites
 
-1. Operating System: MacOS Sierra+, Ubuntu 22.04+, WSL2 or Windows 10+
+1. Operating System: MacOS Sierra+, Ubuntu 22.04+, WSL2, Windows 10+, or Amazon Linux 2023*
 2. Python: 3.10 or above
+
+\*On Amazon Linux 2023, the browser needs extra setup; see [Using Your Own Browser](#using-your-own-browser).
 
 > **Note:** Nova Act supports English.
 
@@ -109,6 +111,60 @@ Nova Act works best with Google Chrome but does not have permission to install t
 playwright install chrome
 ```
 
+#### Using Your Own Browser
+
+Nova Act drives a Playwright browser. The first time you run it, Nova Act installs Chromium for you (this is the one to two minute first run) into Playwright's default location, and later runs reuse it. You can manage the browser yourself instead, which is the recommended way to stay on a current, security-patched Chromium.
+
+1. Install Playwright. Nova Act requires `playwright>=1.60.0` with no upper bound, so you can install the latest:
+
+```bash
+pip install --upgrade "playwright>=1.60.0"
+```
+
+2. Install a browser. Prefer Google Chrome stable, which receives security updates directly from Google:
+
+```bash
+# Recommended: Google Chrome stable channel (kept patched by Google)
+playwright install chrome
+
+# Alternative: Playwright's bundled Chromium
+playwright install chromium
+```
+
+`playwright install chromium` downloads the Chromium build that your installed Playwright pins, which can lag Chrome stable on security fixes until a newer Playwright ships, so keep Playwright up to date if you use it. On Amazon Linux 2023 the `chrome` channel is not available, so use `chromium` there and upgrade Playwright to pick up newer Chromium builds.
+
+Playwright's default browser folder is `~/.cache/ms-playwright` on Linux, `~/Library/Caches/ms-playwright` on macOS, and `%USERPROFILE%\AppData\Local\ms-playwright` on Windows.
+
+3. To keep the browser in a custom folder, set `PLAYWRIGHT_BROWSERS_PATH` before both the install and running Nova Act. Playwright and Nova Act both read it:
+
+```bash
+export PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+playwright install chromium
+```
+
+4. If you install the browser yourself (for example at image build time), set `NOVA_ACT_SKIP_PLAYWRIGHT_INSTALL=1` so Nova Act does not reinstall it on each run:
+
+```bash
+export NOVA_ACT_SKIP_PLAYWRIGHT_INSTALL=1
+```
+
+On Amazon Linux 2023, Playwright cannot install all of the required system libraries automatically (AL2023 is not an officially supported Playwright platform; see Playwright's [browser setup docs](https://playwright.dev/python/docs/browsers)). The following `dnf` command installs the Chromium system libraries commonly needed on AL2023, plus a fonts package:
+
+```bash
+sudo dnf install -y \
+  nss atk at-spi2-atk at-spi2-core cups-libs libdrm mesa-libgbm \
+  libxkbcommon libXcomposite libXdamage libXext libXfixes libXrandr \
+  libXScrnSaver libXtst libXi libXcursor pango cairo alsa-lib gtk3 \
+  dejavu-sans-fonts
+```
+
+This package set is drawn from community guidance for running Playwright's Chromium on Amazon Linux 2023: [microsoft/playwright#33067](https://github.com/microsoft/playwright/issues/33067) and [Playwright on AWS Lambda](https://builder.aws.com/content/3GJYEJ9JCw4GpgNfoiI0FPF4U5e/case-study-playwright-survival-on-aws-lambda).
+
+If a browser launch still reports a missing shared library, install the package that provides it. On hosts with no display server or GPU, such as many bare EC2 instances and Lambda, also set browser arguments:
+
+```bash
+export NOVA_ACT_BROWSER_ARGS="--no-sandbox --disable-dev-shm-usage --disable-gpu --single-process"
+```
 
 ## Quick Start
 
@@ -820,13 +876,36 @@ When using this feature, you must specify `clone_user_data_dir=False` and pass t
 >>> quit()
 ```
 
+
 ### Entering sensitive information
 
-To enter a password or sensitive information (e.g., credit card and social security number), do not prompt the model with the sensitive information. Ask the model to focus on the element you want to fill in. Then use Playwright APIs directly to type the data, using `client.page.keyboard.type(sensitive_string)`. You can get that data in the way you wish: prompting in the command line using [`getpass`](https://docs.python.org/3/library/getpass.html), using an argument, or setting env variable.
+To enter a password or sensitive information (e.g., credit card and social security number), do not prompt the model with the sensitive information. The Nova Act SDK offers several options for working with sensitive data securely.
+
+> **Caution:** If you instruct Nova Act to take an action on any browser screen displaying sensitive information, including information provided through Secrets or Playwright APIs, that information will be included in the screenshots collected.
+
+#### Using Secrets (Preview)
+
+The `Secrets` class lets you reference sensitive values in prompts using placeholders (e.g. `{{password}}`). The model sees and types the placeholder; the actuator resolves it to the real value at type-time, so credentials never reach the backend.
+
+```python
+from nova_act import NovaAct, Secrets
+
+# Define secrets — use keys as placeholders in prompts (e.g. {{password}})
+# Consider fetching values from a secrets manager (e.g. AWS Secrets Manager)
+secrets = Secrets({"password": "s3cret"})
+
+with NovaAct(starting_page="https://example.com", preview={"secrets": secrets}) as nova:
+    # {{password}} is resolved to the real value by the actuator before typing
+    nova.act("Login with username 'admin' and password '{{password}}'")
+```
+
+> **Note:** This is a preview feature. The API may change in future releases.
+
+#### Using Playwright APIs directly
+
+Alternatively, ask the model to focus on the element you want to fill in, then use Playwright APIs directly to type the data using `client.page.keyboard.type(sensitive_string)`. You can get that data in the way you wish: prompting in the command line using [`getpass`](https://docs.python.org/3/library/getpass.html), using an argument, or setting env variable.
 
 Note that any passwords or other sensitive data saved with a Chromium-based browser's password manager on Linux systems without a system-level keyring (ex. Libsecret, KWallet) will be stored in plaintext within a user's profile directory.
-
-> **Caution:** If you instruct Nova Act to take an action on any browser screen displaying sensitive information, including information provided through Playwright APIs, that information will be included in the screenshots collected.
 
 ```python
 # Sign in.
@@ -848,7 +927,7 @@ To enable local file navigation, define one or more filepath patterns in `Securi
 ```python
 from nova_act import NovaAct, SecurityOptions
 
-NovaAct(starting_page="file://home/nova-act/site/index.html", SecurityOptions(allowed_file_open_paths=['/home/nova-act/site/*']))
+NovaAct(starting_page="file:///home/nova-act/site/index.html", security_options=SecurityOptions(allowed_file_open_paths=['/home/nova-act/site/*']))
 ```
 
 #### Allow File Uploads
@@ -858,7 +937,7 @@ To allow the agent to upload files to websites, define one or more filepath patt
 ```python
 from nova_act import NovaAct, SecurityOptions
 
-NovaAct(starting_page="https://example.com", SecurityOptions(allowed_file_upload_paths=['/home/nova-act/shared/*']))
+NovaAct(starting_page="https://example.com", security_options=SecurityOptions(allowed_file_upload_paths=['/home/nova-act/shared/*']))
 ```
 
 #### Filepath Structures
@@ -872,7 +951,18 @@ The filepath parameters support the following formats:
 
 ### State Guardrails
 
-State guardrails allow you to control which URLs the agent can perform actions on during execution. You can provide a callback function that inspects the browser state after each observation and decides whether to allow or block continued execution. If blocked, `act()` will raise `ActStateGuardrailError`. This is useful for preventing the agent from performing actions in unauthorized domains or sensitive pages, if any is visited.
+State guardrails let you control which URLs the agent may navigate to. You provide a callback that, for each navigation the agent attempts or each page it lands on, returns `GuardrailDecision.PASS` or `GuardrailDecision.BLOCK`; a `BLOCK` raises `ActStateGuardrailError`. The SDK consults it in two complementary ways, both on by default: **preventively**, on a navigation request before it leaves the browser (so a blocked click, redirect, form submit, or `go_to_url` is aborted before anything is sent), and **detectively**, after each observation on the URL the agent has reached (so client-side route changes that issue no network request are still caught). This is useful for keeping the agent within an allow-listed set of domains, or out of sensitive pages.
+
+You only write the callback; the SDK enforces it internally, so there are no hooks to register or override.
+
+The callback receives a `GuardrailInputState` whose `state_type` tells you *why* it is being consulted:
+
+- `GuardrailStateType.PROPOSED_ACTION` (**preventive**): a navigation is about to happen. It is evaluated on the navigation request (a click, a redirect, a form submit, or `go_to_url`) **before the request leaves the browser**, so `BLOCK` aborts it before anything is sent.
+- `GuardrailStateType.OBSERVATION` (**detective**): the agent has *already* reached a URL. It is evaluated after each observation on the current URL, and catches client-side (e.g. `history.pushState`) navigations that issue no network request and so are invisible to the preventive check. Because the page has already loaded, `BLOCK` here stops the run rather than preventing the request.
+
+Either way, `BLOCK` raises `ActStateGuardrailError`. Inspecting `state_type` is optional; a callback that reads only `state.browser_url` works for both modes.
+
+**Preventive** (keep the agent inside an allow-list / out of a block-list):
 
 ```python
 from nova_act import NovaAct, GuardrailDecision, GuardrailInputState
@@ -897,9 +987,37 @@ def url_guardrail(state: GuardrailInputState) -> GuardrailDecision:
     return GuardrailDecision.BLOCK
 
 with NovaAct(starting_page="https://allowed-domain.com", state_guardrail=url_guardrail) as nova:
-    # The following will be blocked if agent tries to visit a blocklisted domain or leave one of the allowlisted domains
+    # A click, redirect, or go_to_url toward a block-listed (or non-allow-listed) domain is aborted
+    # before the request is sent, and act() raises ActStateGuardrailError.
     nova.act("Navigate to the homepage")
 ```
+
+**Detective** (stop the run if the agent ends up on a sensitive page, including via in-page routing):
+
+```python
+from nova_act import NovaAct, GuardrailDecision, GuardrailInputState, GuardrailStateType
+
+def combined_guardrail(state: GuardrailInputState) -> GuardrailDecision:
+    if state.state_type is GuardrailStateType.PROPOSED_ACTION:
+        # Preventive: allow only navigations within allowed-domain.com.
+        allowed = state.browser_url.startswith("https://allowed-domain.com")
+        return GuardrailDecision.PASS if allowed else GuardrailDecision.BLOCK
+
+    # Detective (OBSERVATION): the agent has landed somewhere. Stop the run if it reached a sensitive
+    # page, e.g. via a client-side (SPA) route change that never issued a network request.
+    if "/account/settings" in state.browser_url:
+        return GuardrailDecision.BLOCK
+    return GuardrailDecision.PASS
+
+with NovaAct(starting_page="https://allowed-domain.com", state_guardrail=combined_guardrail) as nova:
+    nova.act("Open my profile")
+```
+
+Notes:
+
+- The preventive check runs inline on the browser's navigation path, and the detective check runs after each observation, so keep the callback fast and free of blocking I/O or side effects.
+- Redirect chains invoke it once per hop, and cross-origin iframes count as navigations, so include any intermediate, CDN, or embed hosts your legitimate flows rely on when using an allow-list.
+- During [human-in-the-loop](#human-in-the-loop-hitl) takeover the guardrail is suspended so the person can browse freely, then re-armed automatically when control returns to the agent.
 
 ### Captchas
 

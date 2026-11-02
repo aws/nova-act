@@ -17,7 +17,6 @@ import json
 import logging
 import re
 import uuid
-from typing import Tuple
 
 from boto3 import Session
 from botocore.config import Config
@@ -240,6 +239,6 @@ class AgentCoreClient:
         agent_id = extract_agent_id_from_arn(agent_arn)
         return f"{LOG_GROUP_PREFIX}{agent_id}-{DEFAULT_ENDPOINT_NAME}{OTEL_LOG_SUFFIX}"
 
-    def get_agent_log_groups(self, agent_arn: str) -> Tuple[str, str]:
+    def get_agent_log_groups(self, agent_arn: str) -> tuple[str, str]:
         """Get CloudWatch log group paths for an agent."""
         return self.get_runtime_log_group(agent_arn), self.get_otel_log_group(agent_arn)

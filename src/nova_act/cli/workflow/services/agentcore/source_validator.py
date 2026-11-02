@@ -112,15 +112,14 @@ class AgentCoreSourceValidator:
 
         if len(python_files) == 0:
             raise ConfigurationError(f"No Python files found in source directory: {self.source_path}")
-        elif len(python_files) == 1:
+        if len(python_files) == 1:
             entry_point = python_files[0].name
             logger.info(f"Auto-detected entry point: {entry_point}")
             return entry_point
-        else:
-            py_file_names = sorted([f.name for f in python_files])
-            raise ConfigurationError(
-                f"Multiple Python files found, please specify --entry-point: {', '.join(py_file_names)}"
-            )
+        py_file_names = sorted([f.name for f in python_files])
+        raise ConfigurationError(
+            f"Multiple Python files found, please specify --entry-point: {', '.join(py_file_names)}"
+        )
 
     def _find_top_level_main(
         self, content: str, entry_point_path: Path

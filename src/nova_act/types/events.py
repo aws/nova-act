@@ -15,13 +15,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Union
 
 
 @dataclass
 class Event:
     type: EventType
-    data: Union[LogData, ActionData]
+    data: LogData | ActionData
     context: EventContext
 
 
@@ -50,7 +49,7 @@ class EventType(str, Enum):
 @dataclass
 class EventContext:
     session_id: str
-    act_id: Optional[str] = None
-    num_steps_executed: Optional[int] = None
-    payload_type: Optional[str] = None
+    act_id: str | None = None
+    num_steps_executed: int | None = None
+    payload_type: str | None = None
     is_complete: bool = False

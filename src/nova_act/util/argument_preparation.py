@@ -15,8 +15,6 @@
 Shared utility functions for preparing arguments for actuation calls.
 """
 
-from typing import Dict, List
-
 from pydantic import JsonValue
 
 from nova_act.util.decode_string import safe_string
@@ -26,18 +24,17 @@ def apply_safe_string(args: JsonValue) -> JsonValue:
     if isinstance(args, dict):
         # Recursively convert dictionary keys and values to JSON-safe strings
         return {k: apply_safe_string(v) for k, v in args.items()}
-    elif isinstance(args, list):
+    if isinstance(args, list):
         # Convert list elements to JSON-safe strings
         return [apply_safe_string(arg) for arg in args]
-    elif isinstance(args, str):
+    if isinstance(args, str):
         # Convert string arguments to JSON-safe strings
         return safe_string(args)
-    else:
-        # Return args as is
-        return args
+    # Return args as is
+    return args
 
 
-def prepare_kwargs_for_actuation_calls(tool_name: str, args: List[JsonValue]) -> Dict[str, JsonValue]:
+def prepare_kwargs_for_actuation_calls(tool_name: str, args: list[JsonValue]) -> dict[str, JsonValue]:
     """
     Prepare kwargs for actuation calls based on tool name and arguments.
 
@@ -71,14 +68,12 @@ def prepare_kwargs_for_actuation_calls(tool_name: str, args: List[JsonValue]) ->
         case "agentHover":
             if len(safe_args) != 1:
                 raise ValueError(f"Invalid number of arguments for '{tool_name}': expected 1, got {len(safe_args)}")
-            kwargs = {"box": safe_args[0]}
-            return kwargs
+            return {"box": safe_args[0]}
 
         case "agentScroll":
             if len(safe_args) != 2:
                 raise ValueError(f"Invalid number of arguments for '{tool_name}': expected 2, got {len(safe_args)}")
-            kwargs = {"direction": safe_args[0], "box": safe_args[1]}
-            return kwargs
+            return {"direction": safe_args[0], "box": safe_args[1]}
 
         case "agentType":
             if len(safe_args) < 2:
@@ -96,14 +91,12 @@ def prepare_kwargs_for_actuation_calls(tool_name: str, args: List[JsonValue]) ->
         case "goToUrl":
             if len(safe_args) < 1:
                 raise ValueError(f"Invalid number of arguments for '{tool_name}': expected 1, got 0")
-            kwargs = {"url": safe_args[0]}
-            return kwargs
+            return {"url": safe_args[0]}
 
         case "return":
             if len(safe_args) == 1:
                 return {"value": safe_args[0]}
-            else:
-                return {"value": ""}
+            return {"value": ""}
 
         case "takeObservation":
             return {}

@@ -14,6 +14,7 @@
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 from typing_extensions import TypedDict
 
+from nova_act.types.secrets import Secrets
 from nova_act.util.logging import setup_logging
 from nova_act.util.path_validator import validate_allowed_paths
 
@@ -78,3 +79,12 @@ class SecurityOptions(BaseModel):
 
 class PreviewFeatures(TypedDict, total=False):
     """Experimental features for opt-in."""
+
+    secrets: Secrets
+    """Enable client-side secret resolution for sensitive data entry.
+
+    When set, placeholder tokens (e.g., ``{{password}}``) are sent to the backend
+    and resolved to real values by the actuator before typing — so credentials
+    never reach the backend.
+    """
+

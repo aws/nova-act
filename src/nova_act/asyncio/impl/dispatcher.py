@@ -23,7 +23,7 @@ from nova_act.asyncio.tools.actuator.interface.actuator import ActionType, Actua
 from nova_act.impl.backends.factory import NovaActBackend
 from nova_act.impl.controller import ControlState, NovaStateController
 from nova_act.impl.inputs import validate_viewport_dimensions
-from nova_act.impl.program.base import Call, Program
+from nova_act.impl.program.base import Call, CallResult, Program
 from nova_act.impl.thinker import Thinker
 from nova_act.tools.browser.default.util.image_helpers import get_source_image_from_data_url
 from nova_act.tools.browser.interface.types.agent_redirect_error import (
@@ -44,6 +44,7 @@ from nova_act.types.errors import ClientNotStarted
 from nova_act.types.events import EventType, LogType
 from nova_act.types.guardrail import GuardrailCallable
 from nova_act.types.state.act import Act
+from nova_act.types.state.step import StepWithProgram
 from nova_act.util.decode_string import decode_awl_raw_program
 from nova_act.util.event_handler import EventHandler
 from nova_act.util.human_wait_time_tracker import HumanWaitTimeTracker
@@ -62,8 +63,8 @@ _TRACE_LOGGER = make_trace_logger()
 
 
 def _handle_act_fail(
-    f: "Callable[[ActDispatcher, Act], Coroutine[object, object, ActGetResult]]",
-) -> "Callable[[ActDispatcher, Act], Coroutine[object, object, ActGetResult]]":
+    f: Callable[[ActDispatcher, Act], Coroutine[object, object, ActGetResult]],
+) -> Callable[[ActDispatcher, Act], Coroutine[object, object, ActGetResult]]:
     """Update Act objects with appropriate metadata on Exceptions."""
 
     @functools.wraps(f)
@@ -170,6 +171,8 @@ def _log_time_worked(metadata: ActMetadata) -> None:
     trace_log_lines(message)
 
 
+
+
 class ActDispatcher:
     def __init__(
         self,
@@ -209,6 +212,12 @@ class ActDispatcher:
             data="Terminating agent workflow",
         )
         raise ActCanceledError()
+
+    async def _invoke_step(
+        self, act: Act, call_results: list[CallResult], tool_map: dict[str, ActionType]
+    ) -> StepWithProgram:
+        """Send one InvokeActStep call to the backend."""
+        return self._backend.step(act, call_results, tool_map)
 
     @_handle_act_fail
     async def dispatch(self, act: Act) -> ActGetResult:
@@ -264,7 +273,7 @@ class ActDispatcher:
                 # Get a Program from the model
                 set_logging_session_state(SessionState.THINKING)
                 with Thinker(tty=self._controller._tty, logger=_TRACE_LOGGER):
-                    step_object = self._backend.step(act, program_result.call_results, self._tool_map)
+                    step_object = await self._invoke_step(act, program_result.call_results, self._tool_map)
 
                 self._human_input_callbacks.most_recent_screenshot = step_object.model_input.image
 
@@ -293,7 +302,7 @@ class ActDispatcher:
                     if throw_result := program_result.has_throw():
                         message = format_return_value(throw_result.return_value)
                         raise ActAgentFailed(message=message)
-                    elif exception_result := program_result.has_exception():
+                    if exception_result := program_result.has_exception():
                         assert exception_result.error is not None  # TODO: improve typing of CallResult
                         raise exception_result.error
 

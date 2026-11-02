@@ -14,7 +14,6 @@
 """Core type definitions for Nova Act CLI."""
 
 from datetime import datetime
-from typing import Dict
 
 from pydantic import BaseModel, Field
 
@@ -50,7 +49,7 @@ class WorkflowInfo(BaseModel):
     created_at: datetime
     workflow_definition_arn: str | None = None
     deployments: WorkflowDeployments = Field(default_factory=WorkflowDeployments)
-    metadata: Dict[str, str] | None = None
+    metadata: dict[str, str] | None = None
     last_image_tag: str | None = None
 
 
@@ -78,7 +77,7 @@ class UserConfig(BaseModel):
 class RegionState(BaseModel):
     """Per-region workflow state."""
 
-    workflows: Dict[str, WorkflowInfo] = Field(default_factory=dict)
+    workflows: dict[str, WorkflowInfo] = Field(default_factory=dict)
     last_updated: datetime = Field(default_factory=datetime.now)
     version: str = "1.0"
 

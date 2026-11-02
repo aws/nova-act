@@ -259,7 +259,7 @@ class BrowserActuatorBase(ActuatorBase):
     an execution error, it should raise RuntimeError.
     """
 
-    domain = "browser-use"
+    domain = "browser"
     _action_provider: BrowserActionProvider | None = None
 
     @final

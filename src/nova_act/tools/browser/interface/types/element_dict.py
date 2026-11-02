@@ -11,12 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing_extensions import Dict, Optional, TypedDict
+from typing_extensions import Dict, TypedDict
 
 
 class ElementDict(TypedDict):
-    id: Optional[str]
+    id: str | None
     tagName: str
-    className: Optional[str]
-    textContent: Optional[str]
+    className: str | None
+    textContent: str | None
     attributes: Dict[str, str]

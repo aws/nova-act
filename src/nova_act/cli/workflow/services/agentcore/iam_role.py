@@ -15,7 +15,6 @@
 
 import json
 import time
-from typing import Dict
 
 from boto3 import Session
 
@@ -24,6 +23,12 @@ from nova_act.cli.core.clients.iam.types import (
     CreateRoleRequest,
     PutRolePolicyRequest,
 )
+from nova_act.cli.core.exceptions import ExecutionError
+
+# Inline policies that older CLI versions attached and that must be removed from existing roles.
+# CodeBuildPolicy let workflow code start builds on the shared CodeBuild project, which runs
+# under whichever workflow role deployed last. Only the deploying CLI user starts builds.
+REVOKED_INLINE_POLICIES = ("CodeBuildPolicy",)
 
 
 class AgentCoreRoleCreator:
@@ -63,6 +68,23 @@ class AgentCoreRoleCreator:
             time.sleep(10)
 
         self._attach_inline_policies(role_name)
+        self._remove_revoked_inline_policies(role_name)
+
+    def _remove_revoked_inline_policies(self, role_name: str) -> None:
+        """Delete inline policies that earlier CLI versions attached but are no longer granted."""
+        for policy_name in REVOKED_INLINE_POLICIES:
+            try:
+                self.iam_client.delete_role_policy_if_exists(role_name=role_name, policy_name=policy_name)
+            except ExecutionError as e:
+                # Do not fail the deploy; tell the user how to remove the policy once.
+                print(
+                    f"WARNING: Role {role_name} still has inline policy {policy_name}, which this CLI version "
+                    f"no longer grants (workflow code does not need CodeBuild access). Your deployment will "
+                    f"continue, but the CLI could not remove the policy: {e}\n"
+                    f"To fix this and stop this warning, do one of the following once:\n"
+                    f"  - Add iam:DeleteRolePolicy to your CLI permissions, then redeploy.\n"
+                    f"  - Run: aws iam delete-role-policy --role-name {role_name} --policy-name {policy_name}"
+                )
 
     def _create_role_with_policies(self, role_name: str, workflow_name: str) -> str:
         """Create IAM role with required policies for AgentCore."""
@@ -86,7 +108,7 @@ class AgentCoreRoleCreator:
 
         return role_arn
 
-    def _build_trust_policy(self) -> Dict[str, object]:
+    def _build_trust_policy(self) -> dict[str, object]:
         """Build trust policy for AgentCore and CodeBuild services."""
         return {
             "Version": "2012-10-17",
@@ -128,7 +150,7 @@ class AgentCoreRoleCreator:
             )
             self.iam_client.put_role_policy(request)
 
-    def _get_inline_policies(self) -> Dict[str, Dict[str, object]]:
+    def _get_inline_policies(self) -> dict[str, dict[str, object]]:
         """Get all inline policy definitions."""
         return {
             "ECRAccessPolicy": {
@@ -152,19 +174,6 @@ class AgentCoreRoleCreator:
                         ],
                         "Resource": f"arn:aws:ecr:{self.region}:{self.account_id}:repository/nova-act-*",
                     },
-                ],
-            },
-            "CodeBuildPolicy": {
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "codebuild:StartBuild",
-                            "codebuild:BatchGetBuilds",
-                        ],
-                        "Resource": f"arn:aws:codebuild:{self.region}:{self.account_id}:project/nova-act-*",
-                    }
                 ],
             },
             "CloudWatchLogsPolicy": {

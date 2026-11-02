@@ -15,9 +15,10 @@
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING
 
 import click
 
@@ -45,11 +46,11 @@ class MergedWorkflow:
 
 
 def _merge_workflows(
-    local_workflows: Dict[str, WorkflowInfo],
-    remote_workflows: List[WorkflowDefinitionSummary],
-) -> List[MergedWorkflow]:
+    local_workflows: dict[str, WorkflowInfo],
+    remote_workflows: builtins.list[WorkflowDefinitionSummary],
+) -> builtins.list[MergedWorkflow]:
     """Merge local and remote workflows into a unified list."""
-    merged: Dict[str, MergedWorkflow] = {}
+    merged: dict[str, MergedWorkflow] = {}
 
     for name, wf in local_workflows.items():
         merged[name] = MergedWorkflow(
@@ -89,14 +90,14 @@ def _display_region_header(region: str) -> None:
     click.echo()
 
 
-def _display_workflow_table(workflows: Dict[str, WorkflowInfo]) -> None:
+def _display_workflow_table(workflows: dict[str, WorkflowInfo]) -> None:
     """Display workflows in simple list format (local-only fallback)."""
     for name, workflow_info in workflows.items():
         created_date = workflow_info.created_at.strftime("%Y-%m-%d")
         click.echo(f"{value(name)} {secondary(f'({created_date})')}")
 
 
-def _display_merged_table(merged: List[MergedWorkflow]) -> None:
+def _display_merged_table(merged: builtins.list[MergedWorkflow]) -> None:
     """Display merged workflow table with status indicators."""
     # Calculate column widths
     name_width = max((len(w.name) for w in merged), default=10)
@@ -112,7 +113,9 @@ def _display_merged_table(merged: List[MergedWorkflow]) -> None:
         click.echo(f"  {value(name_padded)}  {secondary(status_str):<10}  {secondary(wf.created_date)}")
 
 
-def _filter_workflows(merged: List[MergedWorkflow], *, show_local: bool, show_remote: bool) -> List[MergedWorkflow]:
+def _filter_workflows(
+    merged: builtins.list[MergedWorkflow], *, show_local: bool, show_remote: bool
+) -> builtins.list[MergedWorkflow]:
     """Filter merged workflows based on --local or --remote flags."""
     if show_local:
         return [w for w in merged if w.status in (STATUS_LOCAL, STATUS_SYNCED)]
@@ -163,7 +166,7 @@ def list(region: str | None = None, show_local: bool = False, show_remote: bool 
     local_workflows = workflow_manager.list_workflows()
 
     # Try to fetch remote workflows
-    remote_workflows: Optional[List[WorkflowDefinitionSummary]] = None
+    remote_workflows: builtins.list[WorkflowDefinitionSummary] | None = None
     try:
         remote_workflows = workflow_manager.list_remote_workflows()
     except Exception as e:

@@ -30,7 +30,7 @@ from nova_act.cli.browser.services.browser_actions.utils import (
 )
 from nova_act.cli.browser.services.intent_resolution import (
     SnapshotElement,
-    flatten_snapshot,
+    snapshot_elements,
 )
 
 if TYPE_CHECKING:
@@ -219,8 +219,7 @@ class ExplorationMixin:
         Returns the best match by priority: searchbox > textbox > button.
         """
         try:
-            tree = self._nova_act.page.accessibility.snapshot()
-            elements = flatten_snapshot(tree)
+            elements = snapshot_elements(self._nova_act.page)
         except PlaywrightError:
             return None
 

@@ -14,7 +14,6 @@
 import os
 import sys
 from types import TracebackType
-from typing import Type
 
 DEFAULT_TERMINAL_COLS = 80
 
@@ -63,7 +62,7 @@ class TerminalInputManager:
         return self
 
     def __exit__(
-        self, exc_type: Type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         if not self.is_interactive:
             return
@@ -90,14 +89,13 @@ class TerminalInputManager:
         if sys.platform == "win32":
             if block:
                 return msvcrt.getch().decode("utf-8")
-            elif msvcrt.kbhit():
+            if msvcrt.kbhit():
                 return msvcrt.getch().decode("utf-8")
         else:
             if block:
                 return sys.stdin.read(1)
-            else:
-                i, _, _ = select.select([sys.stdin], [], [], 0)
-                if i != []:
-                    return sys.stdin.read(1)
+            i, _, _ = select.select([sys.stdin], [], [], 0)
+            if i != []:
+                return sys.stdin.read(1)
 
         return None

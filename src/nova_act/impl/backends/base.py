@@ -63,7 +63,7 @@ class Backend(ABC):
     @staticmethod
     def _maybe_observation(observation: JsonValue) -> BrowserObservation:
         # TODO: get rid of BrowserObservation TypedDict && enforce stricter type check with isinstance
-        return cast(BrowserObservation, observation)
+        return cast("BrowserObservation", observation)
 
     @abstractmethod
     def validate_auth(self) -> None:
@@ -88,6 +88,7 @@ class Backend(ABC):
         Returns:
             Step object containing the Program to run
         """
+
 
     def get_auth_warning_message(self, message: str = "Authentication failed.", request_id: str | None = None) -> str:
         warning = self.get_auth_warning_message_for_backend(message)
@@ -121,7 +122,7 @@ class Backend(ABC):
     def send_environment_telemetry(
         self,
         session_id: str,
-        actuator_type: Literal["custom", "playwright"],
+        actuator_type: str | None,
         sdk_variant: Literal["SYNC", "ASYNC"],
     ) -> None:
         """Send environment telemetry. By default, do not send any."""
@@ -171,7 +172,7 @@ class AwlBackend(Backend):
         # Interpret a program from the AST
         try:
             base_program = NovaActInterpreter.interpret_ast(
-                cast(list[Statement], step_object.model_output.program_ast), tool_map
+                cast("list[Statement]", step_object.model_output.program_ast), tool_map
             )
         except UnknownToolError as e:
             raise ActInvalidToolError(

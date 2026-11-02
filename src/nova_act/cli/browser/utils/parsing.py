@@ -26,7 +26,7 @@ def _resolve_schema_shortcut(schema_lower: str) -> dict[str, JsonValue] | None:
     """Resolve enum shortcuts to schema constants."""
     if schema_lower == "bool" or schema_lower == "boolean":
         return dict(BOOL_SCHEMA)
-    elif schema_lower == "string":
+    if schema_lower == "string":
         return dict(STRING_SCHEMA)
     return None
 

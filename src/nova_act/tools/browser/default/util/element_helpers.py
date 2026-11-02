@@ -187,7 +187,7 @@ def recurse_through_iframes(page: Page, x: float, y: float, inner_js: str, retur
         if result.get("type_") != "iframe":
             # We've reached a non-iframe element; return the result from
             # the caller's custom JS. We cast to their provided type.
-            return cast(_T, result)
+            return cast("_T", result)
 
         # The element at this point is an iframe. We need to:
         # 1. Convert coordinates from the current frame's space to the
@@ -385,10 +385,9 @@ def is_element_focused(page: Page, x: float, y: float) -> FocusState:
 
     if result["isFocusedXY"]:
         return FocusState.UNDER_XY
-    elif result["hasMeaningfulFocus"]:
+    if result["hasMeaningfulFocus"]:
         return FocusState.MEANINGFUL_ELEMENT
-    else:
-        return FocusState.NO
+    return FocusState.NO
 
 
 def is_pdf_page(page: Page) -> bool:

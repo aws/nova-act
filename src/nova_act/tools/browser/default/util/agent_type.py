@@ -100,12 +100,12 @@ def agent_type(
             if input_type == "color":
                 handle_color_input(page, element_info, value)
                 return
-            elif input_type == "file":
+            if input_type == "file":
                 handle_file_input(
                     page, value, element_info=element_info, allowed_file_upload_paths=allowed_file_upload_paths
                 )
                 return
-            elif input_type == "range":
+            if input_type == "range":
                 handle_range_input(page, element_info, value)
                 return
 

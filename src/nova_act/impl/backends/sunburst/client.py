@@ -17,6 +17,7 @@ import sys
 from typing import Literal
 
 import requests
+from pydantic import JsonValue
 
 from nova_act.__version__ import VERSION
 from nova_act.impl.backends.burst.client import BurstClient
@@ -34,7 +35,12 @@ from nova_act.impl.backends.burst.types import (
     UpdateWorkflowRunRequest,
     UpdateWorkflowRunResponse,
 )
-from nova_act.impl.backends.common import assert_json_response, get_client_source
+from nova_act.impl.backends.common import (
+    DEFAULT_REQUEST_TIMEOUT,
+    REQUESTS_TRANSPORT_ERRORS,
+    assert_json_response,
+    get_client_source,
+)
 from nova_act.types.act_errors import (
     ActAPIError,
     ActBadRequestError,
@@ -46,6 +52,7 @@ from nova_act.types.act_errors import (
     ActRateLimitExceededError,
     ActRequestThrottledError,
     ActServerError,
+    ActServiceUnavailableError,
 )
 from nova_act.types.act_result import ActGetResult
 from nova_act.types.errors import AuthError, NovaActError
@@ -122,8 +129,7 @@ class SunburstClient(BurstClient):
             raise type(self)._translate_response_error(response)
 
         data = response.json()
-        create_workflow_run_response = CreateWorkflowRunResponse.model_validate(data)
-        return create_workflow_run_response
+        return CreateWorkflowRunResponse.model_validate(data)
 
     def invoke_act_step(self, request: InvokeActStepRequest) -> InvokeActStepResponse:
         url = (
@@ -136,7 +142,12 @@ class SunburstClient(BurstClient):
             exclude_none=True,
         )
 
-        response = requests.put(url=url, headers=self._headers, json=payload)
+        try:
+            response = requests.put(url=url, headers=self._headers, json=payload, timeout=DEFAULT_REQUEST_TIMEOUT)
+        except requests.exceptions.SSLError:
+            raise
+        except REQUESTS_TRANSPORT_ERRORS as e:
+            raise ActServiceUnavailableError(message=f"Transport error calling Nova Act: {e}") from e
         if response.status_code != requests.codes.ok:
             raise type(self)._translate_response_error(response)
 
@@ -149,6 +160,7 @@ class SunburstClient(BurstClient):
         if act.end_time is not None:
             latency = act.end_time - act.start_time
 
+        result: dict[str, JsonValue]
         if error:
             result = {
                 "result_type": "ERROR",
@@ -165,7 +177,7 @@ class SunburstClient(BurstClient):
         else:
             return
 
-        payload = {
+        payload: dict[str, JsonValue] = {
             "act": {
                 "actId": act.id,
                 "latency": latency,
@@ -187,17 +199,18 @@ class SunburstClient(BurstClient):
     def send_environment_telemetry(
         self,
         session_id: str,
-        actuator_type: Literal["custom", "playwright"],
+        actuator_type: str | None,
         sdk_variant: Literal["SYNC", "ASYNC"],
     ) -> None:
         """Send environment telemetry."""
+
         python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
 
         system_name = platform.system().lower() or "unknown"
         system_release = platform.release().lower() or "unknown"
         system = f"{system_name}/{system_release}"
 
-        payload = {
+        payload: dict[str, JsonValue] = {
             "environment": {
                 "actuatorType": actuator_type,
                 "pythonVersion": python_version,
@@ -284,7 +297,7 @@ class SunburstClient(BurstClient):
                     request_id=request_id,
                     status_code=status_code,
                 )
-            elif reason == "INVALID_INPUT":
+            if reason == "INVALID_INPUT":
                 fields = data.get("fields")
                 fields_str = ""
                 if isinstance(fields, list):
@@ -305,7 +318,7 @@ class SunburstClient(BurstClient):
                 status_code=status_code,
             )
 
-        elif status_code == requests.codes.not_found:
+        if status_code == requests.codes.not_found:
             message = (
                 f"Resource not found: {data.get('message', '')}"
                 f" Resource ID: {data.get('resourceId', '')}"
@@ -318,7 +331,7 @@ class SunburstClient(BurstClient):
                 status_code=status_code,
             )
 
-        elif status_code == requests.codes.too_many_requests:
+        if status_code == requests.codes.too_many_requests:
             message = f"Request throttled: {data.get('message', '')}"
             throttle_type = data.get("throttleType")
             if throttle_type == "DAILY_QUOTA_LIMIT_EXCEEDED":
@@ -328,7 +341,7 @@ class SunburstClient(BurstClient):
                     request_id=request_id,
                     status_code=status_code,
                 )
-            elif throttle_type == "RATE_LIMIT_EXCEEDED":
+            if throttle_type == "RATE_LIMIT_EXCEEDED":
                 return ActRateLimitExceededError(
                     message=message + f" Throttle Type: {throttle_type}",
                     raw_response=response.text,
@@ -343,7 +356,7 @@ class SunburstClient(BurstClient):
                 status_code=status_code,
             )
 
-        elif status_code == requests.codes.internal_server_error:
+        if status_code == requests.codes.internal_server_error:
             reason = data.get("reason")
             message = f"Internal server error: {data.get('message', '')}" + (f" Reason: {reason}" if reason else "")
             if reason in ("InvalidModelGeneration", "RequestTokenLimitExceeded"):
@@ -369,7 +382,7 @@ class SunburstClient(BurstClient):
                     message=message,
                     raw_response=response.text,
                 )
-            elif 400 <= status_code < 500:
+            if 400 <= status_code < 500:
                 return ActClientError(
                     request_id=request_id,
                     status_code=status_code,

@@ -53,7 +53,7 @@ from nova_act.types.act_metadata import ActMetadata
 from nova_act.types.act_result import ActGetResult, ActResult
 from nova_act.types.errors import NovaActError, StartFailed, StopFailed, ValidationFailed
 from nova_act.types.features import SecurityOptions
-from nova_act.types.guardrail import GuardrailDecision, GuardrailInputState
+from nova_act.types.guardrail import GuardrailDecision, GuardrailInputState, GuardrailStateType
 from nova_act.types.workflow import Workflow, get_current_workflow, workflow
 from nova_act.util.jsonschema import BOOL_SCHEMA, STRING_SCHEMA
 
@@ -93,6 +93,7 @@ __all__ = [
     "JSONType",
     "GuardrailDecision",
     "GuardrailInputState",
+    "GuardrailStateType",
     "tool",
     "Workflow",
     "get_current_workflow",

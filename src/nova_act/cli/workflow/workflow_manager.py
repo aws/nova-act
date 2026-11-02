@@ -21,7 +21,6 @@ import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict
 
 from boto3 import Session
 from botocore.exceptions import ClientError
@@ -63,7 +62,7 @@ class WorkflowManager:
         self.account_id = account_id
         self.state_manager = StateManager(account_id=self.account_id, region=self.region)
 
-    def list_workflows(self) -> Dict[str, WorkflowInfo]:
+    def list_workflows(self) -> dict[str, WorkflowInfo]:
         """Get workflows for the current account and region."""
         state = self.state_manager.get_region_state()
         return state.workflows
@@ -164,9 +163,8 @@ class WorkflowManager:
             if isinstance(e, ClientError) and e.response.get("Error", {}).get("Code") == "ConflictException":
                 logger.info(f"WorkflowDefinition '{name}' already exists in AWS")
                 return construct_workflow_definition_arn(name=name, region=self.region, account_id=self.account_id)
-            else:
-                logger.warning(f"Could not create WorkflowDefinition: {e}")
-                return None
+            logger.warning(f"Could not create WorkflowDefinition: {e}")
+            return None
 
     def _recover_workflow_definition_if_needed(
         self, workflow: WorkflowInfo, s3_bucket_name: str | None, s3_key_prefix: str | None, skip_s3_creation: bool
@@ -375,8 +373,7 @@ class WorkflowManager:
                     logger.info(f"Skipping creating existing custom S3 bucket: {custom_bucket_name}")
                     success("[OK] Using existing S3 bucket")
                     return ExportConfig(s3BucketName=custom_bucket_name, s3KeyPrefix=s3_key_prefix)
-                else:
-                    logger.warning(f"Custom bucket {custom_bucket_name} not found, creating default")
+                logger.warning(f"Custom bucket {custom_bucket_name} not found, creating default")
 
             info("Setting up S3 bucket for workflow exports...")
             bucket_manager = BucketManager(session=self.session, region=self.region, account_id=self.account_id)

@@ -19,7 +19,7 @@ import threading
 import time
 from collections import deque
 from contextvars import ContextVar
-from typing import NamedTuple, Type
+from typing import NamedTuple
 
 from nova_act.util.logging import get_session_context
 
@@ -55,10 +55,9 @@ class Thinker:
     def _make_prefix(self, *, with_state_emoji: bool) -> str:
         if self.prefix:
             return self.prefix
-        elif self.session_context is not None:
+        if self.session_context is not None:
             return self.session_context.trace_prefix(with_state_emoji=with_state_emoji)
-        else:
-            return ""
+        return ""
 
     def _print_dots(self) -> None:
         count = 1
@@ -106,7 +105,7 @@ class Thinker:
         return self
 
     def __exit__(
-        self, exc_type: Type[BaseException] | None, exc_value: BaseException | None, traceback: BaseException | None
+        self, exc_type: type[BaseException] | None, exc_value: BaseException | None, traceback: BaseException | None
     ) -> None:
         if self.tty:
             self._stop_event.set()

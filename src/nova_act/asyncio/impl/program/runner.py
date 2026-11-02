@@ -32,7 +32,12 @@ from nova_act.types.act_errors import (
 )
 from nova_act.types.errors import InterpreterError
 from nova_act.types.events import EventType
-from nova_act.types.guardrail import GuardrailCallable, GuardrailDecision, GuardrailInputState
+from nova_act.types.guardrail import (
+    GuardrailCallable,
+    GuardrailDecision,
+    GuardrailInputState,
+    GuardrailStateType,
+)
 from nova_act.util.event_handler import EventHandler
 from nova_act.util.logging import SessionState, set_logging_session_state, trace_log_lines
 
@@ -40,11 +45,10 @@ from nova_act.util.logging import SessionState, set_logging_session_state, trace
 def format_return_value(return_value: JsonValue) -> str:
     if isinstance(return_value, str):
         return return_value
-    else:
-        try:
-            return json.dumps(return_value, indent=2)
-        except Exception:
-            return str(return_value)
+    try:
+        return json.dumps(return_value, indent=2)
+    except Exception:
+        return str(return_value)
 
 
 class SafeLogger(Protocol):
@@ -57,8 +61,7 @@ def get_safe_log() -> SafeLogger:
     """Return a Thinker if we're in context, else trace_log_lines."""
     if (thinker := get_current_thinker()) is not None:
         return thinker.safe_log
-    else:
-        return trace_log_lines
+    return trace_log_lines
 
 
 class ProgramRunner:
@@ -114,11 +117,19 @@ class ProgramRunner:
                     assert self.actuator is not None  # for mypy
                     await self.actuator.lock_context()
 
-                # Check state guardrail if configured
-                # Note that we also run the guardrail within url.py:validate_url()
+                # Detective state-guardrail check (post-observation). Runs for every actuator, so a
+                # custom actuator (which does not install the preventive navigation hook) is still
+                # covered. It also catches client-side navigations (e.g. history.pushState) that issue
+                # no navigation request and are invisible to the preventive hook. The default browser
+                # actuator additionally enforces the guardrail preventively, before navigation.
                 if self.state_guardrail is not None and call.source.name == "takeObservation":
-                    observation = cast(BrowserObservation, return_value)
-                    decision = self.state_guardrail(GuardrailInputState(browser_url=observation["activeURL"]))
+                    observation = cast("BrowserObservation", return_value)
+                    decision = self.state_guardrail(
+                        GuardrailInputState(
+                            browser_url=observation["activeURL"],
+                            state_type=GuardrailStateType.OBSERVATION,
+                        )
+                    )
                     if decision == GuardrailDecision.BLOCK:
                         safe_log("State guardrail denied action", logging.WARNING)
                         raise ActStateGuardrailError()

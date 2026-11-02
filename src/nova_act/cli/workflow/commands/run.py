@@ -71,7 +71,7 @@ def _resolve_payload(payload_file: str, payload: str) -> str:
 
     if payload_file:
         try:
-            with open(file=payload_file, mode="r") as f:
+            with open(file=payload_file) as f:
                 content = f.read()
             json.loads(s=content)  # Validate JSON
             return content
@@ -234,6 +234,11 @@ def run(
     timeout: int = DEFAULT_READ_TIMEOUT,
 ) -> None:
     """Execute workflow on AgentCore Runtime."""
+    # Initialize names the except ClientError handler reads, so a failure before they are
+    # assigned (e.g. expired credentials raising from auto_detect_account_id) surfaces the
+    # real error instead of UnboundLocalError.
+    resolved_region: str | None = None
+    account_id: str | None = None
     try:
         # Lazy-import heavy dependencies at call site
         from boto3 import Session

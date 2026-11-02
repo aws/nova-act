@@ -11,8 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Optional
-
 from playwright.async_api import FileChooser, Page
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
@@ -23,7 +21,7 @@ async def click_and_maybe_return_file_chooser(
     y: float,
     *,
     timeout_ms: int = 600,
-) -> Optional[FileChooser]:
+) -> FileChooser | None:
     """
     Perform a single *left click* at (x, y), wrapped in Playwright's `expect_file_chooser`.
     Returns the `FileChooser` if clicking opened a native file chooser dialog; otherwise returns None.

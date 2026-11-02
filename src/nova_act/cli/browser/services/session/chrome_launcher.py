@@ -231,11 +231,10 @@ class ChromeLauncher:
                 )
 
             return ProfileResolution(user_data_dir=profile_dir)
-        else:
-            user_data_dir = Path(self.session_dir) / session_id / "profile"
-            user_data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-            os.chmod(user_data_dir, 0o700)
-            return ProfileResolution(user_data_dir=user_data_dir)
+        user_data_dir = Path(self.session_dir) / session_id / "profile"
+        user_data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.chmod(user_data_dir, 0o700)
+        return ProfileResolution(user_data_dir=user_data_dir)
 
     def _is_lock_stale(self, lock_file: Path) -> bool:
         """Check if a SingletonLock is stale (owning process no longer running).

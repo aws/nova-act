@@ -13,13 +13,11 @@
 # limitations under the License.
 """Tag generation utilities for workflow deployments."""
 
-from typing import Dict
-
 # WORKFLOW_TAG_KEY helps associate AWS resources with WorkflowDefinition
 WORKFLOW_TAG_KEY = "nova-act-workflow-definition-v1"
 
 
-def generate_workflow_tags(workflow_definition_name: str) -> Dict[str, str]:
+def generate_workflow_tags(workflow_definition_name: str) -> dict[str, str]:
     """Generate standardized tags for AgentCore runtime deployment.
 
     Args:

@@ -18,12 +18,11 @@ invoke_agent_runtime calls, handling different content types according to AWS sp
 """
 
 import json
-from typing import Dict, Union
 
 from botocore.response import StreamingBody
 
 
-def parse_invoke_response(response: Dict[str, Union[str, StreamingBody]]) -> Dict[str, str]:
+def parse_invoke_response(response: dict[str, str | StreamingBody]) -> dict[str, str]:
     """Parse invoke_agent_runtime response handling StreamingBody properly.
 
     Args:
@@ -47,7 +46,7 @@ def parse_invoke_response(response: Dict[str, Union[str, StreamingBody]]) -> Dic
     return {"response": parsed_content}
 
 
-def _is_valid_response(response: Union[Dict[str, Union[str, StreamingBody]], str, None]) -> bool:
+def _is_valid_response(response: dict[str, str | StreamingBody] | str | None) -> bool:
     """Validate response is a dictionary."""
     return isinstance(response, dict)
 
@@ -65,11 +64,10 @@ def _handle_streaming_body(streaming_body: StreamingBody, content_type: str) -> 
     try:
         if "text/event-stream" in content_type:
             return _parse_event_stream(streaming_body)
-        elif "application/json" in content_type:
+        if "application/json" in content_type:
             return _parse_json_response(streaming_body)
-        else:
-            # Fallback: read as raw text
-            return streaming_body.read().decode("utf-8")
+        # Fallback: read as raw text
+        return streaming_body.read().decode("utf-8")
     except Exception as e:
         return f"Error parsing response: {str(e)}"
 

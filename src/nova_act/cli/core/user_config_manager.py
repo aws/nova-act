@@ -13,7 +13,7 @@
 # limitations under the License.
 """User configuration manager for YAML-based config."""
 
-from typing import Any, Dict
+from typing import Any
 
 import yaml
 
@@ -66,11 +66,11 @@ class UserConfigManager:
         get_cli_config_dir().mkdir(exist_ok=True)
 
     @staticmethod
-    def _load_user_config(data: Dict[str, Any]) -> UserConfig:  # type: ignore[explicit-any]
+    def _load_user_config(data: dict[str, Any]) -> UserConfig:  # type: ignore[explicit-any]
         """Load UserConfig from dictionary."""
         return UserConfig.model_validate(data)
 
     @staticmethod
-    def _convert_config_to_dict(config: UserConfig) -> Dict[str, Any]:  # type: ignore[explicit-any]
+    def _convert_config_to_dict(config: UserConfig) -> dict[str, Any]:  # type: ignore[explicit-any]
         """Convert UserConfig to dictionary."""
         return config.model_dump()

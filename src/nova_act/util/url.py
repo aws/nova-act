@@ -20,7 +20,12 @@ import certifi
 
 from nova_act.types.act_errors import ActStateGuardrailError
 from nova_act.types.errors import InvalidCertificate, InvalidURL
-from nova_act.types.guardrail import GuardrailCallable, GuardrailDecision, GuardrailInputState
+from nova_act.types.guardrail import (
+    GuardrailCallable,
+    GuardrailDecision,
+    GuardrailInputState,
+    GuardrailStateType,
+)
 from nova_act.util.path_validator import validate_file_url
 
 
@@ -110,9 +115,11 @@ def validate_url(
     if parsed_url.scheme in http_schemes and not parsed_url.netloc:
         raise InvalidURL(f"Invalid URL format. URL: '{url}'")
 
-    # If a state guardrail is defined, check it
+    # If a state guardrail is defined, check it. This guards explicit navigations for callers that
+    # do not install the navigation guardrail hook on the browser context.
     if state_guardrail is not None:
-        decision = state_guardrail(GuardrailInputState(browser_url=url))
+        # validate_url gates a navigation before it happens, so this is a proposed action.
+        decision = state_guardrail(GuardrailInputState(browser_url=url, state_type=GuardrailStateType.PROPOSED_ACTION))
         if decision == GuardrailDecision.BLOCK:
             raise ActStateGuardrailError(f"State guardrail blocked URL: '{url}'")
 

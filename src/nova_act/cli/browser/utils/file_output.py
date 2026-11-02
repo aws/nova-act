@@ -84,10 +84,8 @@ def format_result(result: object, output_format: str) -> str:
     if output_format == "json":
         if isinstance(result, dict):
             return json.dumps(result, indent=2)
-        else:
-            # Wrap string result in JSON object
-            return json.dumps({"result": result}, indent=2)
-    else:
-        if isinstance(result, (dict, list)):
-            return json.dumps(result, indent=2, default=str)
-        return str(result)
+        # Wrap string result in JSON object
+        return json.dumps({"result": result}, indent=2)
+    if isinstance(result, (dict, list)):
+        return json.dumps(result, indent=2, default=str)
+    return str(result)

@@ -112,7 +112,7 @@ def get_or_create_session(
 
 
 def build_browser_options_from_params(
-    params: "CommandParams",
+    params: CommandParams,
     *,
     nova_args: dict[str, object] | None = None,
     auth_config: AuthConfig | None = None,
@@ -253,7 +253,7 @@ from nova_act.cli.browser.utils.orientation import (  # noqa: E402 -- deferred i
 def _handle_post_command(
     nova_act: NovaAct,
     session_info: SessionInfo,
-    params: "CommandParams",
+    params: CommandParams,
     command_name: str,
     cmd_start: datetime,
     step_snapshots: list[list[SnapshotElement]],
@@ -303,7 +303,7 @@ def command_session(
     command_name: str,
     manager: SessionManager,
     session_info: SessionInfo,
-    params: "CommandParams",
+    params: CommandParams,
     log_args: dict[str, object] | None = None,
 ) -> Iterator[NovaAct]:
     """Unified context manager combining log capture, session locking, and auto-screenshot.
@@ -379,7 +379,7 @@ def command_session(
 
 
 def prepare_session(
-    params: "CommandParams",
+    params: CommandParams,
     starting_page: str | None,
 ) -> PreparedSession:
     """Parse nova args, prepare browser options, and get or create a session.

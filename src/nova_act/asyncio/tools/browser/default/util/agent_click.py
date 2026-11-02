@@ -178,7 +178,7 @@ async def handle_special_elements(page: Page, x: float, y: float) -> None:
             raise AgentRedirectError(
                 "This color input cannot be clicked. Use agentType(<value>, <same bbox>), with this format: #RRGGBB"
             )
-        elif input_type == "range":
+        if input_type == "range":
             range_min = element_info.get("attributes", {}).get("min", "0")
             range_max = element_info.get("attributes", {}).get("max", "100")
             raise AgentRedirectError(

@@ -24,12 +24,26 @@ from nova_act.util.logging import setup_logging
 _LOGGER = setup_logging(__name__)
 
 
+def get_bundled_playwright_paths() -> tuple[str | None, str | None]:
+    """Return (shared_libraries_path, browsers_path) if bundled Playwright deps exist in the installed package."""
+    package_dir = Path(__file__).parent.parent  # nova_act/
+    deps_dir = package_dir / "_playwright_deps"
+
+    shared_libs = deps_dir / "shared_libraries"
+    browsers = deps_dir / "ms-playwright"
+
+    return (
+        str(shared_libs) if shared_libs.exists() else None,
+        str(browsers) if browsers.exists() else None,
+    )
+
+
 def should_install_chromium_dependencies() -> bool:
     """Determine whether to install Chromium dependencies.
 
     OS specifics
-    * Amazon Linux below 2023 - glibc version is too low to support the NovaAct Python SDK
-    * Amazon Linux 2023 - install Chromium without dependencies
+    * Amazon Linux (AL2 and AL2023) - do not install deps (bundled deps expected)
+    * Other Linux distros - install Chromium with dependencies
 
     Returns
     -------
@@ -39,7 +53,7 @@ def should_install_chromium_dependencies() -> bool:
     Raises
     ------
     UnsupportedOperatingSystem
-        If the underlying operating system is a version of Amazon Linux below 2023.
+        If on Amazon Linux without bundled Playwright dependencies.
     """
     if system() != "Linux":
         return True
@@ -50,10 +64,10 @@ def should_install_chromium_dependencies() -> bool:
         os_release = {}
 
     if os_release.get("NAME", "") == "Amazon Linux":
-        if os_release.get("VERSION", "") == "2023":
+        shared_libs_path, browsers_path = get_bundled_playwright_paths()
+        if shared_libs_path and browsers_path:
             return False
-        else:
-            raise UnsupportedOperatingSystem("NovaAct does not support Amazon Linux below version 2023")
+        raise UnsupportedOperatingSystem("NovaAct does not support Amazon Linux below version 2023")
 
     return True
 

@@ -247,7 +247,7 @@ def compile_feature(
     compile_fn = _compile_steps_aggressive if strategy == "aggressive" else _compile_steps_conservative
 
     for child in feature.get("children", []):
-        scenario = cast(ScenarioEnvelope, child).get("scenario")
+        scenario = cast("ScenarioEnvelope", child).get("scenario")
         if not scenario:
             continue
 

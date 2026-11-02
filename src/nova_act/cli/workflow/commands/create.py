@@ -66,6 +66,11 @@ def create(
     skip_s3_creation: bool = False,
 ) -> None:
     """Register a new workflow in the configuration."""
+    # Initialize names the except ClientError handler reads, so a failure before they are
+    # assigned (e.g. expired credentials raising from auto_detect_account_id) surfaces the
+    # real error instead of UnboundLocalError.
+    effective_region: str | None = None
+    account_id: str | None = None
     try:
         # Lazy-import heavy dependencies at call site
         from boto3 import Session

@@ -14,24 +14,24 @@
 import asyncio
 import os
 import subprocess
-import sys
 from typing import Any
 
 import requests
 from install_playwright import install
-from playwright.async_api import BrowserContext, Page, Route, async_playwright
+from playwright.async_api import BrowserContext, Page, async_playwright
 from playwright.async_api import Error as PlaywrightError
 
 from nova_act.asyncio.tools.browser.default.playwright_instance_options import PlaywrightInstanceOptions
 from nova_act.browser_auth.browser_session_provider import BrowserSessionProvider
-from nova_act.impl.common import quit_default_chrome_browser, should_install_chromium_dependencies
-from nova_act.impl.inputs import validate_url_ssl_certificate
+from nova_act.impl.common import (
+    get_bundled_playwright_paths,
+    quit_default_chrome_browser,
+    should_install_chromium_dependencies,
+)
 from nova_act.types.errors import (
     BrowserAuthError,
     ClientNotStarted,
-    InvalidCertificate,
     InvalidPlaywrightState,
-    InvalidURL,
     PageNotFoundError,
     StartFailed,
     ValidationFailed,
@@ -44,11 +44,6 @@ _LOGGER = setup_logging(__name__)
 _DEFAULT_USER_AGENT_SUFFIX = " Agent-NovaAct/0.9"
 _MACOS_LOCAL_CHROME_PATH = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 _CDP_PORT = 9222
-
-
-def detect_interactive_mode() -> bool:
-    """Detect if running in interactive Python interpreter."""
-    return hasattr(sys, "ps1")
 
 
 class PlaywrightInstanceManager:
@@ -72,6 +67,7 @@ class PlaywrightInstanceManager:
         self.user_agent = options.user_agent
         self._record_video = options.record_video
         self._ignore_https_errors = options.ignore_https_errors
+        self._skip_ssl_precheck = options.skip_ssl_precheck
         self._go_to_url_timeout = options.go_to_url_timeout
         self._use_default_chrome_browser = options.use_default_chrome_browser
         self._cdp_headers = options.cdp_headers
@@ -96,13 +92,9 @@ class PlaywrightInstanceManager:
         else:
             self._user_browser_args = options.user_browser_args
 
-        # For local executions Playwright will resolve the the modifier key appropriately.
+        # For local executions Playwright will resolve the modifier key appropriately.
         # Docs: https://playwright.dev/docs/api/class-keyboard#keyboard-press
         self._modifier_key = "ControlOrMeta"
-        self._safe_site_validation_error: InvalidURL | InvalidCertificate | None = None
-        self._ssl_hook_enabled = False
-        # Static flag: are we running in an interactive REPL? Never changes after init.
-        self._is_interactive = detect_interactive_mode()
 
     @property
     def started(self) -> bool:
@@ -113,7 +105,7 @@ class PlaywrightInstanceManager:
         """Go to the starting page and exit."""
         if self._cdp_use_existing_page:
             return trusted_page
-        elif self._starting_page is None:
+        if self._starting_page is None:
             raise ValueError("starting_page cannot be None unless connecting to existing CDP context.")
 
         first_page = await context.new_page()
@@ -151,51 +143,6 @@ class PlaywrightInstanceManager:
             context.set_default_navigation_timeout(self._go_to_url_timeout)
         return context
 
-    async def setup_ssl_validation_hook(self, context: BrowserContext) -> None:
-        """Set up SSL certificate validation for all navigation requests."""
-        if self._ssl_hook_enabled:
-            return
-
-        # Skip hook setup when ignore_https_errors is True.
-        if self._ignore_https_errors:
-            return
-
-        async def handle_navigation(route: Route) -> None:
-            if route.request.is_navigation_request() and route.request.url:
-                try:
-                    validate_url_ssl_certificate(self._ignore_https_errors, route.request.url)
-                    await route.continue_()
-                except (InvalidCertificate, InvalidURL) as e:
-                    if self._safe_site_validation_error is None:
-                        self._safe_site_validation_error = e
-                    # Force navigate to a safe page
-                    await route.fulfill(body="<html><body>SSL Error</body></html>", content_type="text/html")
-                    raise
-            else:
-                await route.continue_()
-
-        await context.route("**", handle_navigation)
-        self._ssl_hook_enabled = True
-
-    def clear_ssl_error(self) -> None:
-        """Explicitly clear the stored SSL validation error."""
-        self._safe_site_validation_error = None
-
-    async def disable_ssl_validation_hook(self, force: bool = False) -> None:
-        """Disable SSL validation for manual browsing.
-
-        Args:
-            force: If True, disable even in non-interactive mode (for HITL).
-        """
-        if self._context and self._ssl_hook_enabled and (self._is_interactive or force):
-            await self._context.unroute_all(behavior="wait")
-            self._ssl_hook_enabled = False
-
-    @property
-    def safe_site_validation_error(self) -> InvalidURL | InvalidCertificate | None:
-        """Get any stored SSL validation error without clearing it."""
-        return self._safe_site_validation_error
-
     async def start(self, session_logs_directory: str | None) -> None:
         """Start and attach the Browser"""
         if self._context is not None:
@@ -206,6 +153,17 @@ class PlaywrightInstanceManager:
             assert session_logs_directory is not None, "Started without a logs dir when record_video is True"
 
         self._session_logs_directory = session_logs_directory
+
+        # Configure bundled Playwright deps before starting the driver process.
+        # PLAYWRIGHT_BROWSERS_PATH must be set before async_playwright().start()
+        # because the Node.js driver reads it at spawn time.
+        shared_libs_path, browsers_path = get_bundled_playwright_paths()
+        if shared_libs_path:
+            existing = os.environ.get("LD_LIBRARY_PATH", "")
+            os.environ["LD_LIBRARY_PATH"] = f"{shared_libs_path}:{existing}" if existing else shared_libs_path
+        if browsers_path:
+            os.environ["PLAYWRIGHT_BROWSERS_PATH"] = browsers_path
+
         try:
             # Start a new playwright instance if one was not provided by the user
             if self._playwright is None:
@@ -281,7 +239,7 @@ class PlaywrightInstanceManager:
 
                 # For CDP executions both the 'modelName' and 'modelVersion' values will be non-empty for only MacOS.
                 # Docs: https://chromedevtools.github.io/devtools-protocol/tot/SystemInfo/#method-getInfo
-                # Source: https://tiny.amazon.com/vhliqjec/sourchroorgchrochrosrcmain
+                # Source: https://source.chromium.org/chromium/chromium/src/+/main:third_party/angle/src/gpu_info_util/SystemInfo.h;l=89-93
                 model_name = system_info.get("modelName", "")
                 model_version = system_info.get("modelVersion", "")
                 if model_name and model_version:
@@ -298,7 +256,7 @@ class PlaywrightInstanceManager:
                     trusted_page = await context.new_page()
 
             else:
-                if not os.environ.get("NOVA_ACT_SKIP_PLAYWRIGHT_INSTALL"):
+                if not os.environ.get("NOVA_ACT_SKIP_PLAYWRIGHT_INSTALL") and not browsers_path:
                     with_deps = should_install_chromium_dependencies()
                     if not install(self._playwright.chromium, with_deps=with_deps):
                         raise StartFailed(
@@ -396,7 +354,16 @@ class PlaywrightInstanceManager:
         except Exception as e:
             _LOGGER.exception(f"Failed to start and initialize Playwright for NovaAct: {e}")
             await self.stop()
-            raise StartFailed("Failed to start and initialize Playwright for NovaAct") from e
+            message = "Failed to start and initialize Playwright for NovaAct"
+            if "Page crashed" in str(e):
+                message += (
+                    ". The browser page crashed — this is common on minimal Linux environments "
+                    "(e.g., EC2 instances, containers). Try:\n"
+                    "  1. Setting NOVA_ACT_BROWSER_ARGS='--no-sandbox --disable-dev-shm-usage --disable-gpu --single-process'\n"
+                    "  2. Installing system fonts (e.g., on AL2023: `sudo dnf install -y dejavu-sans-fonts`)\n"
+                    "  3. If the issue persists, the host may have insufficient memory for the browser."
+                )
+            raise StartFailed(message) from e
 
     @staticmethod
     async def _prepare_for_close(context: BrowserContext) -> None:
@@ -526,7 +493,8 @@ class PlaywrightInstanceManager:
 
     @property
     def _active_page(self) -> Page:
-        assert self._context is not None and len(self._context.pages) > 0
+        if self._context is None or not self._context.pages:
+            raise InvalidPlaywrightState("No open pages in the browser context; the browser or tab was closed.")
         return self._context.pages[-1]
 
     @property

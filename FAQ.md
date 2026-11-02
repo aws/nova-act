@@ -41,7 +41,7 @@ We have not published timelines for additional region availability.
 
 We highly encourage users to share their workflows with others in the community. Please make a Pull Request (PR) with your script in the Nova Act GitHub [samples folder](https://github.com/aws/nova-act/tree/main/src/nova_act/samples). Our team will analyze your workflow and, if approved, it will be merged into the repository.
 
-You can also share any workflows that you create using the [nova.amazon.com playground](https://internal.nova.amazon.com/act?tab=playground). After you create and run your agent, you can post it on the Nova Public Gallery by clicking the 'Share' button.
+You can also share any workflows that you create using the [nova.amazon.com playground](https://nova.amazon.com/act?tab=playground). After you create and run your agent, you can post it on the Nova Public Gallery by clicking the 'Share' button.
 
 ### General Question 7: Where can I find more information?
 

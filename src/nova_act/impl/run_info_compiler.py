@@ -801,7 +801,7 @@ class RunInfoCompiler:
         nonce = secrets.token_urlsafe(32)
 
         # Compile Workflow View
-        html_content = HTML_TEMPLATE.format(
+        return HTML_TEMPLATE.format(
             run_info=run_info,
             session_id=act.session_id,
             act_id=act.id,
@@ -810,7 +810,6 @@ class RunInfoCompiler:
             nonce=nonce,
             time_worked=time_worked_display,
         )
-        return html_content
 
     def compile(self, act: Act, result: ActResult | None = None) -> str:
         """

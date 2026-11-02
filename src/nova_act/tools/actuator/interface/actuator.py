@@ -23,6 +23,7 @@ from strands.tools.decorator import DecoratedFunctionTool
 from strands.types.tools import ToolSpec
 
 from nova_act.tools.compatibility import safe_tool_spec
+from nova_act.types.secrets import Secrets
 
 
 @deprecated(version="2.0.200", reason="the `@action` decorator is no longer required.")
@@ -57,6 +58,9 @@ class ActuatorBase(ABC):
 
     domain: str | None = None
     """An optional description of the actuation domain."""
+
+    _secrets: Secrets | None = None
+    """Optional Secrets instance for placeholder resolution in typing actions."""
 
     def start(self, **kwargs: Any) -> None:  # type: ignore[explicit-any]
         """Prepare for actuation."""

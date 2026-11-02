@@ -68,10 +68,9 @@ def coerce_type(value: str, target_type: type) -> object:
     if target_type is bool:
         if value.lower() in ("true", "1", "yes"):
             return True
-        elif value.lower() in ("false", "0", "no"):
+        if value.lower() in ("false", "0", "no"):
             return False
-        else:
-            raise ValueError(f"Cannot convert '{value}' to bool")
+        raise ValueError(f"Cannot convert '{value}' to bool")
 
     # Handle int
     if target_type is int:

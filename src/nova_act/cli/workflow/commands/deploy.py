@@ -94,6 +94,11 @@ def deploy(
     remote_build: bool,
 ) -> None:
     """Deploy workflow to agentcore service."""
+    # Initialize names the except ClientError handler reads, so a failure before they are
+    # assigned (e.g. expired credentials raising from auto_detect_account_id) surfaces the
+    # real error instead of UnboundLocalError.
+    effective_region: str | None = None
+    effective_account_id: str | None = None
     try:
         # Lazy-import heavy dependencies at call site
         import subprocess

@@ -28,7 +28,7 @@ class StepServerTimeTracker:
 
     def __new__(
         cls, browser_context: BrowserContext | None = None, endpoint_pattern: str = "/step"
-    ) -> "StepServerTimeTracker":
+    ) -> StepServerTimeTracker:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False

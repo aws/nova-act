@@ -115,7 +115,7 @@ class SessionPersistence:
             json.JSONDecodeError: If session file is corrupted
         """
         file_path = self.get_session_file_path(session_id)
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             result: dict[str, object] = json.load(f)
             return result
 
@@ -236,7 +236,7 @@ class SessionPersistence:
             if session_file.stem in exclude_ids:
                 continue
             try:
-                with open(session_file, "r", encoding="utf-8") as f:
+                with open(session_file, encoding="utf-8") as f:
                     metadata = json.load(f)
                     if port := metadata.get("cdp_port"):
                         ports.add(port)
