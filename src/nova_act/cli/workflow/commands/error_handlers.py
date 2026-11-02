@@ -30,14 +30,16 @@ def handle_credential_error() -> None:
     raise styled_error_exception(get_credential_error_message())
 
 
-def handle_client_error(error: ClientError, workflow_name: str, region: str, account_id: str, context: str) -> None:
+def handle_client_error(
+    error: ClientError, workflow_name: str, region: str | None, account_id: str | None, context: str
+) -> None:
     """Handle AWS ClientError with permission detection.
 
     Args:
         error: The ClientError from AWS.
         workflow_name: Name of the workflow being operated on.
-        region: AWS region.
-        account_id: AWS account ID.
+        region: AWS region, or None if the error was raised before it was resolved.
+        account_id: AWS account ID, or None if the error was raised before it was detected.
         context: Description of the operation for the fallback error message (e.g. "deployment").
     """
     if is_permission_error(error):

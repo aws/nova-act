@@ -13,8 +13,6 @@
 # limitations under the License.
 """Pydantic types for AgentCore client operations."""
 
-from typing import Dict, List
-
 from pydantic import BaseModel
 
 
@@ -41,8 +39,8 @@ class AgentRuntimeConfig(BaseModel):
 
     container_uri: str
     role_arn: str
-    environment_variables: Dict[str, str] | None = None
-    tags: Dict[str, str] | None = None
+    environment_variables: dict[str, str] | None = None
+    tags: dict[str, str] | None = None
 
 
 class AgentRuntimeResponse(BaseModel):
@@ -62,9 +60,9 @@ class CreateAgentRuntimeRequest(BaseModel):
     agentRuntimeName: str
     agentRuntimeArtifact: AgentRuntimeArtifact
     roleArn: str
-    networkConfiguration: Dict[str, str]
-    environmentVariables: Dict[str, str] | None = None
-    tags: Dict[str, str] | None = None
+    networkConfiguration: dict[str, str]
+    environmentVariables: dict[str, str] | None = None
+    tags: dict[str, str] | None = None
 
 
 class UpdateAgentRuntimeRequest(BaseModel):
@@ -75,8 +73,8 @@ class UpdateAgentRuntimeRequest(BaseModel):
     agentRuntimeId: str
     agentRuntimeArtifact: AgentRuntimeArtifact
     roleArn: str
-    networkConfiguration: Dict[str, str]
-    environmentVariables: Dict[str, str] | None = None
+    networkConfiguration: dict[str, str]
+    environmentVariables: dict[str, str] | None = None
 
 
 class ListAgentRuntimesRequest(BaseModel):
@@ -119,7 +117,7 @@ class ListAgentRuntimesResponse(BaseModel):
 
     model_config = {"extra": "allow"}
 
-    agentRuntimes: List[AgentRuntimeSummary]
+    agentRuntimes: list[AgentRuntimeSummary]
     nextToken: str | None = None
 
 
@@ -143,5 +141,5 @@ class InvokeAgentRuntimeResponse(BaseModel):
 
     model_config = {"extra": "allow"}
 
-    response: Dict[str, object]
+    response: dict[str, object]
     contentType: str | None = None  # MIME type for response parsing

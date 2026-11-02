@@ -20,7 +20,7 @@ import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from nova_act.cli.core.config import (
     get_account_dir,
@@ -113,7 +113,7 @@ class StateManager:
             # Atomic write
             self._write_state_to_temp_file(state_file=state_file, state=state)
 
-    def list_workflows(self) -> List[WorkflowInfo]:
+    def list_workflows(self) -> list[WorkflowInfo]:
         """List workflows in current region."""
         state = self.get_region_state()
         return list(state.workflows.values())
@@ -163,11 +163,11 @@ class StateManager:
             raise ConfigurationError(message) from e
 
     @staticmethod
-    def _load_region_state(data: Dict[str, Any]) -> RegionState:  # type: ignore[explicit-any]
+    def _load_region_state(data: dict[str, Any]) -> RegionState:  # type: ignore[explicit-any]
         """Load RegionState from dictionary."""
         return RegionState.model_validate(data)
 
     @staticmethod
-    def _convert_state_to_dict(state: RegionState) -> Dict[str, Any]:  # type: ignore[explicit-any]
+    def _convert_state_to_dict(state: RegionState) -> dict[str, Any]:  # type: ignore[explicit-any]
         """Convert RegionState to dictionary."""
         return state.model_dump()

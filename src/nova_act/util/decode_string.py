@@ -43,11 +43,10 @@ def safe_string(s: str) -> str:
                 # This is a high surrogate, we need to find the low surrogate
                 return chr(code_point)
             # Check if this is a low surrogate (0xDC00-0xDFFF)
-            elif 0xDC00 <= code_point <= 0xDFFF:
+            if 0xDC00 <= code_point <= 0xDFFF:
                 return chr(code_point)
-            else:
-                # Regular unicode character
-                return chr(code_point)
+            # Regular unicode character
+            return chr(code_point)
 
         result = re.sub(pattern, replace_match, text)
 
@@ -73,9 +72,7 @@ def safe_string(s: str) -> str:
 
     # Handle escaped backslashes (\\) -> (\)
     # This needs to be done carefully to not interfere with other escape sequences
-    decoded = decoded.replace("\\\\", "\\")
-
-    return decoded
+    return decoded.replace("\\\\", "\\")
 
 
 def decode_awl_raw_program(awl_raw_program: str) -> str:
@@ -84,5 +81,4 @@ def decode_awl_raw_program(awl_raw_program: str) -> str:
     decoded_lines = []
     for line in lines:
         decoded_lines.append(safe_string(line))
-    awl_program = "\n".join(decoded_lines)
-    return awl_program
+    return "\n".join(decoded_lines)

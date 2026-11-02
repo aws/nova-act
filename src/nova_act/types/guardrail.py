@@ -24,10 +24,22 @@ class GuardrailDecision(Enum):
     BLOCK = auto()
 
 
+class GuardrailStateType(Enum):
+    """Whether the guardrail is being consulted about the current observed state or a pending action.
+
+    OBSERVATION is the state the agent has already reached; PROPOSED_ACTION is a navigation that is
+    about to happen and can still be prevented (e.g. a click- or redirect-triggered navigation).
+    """
+
+    OBSERVATION = auto()
+    PROPOSED_ACTION = auto()
+
+
 class GuardrailInputState(NamedTuple):
     """Input representing state of the agent on which to apply a guardrail policy."""
 
     browser_url: str
+    state_type: GuardrailStateType = GuardrailStateType.OBSERVATION
 
 
 GuardrailCallable = Callable[[GuardrailInputState], GuardrailDecision]

@@ -17,7 +17,7 @@ import os
 import platform
 import shutil
 import tempfile
-from typing import Literal, Mapping, Type, cast
+from typing import Mapping, cast
 
 from boto3 import Session
 from playwright.async_api import Page, Playwright
@@ -107,8 +107,7 @@ MAX_ACT_TRACE_LEN = 1000
 _LOGGER = setup_logging(__name__)
 _TRACE_LOGGER = make_trace_logger()
 
-
-ManagedActuatorType = Type[DefaultNovaLocalBrowserActuator | ExtensionActuator]
+ManagedActuatorType = type[DefaultNovaLocalBrowserActuator | ExtensionActuator]
 
 
 class NovaAct:
@@ -158,6 +157,7 @@ class NovaAct:
         go_to_url_timeout: int | None = None,
         headless: bool = False,
         ignore_https_errors: bool = False,
+        skip_ssl_precheck: bool = False,
         security_options: SecurityOptions | None = None,
         logs_directory: str | None = None,
         nova_act_api_key: str | None = None,
@@ -246,6 +246,10 @@ class NovaAct:
             Max wait time on initial page load in seconds
         ignore_https_errors: bool
             If True, ignore certificate validation errors for https urls. Defaults to False.
+        skip_ssl_precheck: bool
+            If True, skip the SDK-level SSL certificate pre-flight check. Defaults to False.
+            Use this when the browser environment has its own trusted Root CA that the SDK
+            host does not have access to (e.g., AgentCore Browser with custom certificates).
         state_guardrail: GuardrailCallable, optional
             A callback function that takes a GuardrailInputState and returns a GuardrailDecision.
             Called after taking an observation but before invoking step on the backend.
@@ -257,6 +261,11 @@ class NovaAct:
             Use the locally installed Chrome browser. Only works on MacOS.
         preview: PreviewFeatures
             Optional preview features for opt-in.
+            secrets: Secrets, optional
+                Sensitive data (e.g. passwords, API keys) that the actuator can securely
+                reference without sending to the backend. Prompts use placeholders
+                (e.g. ``{{password}}``) and real values are substituted by the actuator
+                at type-time. See ``Secrets`` for details.
         security_options: SecurityOptions, optional
             Set of security-related parameters that overwrite default agent behavior
             allowed_file_open_paths: list[str]
@@ -298,13 +307,10 @@ class NovaAct:
 
 
         if preview is not None:
-            _LOGGER.warning(
-                "No preview features in this release! Check back soon!\n\n"
-                "• If you are looking for Playwright Actuation, it is now the default, so no parameters are needed!\n"
-                "• If you are looking for Custom Actuators, they can now be passed directly in the `actuator` param."
-            )
             if not actuator and (custom_actuator := preview.get("custom_actuator")):
-                actuator = cast(BrowserActuatorBase, custom_actuator)
+                actuator = cast("BrowserActuatorBase", custom_actuator)
+
+        self._secrets = preview.get("secrets") if preview else None
 
         if actuator is ExtensionActuator:
             _LOGGER.warning(
@@ -352,6 +358,7 @@ class NovaAct:
             proxy=proxy,
             state_guardrail=state_guardrail,
             ignore_screen_dims_check=ignore_screen_dims_check,
+            skip_ssl_precheck=skip_ssl_precheck,
         )
 
         self._session_user_data_dir_is_temp: bool = False
@@ -429,6 +436,7 @@ class NovaAct:
             user_agent=user_agent,
             record_video=bool(record_video and self._logs_directory),
             ignore_https_errors=ignore_https_errors,
+            skip_ssl_precheck=skip_ssl_precheck,
             go_to_url_timeout=self.go_to_url_timeout,
             use_default_chrome_browser=use_default_chrome_browser,
             cdp_headers=cdp_headers,
@@ -462,7 +470,8 @@ class NovaAct:
             _LOGGER.debug(f"Using actuator type: {actuator.__name__}")
             _save_dom = self._replayable
             try:
-                self._actuator = actuator(  # type: ignore[call-arg, unused-ignore]
+                self._actuator = self._instantiate_actuator(
+                    actuator,
                     playwright_options=playwright_options,
                     state_guardrail=state_guardrail,
                     save_dom=_save_dom,
@@ -479,6 +488,9 @@ class NovaAct:
                 "Deviations from NovaAct's standard observation and I/O formats may impact model performance"
             )
             self._actuator = actuator
+
+        # Wire secrets into actuator for placeholder resolution
+        self._actuator._secrets = self._secrets
 
         # Get human input callbacks
         self._human_input_callbacks = human_input_callbacks or self._get_default_human_input_callbacks()
@@ -497,8 +509,8 @@ class NovaAct:
             controller=self._controller,
             human_input_callbacks=self._human_input_callbacks,
             tools=self._client_tools,
-            state_guardrail=state_guardrail,
             actuator=self._actuator,
+            state_guardrail=state_guardrail,
         )
 
 
@@ -587,7 +599,7 @@ class NovaAct:
         return self
 
     async def __aexit__(
-        self, exc_type: Type[BaseException] | None, exc_value: BaseException | None, traceback: BaseException | None
+        self, exc_type: type[BaseException] | None, exc_value: BaseException | None, traceback: BaseException | None
     ) -> None:
         if not self.started:
             _LOGGER.warning("Attention: Client is already stopped.")
@@ -625,8 +637,7 @@ class NovaAct:
                 "If you are using playwright, ensure you are implementing PlaywrightPageManagerBase to get page access"
             )
 
-        maybe_playwright_page = self._actuator.get_page(index)
-        return maybe_playwright_page
+        return self._actuator.get_page(index)
 
     @property
     def pages(self) -> list[Page]:
@@ -645,8 +656,7 @@ class NovaAct:
                 "If you are using playwright, ensure you are implementing PlaywrightPageManagerBase to get page access"
             )
 
-        maybe_playwright_pages = self._actuator.pages
-        return maybe_playwright_pages
+        return self._actuator.pages
 
     async def go_to_url(self, url: str) -> None:
         """Navigates to the specified URL and waits for the page to settle."""
@@ -736,8 +746,7 @@ class NovaAct:
             if self._session_logs_directory:
                 set_session_logs_directory(self._session_logs_directory)
 
-            actuator_type: Literal["custom", "playwright"]
-            actuator_type = "playwright" if isinstance(self._actuator, DefaultNovaLocalBrowserActuator) else "custom"
+            actuator_type = self._actuator.domain
 
             if True:  # pragma: async
                 self._backend.send_environment_telemetry(
@@ -804,7 +813,7 @@ class NovaAct:
             except Exception as e:
                 _LOGGER.error(f"Error in stop hook {hook}: {e}", exc_info=True)
 
-    async def _stop(self, exc_type: Type[BaseException] | None = None) -> None:
+    async def _stop(self, exc_type: type[BaseException] | None = None) -> None:
         try:
             self._execute_stop_hooks()
             self._dispatcher.cancel_prompt()
@@ -917,9 +926,8 @@ class NovaAct:
         if schema:
             # schema is deprecated but allow duck-typing to preserve backward compatibility.
             return result
-        else:
-            # Return the response-erased base result type.
-            return result.without_response()
+        # Return the response-erased base result type.
+        return result.without_response()
 
     async def act_get(
         self,
@@ -1106,4 +1114,24 @@ class NovaAct:
             self._session_act_count += 1
 
         return result
+
+    @staticmethod
+    def _instantiate_actuator(
+        actuator_type: type[ActuatorBase],
+        *,
+        playwright_options: PlaywrightInstanceOptions,
+        state_guardrail: GuardrailCallable | None,
+        save_dom: bool,
+    ) -> ActuatorBase:
+        """Construct a managed actuator from its type.
+
+        A staticmethod seam so tests can substitute a mock instance by patching this method,
+        rather than patching the actuator class's __new__ (which is fragile: the actuator classes
+        use ABCMeta, and once __new__ is set on such a class it cannot be cleanly restored).
+        """
+        return actuator_type(  # type: ignore[call-arg, unused-ignore]
+            playwright_options=playwright_options,
+            state_guardrail=state_guardrail,
+            save_dom=save_dom,
+        )
 

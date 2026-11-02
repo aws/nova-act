@@ -184,7 +184,7 @@ class BrowserSessionProvider(BrowserCookieProvider):
         # StorageStateCookie and SetCookieParam are structurally
         # compatible TypedDicts (same fields), but mypy treats them
         # as distinct nominal types.
-        return cast(list[SetCookieParam], self._load_session().get("cookies", []))
+        return cast("list[SetCookieParam]", self._load_session().get("cookies", []))
 
     def load_local_storage(self) -> list[OriginState]:
         """Extract localStorage origins from the saved storage state.

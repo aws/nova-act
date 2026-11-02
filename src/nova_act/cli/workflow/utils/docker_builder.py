@@ -20,7 +20,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Callable, Set
+from typing import Callable
 
 from nova_act.cli.core.constants import BUILD_DIR_PREFIX
 from nova_act.cli.core.exceptions import ImageBuildError
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 # Directories excluded from project copy during Docker build.
 # These are universally safe to exclude: version control, caches, virtual envs, and secrets.
-DEFAULT_EXCLUDE_DIRS: Set[str] = {
+DEFAULT_EXCLUDE_DIRS: set[str] = {
     ".git",
     "__pycache__",
     "node_modules",
@@ -42,7 +42,7 @@ DEFAULT_EXCLUDE_DIRS: Set[str] = {
 }
 
 # File patterns excluded from project copy during Docker build.
-DEFAULT_EXCLUDE_FILE_PATTERNS: Set[str] = {"*.pyc", "*.pyo"}
+DEFAULT_EXCLUDE_FILE_PATTERNS: set[str] = {"*.pyc", "*.pyo"}
 
 
 class DockerBuilder:
@@ -118,7 +118,7 @@ class DockerBuilder:
             self._copy_directory_contents(project_dir=project_path_obj, template_files=template_files)
             logger.info("Copied project directory contents")
 
-    def _get_template_file_names(self, template_dir: Path) -> Set[str]:
+    def _get_template_file_names(self, template_dir: Path) -> set[str]:
         """Get template file names from directory structure."""
         template_files = set()
         for item in template_dir.rglob("*"):
@@ -127,7 +127,7 @@ class DockerBuilder:
                 template_files.add(str(rel_path))
         return template_files
 
-    def _copy_single_file(self, project_file: Path, template_files: Set[str]) -> None:
+    def _copy_single_file(self, project_file: Path, template_files: set[str]) -> None:
         """Copy single file deployment."""
         assert self.build_dir is not None
         if project_file.name in template_files:
@@ -156,7 +156,7 @@ class DockerBuilder:
 
         return _ignore
 
-    def _copy_directory_contents(self, project_dir: Path, template_files: Set[str]) -> None:
+    def _copy_directory_contents(self, project_dir: Path, template_files: set[str]) -> None:
         """Copy directory contents, excluding problematic dirs/files and warning about template overrides."""
         assert self.build_dir is not None
         ignore_fn = self._make_copytree_ignore()

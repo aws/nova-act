@@ -46,6 +46,7 @@ class PlaywrightInstanceOptions:
     user_browser_args: list[str] | None = None
     security_options: SecurityOptions = field(default_factory=SecurityOptions)
     browser_auth_mode: BrowserAuth = None
+    skip_ssl_precheck: bool = False
 
     def __post_init__(self) -> None:
         self.owns_playwright = self.maybe_playwright is None

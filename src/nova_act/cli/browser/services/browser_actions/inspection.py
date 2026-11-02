@@ -88,7 +88,7 @@ def is_complex_result(result: object) -> bool:
     return isinstance(result, (list, dict))
 
 
-def _get_element_properties(element: "Locator", props: tuple[str, ...]) -> dict[str, object]:
+def _get_element_properties(element: Locator, props: tuple[str, ...]) -> dict[str, object]:
     """Extract requested properties from a single element."""
     result: dict[str, object] = {}
     if "tag" in props:
@@ -122,12 +122,11 @@ class InspectionMixin:
         """Get page content in specified format (text, html, markdown)."""
         if output_format == "html":
             return self._nova_act.page.content()
-        elif output_format == "markdown":
+        if output_format == "markdown":
             from markdownify import markdownify as md
 
             return md(self._nova_act.page.content())
-        else:
-            return self._nova_act.page.inner_text("body")
+        return self._nova_act.page.inner_text("body")
 
     def screenshot(self, full_page: bool = False, output_format: str = "png", quality: int = 80) -> bytes:
         """Capture a screenshot. Returns raw bytes."""

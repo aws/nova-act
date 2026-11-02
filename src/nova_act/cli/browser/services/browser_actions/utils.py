@@ -26,7 +26,7 @@ from pydantic import BaseModel
 
 from nova_act.cli.browser.services.intent_resolution.snapshot import (
     SnapshotElement,
-    flatten_snapshot,
+    snapshot_elements,
 )
 from nova_act.util.jsonschema import BOOL_SCHEMA
 
@@ -192,11 +192,11 @@ class TransitionTracker:
 
     def capture_before(self) -> None:
         """Capture the 'before' accessibility snapshot."""
-        self._before = flatten_snapshot(self.page.accessibility.snapshot())
+        self._before = snapshot_elements(self.page)
 
     def transition(self, description: str) -> str:
         """Capture 'after' snapshot and return transition narrative."""
-        after = flatten_snapshot(self.page.accessibility.snapshot())
+        after = snapshot_elements(self.page)
         return generate_fast_transition(self._before, after, description)
 
 

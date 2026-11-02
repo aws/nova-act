@@ -97,11 +97,10 @@ def patch_nova_act_for_step_snapshots(nova_act: NovaAct, snapshots_out: list[lis
         result = original_run(program, *args, **kwargs)
         try:
             from nova_act.cli.browser.services.intent_resolution.snapshot import (
-                flatten_snapshot,
+                snapshot_elements,
             )
 
-            tree = nova_act.page.accessibility.snapshot()
-            snapshots_out.append(flatten_snapshot(tree))
+            snapshots_out.append(snapshot_elements(nova_act.page))
         except PlaywrightError:
             logger.debug("Step snapshot capture failed", exc_info=True)
         return result

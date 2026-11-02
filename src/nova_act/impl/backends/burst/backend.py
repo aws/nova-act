@@ -55,6 +55,7 @@ T = TypeVar("T", bound=BurstClient)
 class BurstBackend(Backend, Generic[T]):
     _client: T
 
+
     @staticmethod
     def _calls_to_awl_program(calls: Calls) -> str:
         """Reverse-engineer an AWL program from Calls."""
@@ -130,7 +131,7 @@ class BurstBackend(Backend, Generic[T]):
     def send_environment_telemetry(
         self,
         session_id: str,
-        actuator_type: Literal["custom", "playwright"],
+        actuator_type: str | None,
         sdk_variant: Literal["SYNC", "ASYNC"],
     ) -> None:
         self._client.send_environment_telemetry(

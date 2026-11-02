@@ -17,7 +17,6 @@ import threading
 from contextlib import nullcontext
 from enum import Enum, auto
 from types import TracebackType
-from typing import Optional, Type
 
 from nova_act.impl.keyboard_event_watcher import KeyboardEventWatcher
 
@@ -79,9 +78,9 @@ class NovaStateController:
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         try:
             self._keyboard_manager.__exit__(exc_type, exc_val, exc_tb)

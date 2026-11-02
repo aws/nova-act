@@ -79,7 +79,7 @@ class LogTailer:
         """Process a single event from the log stream."""
         if "sessionStart" in event.events:
             return
-        elif "sessionUpdate" in event.events:
+        if "sessionUpdate" in event.events:
             log_events = event.events["sessionUpdate"]["sessionResults"]
             for log_event in log_events:
                 callback(LogEvent(message=log_event["message"], timestamp=int(log_event["timestamp"])))

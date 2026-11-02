@@ -64,7 +64,7 @@ class AuthConfig:
     workflow_name: str | None = None
 
     @classmethod
-    def from_metadata(cls, metadata: dict[str, object]) -> "AuthConfig | None":
+    def from_metadata(cls, metadata: dict[str, object]) -> AuthConfig | None:
         """Reconstruct AuthConfig from persisted session metadata.
 
         Args:

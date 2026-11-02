@@ -81,7 +81,11 @@ def get_credential_error_message() -> str:
 
 
 def get_permission_error_message(
-    operation: str, workflow_name: str, region: str, account_id: str, permission: str | None = None
+    operation: str,
+    workflow_name: str,
+    region: str | None,
+    account_id: str | None,
+    permission: str | None = None,
 ) -> str:
     """Generate AWS permission denied message with required permissions."""
     permission_text = f"  - {permission}\n\n" if permission else ""
@@ -89,8 +93,8 @@ def get_permission_error_message(
     return (
         f"[FAIL] AWS Permission Denied: {operation}\n\n"
         f"Operation: deploying workflow '{workflow_name}'\n"
-        f"Region: {region}\n"
-        f"Account: {account_id}\n\n"
+        f"Region: {region or 'unknown'}\n"
+        f"Account: {account_id or 'unknown'}\n\n"
         "The CLI needs permissions to perform this operation.\n\n"
         f"Required permission:\n{permission_text}"
         "To fix:\n"

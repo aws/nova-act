@@ -15,7 +15,6 @@ import dataclasses
 import os
 import re
 from datetime import datetime
-from typing import Dict
 
 _FILENAME_SUB_RE = re.compile(r'[<>:"/\\|?*\x00-\x1F\s]')
 

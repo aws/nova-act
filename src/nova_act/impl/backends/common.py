@@ -17,6 +17,7 @@ import json
 import os
 from enum import Enum
 
+import requests
 from requests import Response
 from typing_extensions import Any
 
@@ -28,6 +29,16 @@ from nova_act.types.state.act import Act
 # Request timeout constants
 DEFAULT_REQUEST_CONNECT_TIMEOUT = 30  # 30s
 DEFAULT_REQUEST_READ_TIMEOUT = 5 * 60  # 5min
+DEFAULT_REQUEST_TIMEOUT = 60  # 60s overall requests timeout
+
+# requests transport faults: the connection failed, timed out or broke mid-response, so the service
+# was not reached or did not finish replying. requests.exceptions.SSLError subclasses ConnectionError
+# but is a configuration fault; callers must catch and re-raise it before catching this tuple.
+REQUESTS_TRANSPORT_ERRORS = (
+    requests.exceptions.ConnectionError,
+    requests.exceptions.Timeout,
+    requests.exceptions.ChunkedEncodingError,
+)
 
 
 def assert_json_response(  # type: ignore[explicit-any]
@@ -49,18 +60,17 @@ def assert_json_response(  # type: ignore[explicit-any]
                 status_code=status_code,
                 message=message,
             )
-        elif 400 <= status_code < 500:
+        if 400 <= status_code < 500:
             raise ActBadRequestError(
                 request_id=request_id,
                 status_code=status_code,
                 message=message,
             )
-        else:
-            raise ActInternalServerError(
-                request_id=request_id,
-                status_code=status_code,
-                message=message,
-            )
+        raise ActInternalServerError(
+            request_id=request_id,
+            status_code=status_code,
+            message=message,
+        )
 
     if not isinstance(response, dict):
         raise ActBadResponseError(

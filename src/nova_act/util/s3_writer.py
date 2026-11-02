@@ -106,15 +106,14 @@ class S3Writer(StopHook):
             error_code = e.response.get("Error", {}).get("Code", "")
             if error_code == "404":
                 raise S3WriterBucketNotFoundError(self._s3_bucket_name, e)
-            elif error_code == "403":
+            if error_code == "403":
                 raise S3WriterPermissionError(
                     "HeadBucket",
                     self._s3_bucket_name,
                     e,
                     "You need the 's3:HeadBucket' permission to access this bucket.",
                 )
-            else:
-                raise S3WriterError(f"Error accessing bucket '{self._s3_bucket_name}': {e}", e)
+            raise S3WriterError(f"Error accessing bucket '{self._s3_bucket_name}': {e}", e)
 
     def _check_list_objects_permission(self) -> None:
         """Check if the user has ListObjects permission on the bucket/prefix.
@@ -141,12 +140,11 @@ class S3Writer(StopHook):
                     "permission for this bucket and prefix."
                 )
                 raise S3WriterPermissionError("ListObjects", resource, e, additional_info)
-            else:
-                raise S3WriterError(
-                    f"Error checking ListObjects permission on {resource}: {e}. "
-                    f"Please ensure you have the necessary permissions to list and upload objects.",
-                    e,
-                )
+            raise S3WriterError(
+                f"Error checking ListObjects permission on {resource}: {e}. "
+                f"Please ensure you have the necessary permissions to list and upload objects.",
+                e,
+            )
 
     def set_metadata(self, metadata: dict[str, str]) -> None:
         """Set or update metadata to be applied to all S3 objects uploaded by this writer.
@@ -221,8 +219,7 @@ class S3Writer(StopHook):
 
         if self._s3_prefix:
             return f"{self._s3_prefix}{session_id}/{relative_path}"
-        else:
-            return f"{session_id}/{relative_path}"
+        return f"{session_id}/{relative_path}"
 
     def _upload_file_to_s3(self, bucket: Bucket, local_path: str, s3_key: str) -> None:
         """Upload a file to S3 with error handling.

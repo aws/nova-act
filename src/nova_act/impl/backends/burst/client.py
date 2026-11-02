@@ -64,7 +64,7 @@ class BurstClient(ABC):
     def send_environment_telemetry(
         self,
         session_id: str,
-        actuator_type: Literal["custom", "playwright"],
+        actuator_type: str | None,
         sdk_variant: Literal["SYNC", "ASYNC"],
     ) -> None:
         """Send environment telemetry. By default, do not send any."""

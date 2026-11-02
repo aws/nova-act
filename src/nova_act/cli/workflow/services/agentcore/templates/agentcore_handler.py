@@ -23,7 +23,7 @@ This handler expects the following to be present in the deployment:
 
 import importlib.util
 import os
-from typing import Any, Dict
+from typing import Any
 
 from bedrock_agentcore import BedrockAgentCoreApp
 
@@ -31,7 +31,7 @@ app = BedrockAgentCoreApp()
 
 
 @app.entrypoint
-def handler(payload: Dict[str, Any]) -> None:  # type: ignore
+def handler(payload: dict[str, Any]) -> None:  # type: ignore
     """Main entrypoint for AgentCore Runtime."""
     # Extract and set environment variables from payload
     if "AC_HANDLER_ENV" in payload:

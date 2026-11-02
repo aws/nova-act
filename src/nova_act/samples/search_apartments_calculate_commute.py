@@ -77,8 +77,7 @@ def add_commute_distance(
             f"Return the shortest {transport_mode} time and distance.",
             schema=TransitCommute.model_json_schema(),
         )
-        time_distance = TransitCommute.model_validate(result.parsed_response)
-        return time_distance
+        return TransitCommute.model_validate(result.parsed_response)
 
 
 def main(

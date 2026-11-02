@@ -11,8 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Dict
-
 from nova_act.types.api.step import BboxTLBR
 
 
@@ -49,7 +47,7 @@ def parse_bbox_string(bbox_string: str) -> BboxTLBR:
     return BboxTLBR(*coords)
 
 
-def bounding_box_to_point(bbox: BboxTLBR) -> Dict[str, float]:
+def bounding_box_to_point(bbox: BboxTLBR) -> dict[str, float]:
     # Calculate the center point of the bounding box
     center_x = (bbox.left + bbox.right) / 2
     center_y = (bbox.top + bbox.bottom) / 2

@@ -44,10 +44,11 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import shutil
 import subprocess
 import sys
-import tempfile
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 import libcst as cst
@@ -55,6 +56,10 @@ import libcst as cst
 # Resolve project root from this script's location (scripts/generate_sync.py → project root)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _HATCH_BIN = _PROJECT_ROOT / ".hatch" / "bin" / "hatch"
+# Staging directory used to batch-format generated sync code with a single
+# `hatch fmt` call. Kept inside the project root so ruff discovers
+# ``pyproject.toml`` and applies the correct settings.
+_STAGING_DIR = _PROJECT_ROOT / ".sync-staging"
 ASYNC_DIR = _PROJECT_ROOT / "src/nova_act/asyncio"
 SYNC_DIR = _PROJECT_ROOT / "src/nova_act"
 
@@ -407,22 +412,39 @@ def convert_file(async_path: Path, async_rel_path: str) -> str:
     return sync_tree.code
 
 
-def format_code(code: str) -> str:
-    """Format code with ``hatch fmt``, respecting project configuration.
+@dataclass(frozen=True)
+class StagedFile:
+    """A sync file staged for batch formatting.
 
-    Writes to a temp file in the project root so that ``hatch fmt`` discovers
-    ``pyproject.toml`` and applies the correct settings.
+    Attributes:
+        async_path (Path): The source async file under ``ASYNC_DIR``.
+        sync_path (Path): The eventual destination under ``SYNC_DIR``.
+        stage_path (Path): The intermediate location under ``_STAGING_DIR`` where ``hatch fmt`` operates.
     """
-    tmp_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", dir=str(_PROJECT_ROOT), delete=False) as f:
-            tmp_path = Path(f.name)
-            f.write(code)
-        subprocess.check_call([str(_HATCH_BIN), "fmt", str(tmp_path)])
-        return tmp_path.read_text()
-    finally:
-        if tmp_path is not None:
-            tmp_path.unlink(missing_ok=True)
+
+    async_path: Path
+    sync_path: Path
+    stage_path: Path
+
+
+def reset_staging() -> None:
+    """Clear and recreate ``_STAGING_DIR``.
+
+    Defensive against crashed prior runs leaving partial state.
+    """
+    if _STAGING_DIR.exists():
+        shutil.rmtree(_STAGING_DIR)
+    _STAGING_DIR.mkdir()
+
+
+def format_files(paths: Sequence[Path]) -> None:
+    """Format all ``paths`` in a single ``hatch fmt`` call (in place).
+
+    No-op when ``paths`` is empty. Caller reads the files back after this returns.
+    """
+    if not paths:
+        return
+    subprocess.check_call([str(_HATCH_BIN), "fmt", *[str(p) for p in paths]])
 
 
 # ---------------------------------------------------------------------------
@@ -472,19 +494,34 @@ def main() -> None:
     else:
         pairs = discover_file_pairs(async_dir, sync_dir)
 
-    stale = False
+    # Phase 1: transform every async file and write the unformatted sync source
+    # to the staging directory mirroring the sync tree layout. Mirroring the
+    # layout lets ruff apply path-based per-file-ignores (e.g., __init__.py).
+    reset_staging()
+    staged: list[StagedFile] = []
     for async_path, sync_path in pairs:
         async_rel = str(async_path.relative_to(_PROJECT_ROOT))
-
         code = convert_file(async_path, async_rel)
-        code = format_code(code)
 
-        # Determine output path
+        stage_path = _STAGING_DIR / sync_path.relative_to(SYNC_DIR)
+        stage_path.parent.mkdir(parents=True, exist_ok=True)
+        stage_path.write_text(code)
+        staged.append(StagedFile(async_path=async_path, sync_path=sync_path, stage_path=stage_path))
+
+    # Phase 2: format every staged file in a single `hatch fmt` call.
+    format_files([s.stage_path for s in staged])
+
+    # Phase 3: diff against the checked-in sync files (--check) or write them
+    # to their final destination (normal mode).
+    stale = False
+    for item in staged:
+        code = item.stage_path.read_text()
+
         if args.output:
-            relative = sync_path.relative_to(sync_dir)
+            relative = item.sync_path.relative_to(sync_dir)
             out_path = args.output / relative
         else:
-            out_path = sync_path
+            out_path = item.sync_path
 
         if args.check:
             existing = out_path.read_text() if out_path.exists() else ""
@@ -493,14 +530,14 @@ def main() -> None:
                     existing.splitlines(keepends=True),
                     code.splitlines(keepends=True),
                     fromfile=str(out_path),
-                    tofile=f"generated from {async_path}",
+                    tofile=f"generated from {item.async_path}",
                 )
                 sys.stderr.writelines(diff)
                 stale = True
         else:
             out_path.parent.mkdir(parents=True, exist_ok=True)
             out_path.write_text(code)
-            async_display = async_path.relative_to(_PROJECT_ROOT)
+            async_display = item.async_path.relative_to(_PROJECT_ROOT)
             try:
                 out_display = out_path.relative_to(_PROJECT_ROOT)
             except ValueError:

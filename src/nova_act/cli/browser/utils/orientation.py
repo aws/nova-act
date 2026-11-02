@@ -60,15 +60,14 @@ def emit_observe(nova_act: NovaAct) -> None:
 def _capture_auto_snapshot(
     nova_act: NovaAct,
     session_info: SessionInfo,
-    cmd_dir: "Path",
+    cmd_dir: Path,
     command_name: str,
 ) -> dict[str, object]:
     """Capture accessibility snapshot and write to cmd_dir/snapshot.yaml."""
-    from nova_act.cli.browser.services.intent_resolution import flatten_snapshot
+    from nova_act.cli.browser.services.intent_resolution import snapshot_elements
 
     active_page = get_active_page(nova_act, session_info)
-    tree = active_page.accessibility.snapshot()
-    elements = flatten_snapshot(tree)
+    elements = snapshot_elements(active_page)
     snapshot_data = [{"ref": e.ref, "role": e.role, "name": e.name, "value": e.value} for e in elements if e.name]
     snapshot_path = cmd_dir / "snapshot.yaml"
     snapshot_path.write_text(yaml.dump(snapshot_data, default_flow_style=False, sort_keys=False))
@@ -85,7 +84,7 @@ def _capture_auto_snapshot(
 def _capture_auto_screenshot(
     nova_act: NovaAct,
     session_info: SessionInfo,
-    cmd_dir: "Path",
+    cmd_dir: Path,
 ) -> dict[str, object]:
     """Capture screenshot and write to cmd_dir/screenshot.png."""
     screenshot_path = cmd_dir / "screenshot.png"
@@ -95,7 +94,7 @@ def _capture_auto_screenshot(
 
 
 def auto_orientation(
-    nova_act: NovaAct, session_info: SessionInfo, params: "CommandParams", command_name: str
+    nova_act: NovaAct, session_info: SessionInfo, params: CommandParams, command_name: str
 ) -> dict[str, object]:
     """Capture auto-snapshot and auto-screenshot after command execution.
 
@@ -125,7 +124,7 @@ def auto_orientation(
 
 def emit_steps_summary(
     nova_act: NovaAct,
-    params: "CommandParams",
+    params: CommandParams,
     command_name: str,
     snapshots: list[list[SnapshotElement]],
 ) -> dict[str, object] | None:

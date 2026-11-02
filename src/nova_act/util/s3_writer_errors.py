@@ -18,13 +18,11 @@ This module defines specialized exception classes for the S3Writer component
 to provide more specific error handling for different S3-related issues.
 """
 
-from typing import Optional
-
 
 class S3WriterError(Exception):
     """Base exception class for all S3Writer-related errors."""
 
-    def __init__(self, message: str, original_error: Optional[Exception] = None):
+    def __init__(self, message: str, original_error: Exception | None = None):
         """
         Initialize S3WriterError.
 
@@ -39,7 +37,7 @@ class S3WriterError(Exception):
 class S3WriterBucketNotFoundError(S3WriterError):
     """Exception raised when the specified S3 bucket does not exist."""
 
-    def __init__(self, bucket_name: str, original_error: Optional[Exception] = None):
+    def __init__(self, bucket_name: str, original_error: Exception | None = None):
         """
         Initialize S3WriterBucketNotFoundError.
 
@@ -62,7 +60,7 @@ class S3WriterPermissionError(S3WriterError):
         self,
         operation: str,
         resource: str,
-        original_error: Optional[Exception] = None,
+        original_error: Exception | None = None,
         additional_info: str = "",
     ):
         """

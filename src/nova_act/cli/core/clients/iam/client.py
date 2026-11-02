@@ -65,3 +65,13 @@ class IAMClient:
     def update_assume_role_policy(self, role_name: str, policy_document: str) -> None:
         """Update the trust policy (assume role policy) for an existing role."""
         self.client.update_assume_role_policy(RoleName=role_name, PolicyDocument=policy_document)
+
+    def delete_role_policy_if_exists(self, role_name: str, policy_name: str) -> bool:
+        """Delete an inline policy from a role. Returns False if the policy was not present."""
+        try:
+            self.client.delete_role_policy(RoleName=role_name, PolicyName=policy_name)
+            return True
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "NoSuchEntity":
+                return False
+            raise ExecutionError(f"Failed to delete inline policy {policy_name} from IAM role {role_name}: {e}")

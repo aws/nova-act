@@ -110,7 +110,7 @@ def translate_nova_act_service_error(error: NovaActServiceError) -> Exception:
     if error.error_code == "AccessDeniedException":
         return AuthError(f"Access denied: {error.message}")
 
-    elif error.error_code == "ValidationException":
+    if error.error_code == "ValidationException":
         field_details = ""
         if error.field_list:
             field_details = " Fields: " + ", ".join(
@@ -136,7 +136,7 @@ def translate_nova_act_service_error(error: NovaActServiceError) -> Exception:
             raw_response=error.raw_response,
         )
 
-    elif error.error_code == "ResourceNotFoundException":
+    if error.error_code == "ResourceNotFoundException":
         resource_details = ""
         if error.resource_id:
             resource_details += f" Resource ID: {error.resource_id}"
@@ -150,7 +150,7 @@ def translate_nova_act_service_error(error: NovaActServiceError) -> Exception:
             raw_response=error.raw_response,
         )
 
-    elif error.error_code == "ThrottlingException":
+    if error.error_code == "ThrottlingException":
         full_message = f"Request throttled: {error.message}"
         if error.service_code:
             full_message += f" Service: {error.service_code}"
@@ -166,7 +166,7 @@ def translate_nova_act_service_error(error: NovaActServiceError) -> Exception:
             raw_response=error.raw_response,
         )
 
-    elif error.error_code == "ServiceQuotaExceededException":
+    if error.error_code == "ServiceQuotaExceededException":
         quota_details = ""
         if error.quota_code:
             quota_details += f" Quota Code: {error.quota_code}"
@@ -184,7 +184,7 @@ def translate_nova_act_service_error(error: NovaActServiceError) -> Exception:
             raw_response=error.raw_response,
         )
 
-    elif error.error_code == "InternalServerException":
+    if error.error_code == "InternalServerException":
         if error.reason in ("InvalidModelGeneration", "RequestTokenLimitExceeded"):
             return ActInvalidModelGenerationError(
                 message=str(error.message),
@@ -203,26 +203,25 @@ def translate_nova_act_service_error(error: NovaActServiceError) -> Exception:
             raw_response=error.raw_response,
         )
 
-    else:
-        message = f"Unknown error ({error.error_code}): {error.message}"
-        if isinstance(error.status_code, int):
-            if 500 <= error.status_code < 600:
-                return ActServerError(
-                    request_id=error.request_id,
-                    status_code=error.status_code,
-                    message=message,
-                    raw_response=error.raw_response,
-                )
-            elif 400 <= error.status_code < 500:
-                return ActClientError(
-                    request_id=error.request_id,
-                    status_code=error.status_code,
-                    message=message,
-                    raw_response=error.raw_response,
-                )
-        return ActAPIError(
-            request_id=error.request_id,
-            status_code=error.status_code,
-            message=message,
-            raw_response=error.raw_response,
-        )
+    message = f"Unknown error ({error.error_code}): {error.message}"
+    if isinstance(error.status_code, int):
+        if 500 <= error.status_code < 600:
+            return ActServerError(
+                request_id=error.request_id,
+                status_code=error.status_code,
+                message=message,
+                raw_response=error.raw_response,
+            )
+        if 400 <= error.status_code < 500:
+            return ActClientError(
+                request_id=error.request_id,
+                status_code=error.status_code,
+                message=message,
+                raw_response=error.raw_response,
+            )
+    return ActAPIError(
+        request_id=error.request_id,
+        status_code=error.status_code,
+        message=message,
+        raw_response=error.raw_response,
+    )

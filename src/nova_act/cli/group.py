@@ -25,7 +25,7 @@ class StyledGroup(click.Group):
     def get_help(self, ctx: click.Context) -> str:
         if ctx.info_name == "workflow":
             return self._get_workflow_help()
-        elif ctx.info_name in ("act", "main"):
+        if ctx.info_name in ("act", "main"):
             return self._get_main_help()
         return super().get_help(ctx)
 

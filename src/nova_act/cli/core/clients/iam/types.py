@@ -13,8 +13,6 @@
 # limitations under the License.
 """IAM client types for basic boto3 operations."""
 
-from typing import Dict
-
 from pydantic import BaseModel
 
 
@@ -33,7 +31,7 @@ class CreateRoleResponse(BaseModel):
 
     model_config = {"extra": "allow"}
 
-    Role: Dict[str, object]
+    Role: dict[str, object]
 
 
 class GetRoleResponse(BaseModel):
@@ -41,7 +39,7 @@ class GetRoleResponse(BaseModel):
 
     model_config = {"extra": "allow"}
 
-    Role: Dict[str, object]
+    Role: dict[str, object]
 
 
 class AttachRolePolicyRequest(BaseModel):

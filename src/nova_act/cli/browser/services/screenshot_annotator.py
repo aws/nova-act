@@ -172,10 +172,9 @@ def annotate_page_screenshot(
     Returns:
         Tuple of (annotated_bytes, annotation_count).
     """
-    from nova_act.cli.browser.services.intent_resolution.snapshot import flatten_snapshot
+    from nova_act.cli.browser.services.intent_resolution.snapshot import snapshot_elements
 
-    tree = active_page.accessibility.snapshot()
-    elements = flatten_snapshot(tree)
+    elements = snapshot_elements(active_page)
 
     role_filter: frozenset[str] | None = None
     if annotate_filter:

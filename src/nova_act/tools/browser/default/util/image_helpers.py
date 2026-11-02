@@ -16,7 +16,7 @@
 # DO NOT EDIT — changes will be overwritten. Modify the async source instead.
 import base64
 import io
-from typing import Literal, Union
+from typing import Literal
 
 import numpy as np
 import requests
@@ -36,10 +36,9 @@ def get_source_image_from_data_url(screenshot_data_url: str) -> Image.Image:
         base64_data = screenshot_data_url.split("base64,")[1]
         image_data = base64.b64decode(base64_data)
         return Image.open(io.BytesIO(image_data))
-    else:
-        # Handle URLs that aren't data URLs
-        response = requests.get(screenshot_data_url)
-        return Image.open(io.BytesIO(response.content))
+    # Handle URLs that aren't data URLs
+    response = requests.get(screenshot_data_url)
+    return Image.open(io.BytesIO(response.content))
 
 
 def convert_image_to_data_url(image: Image.Image, format_type: str = "jpeg", quality: int | None = 90) -> str:
@@ -168,7 +167,7 @@ def compare_images(image1_data_url: str, image2_data_url: str, threshold: int = 
         raise RuntimeError(f"Unable to compare images: {str(e)}")
 
 
-def crop_image_with_box(image_data: Union[str, Image.Image], box_string: str, increase_size: int = 0) -> Image.Image:
+def crop_image_with_box(image_data: str | Image.Image, box_string: str, increase_size: int = 0) -> Image.Image:
     """
     Crops an image using coordinates specified in a box string.
 
@@ -219,8 +218,7 @@ def crop_image_with_box(image_data: Union[str, Image.Image], box_string: str, in
             )
 
         # Crop the image using the adjusted box coordinates
-        cropped_image = image.crop((new_left, new_top, new_right, new_bottom))
-        return cropped_image
+        return image.crop((new_left, new_top, new_right, new_bottom))
 
     except ValueError:
         # Re-raise ValueError for invalid box format or coordinates
@@ -231,7 +229,7 @@ def crop_image_with_box(image_data: Union[str, Image.Image], box_string: str, in
 
 
 def crop_image_with_box_to_data_url(
-    image_data: Union[str, Image.Image],
+    image_data: str | Image.Image,
     box_string: str,
     format_type: str = "JPEG",
     quality: int = 100,

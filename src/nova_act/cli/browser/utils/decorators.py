@@ -34,8 +34,7 @@ def common_session_options(func: F) -> F:  # type: ignore[explicit-any]
         "Supports constructor args (headless, screen_width, screen_height) "
         "and method args (max_steps, model_temperature, observation_delay_ms).",
     )(func)
-    func = click.option("--session-id", default="default", help="Session ID (default: 'default')")(func)
-    return func
+    return click.option("--session-id", default="default", help="Session ID (default: 'default')")(func)
 
 
 def auth_options(func: F) -> F:  # type: ignore[explicit-any]
@@ -60,13 +59,12 @@ def auth_options(func: F) -> F:  # type: ignore[explicit-any]
         default=None,
         help="AWS profile name for AWS auth",
     )(func)
-    func = click.option(
+    return click.option(
         "--auth-mode",
         type=click.Choice(["api-key", "aws"]),
         default=None,
         help="Authentication mode (auto-detected if not specified)",
     )(func)
-    return func
 
 
 def common_browser_options(func: F) -> F:  # type: ignore[explicit-any]
@@ -113,12 +111,11 @@ def common_browser_options(func: F) -> F:  # type: ignore[explicit-any]
         default=False,
         help="Launch browser in headless mode (no visible UI)",
     )(func)
-    func = click.option(
+    return click.option(
         "--cdp",
         default=None,
         help="Connect to an existing browser via CDP endpoint URL (e.g. ws://localhost:9222/devtools/browser/...)",
     )(func)
-    return func
 
 
 def json_option(func: F) -> F:  # type: ignore[explicit-any]
@@ -197,8 +194,7 @@ def browser_command_options(func: F) -> F:  # type: ignore[explicit-any]
     func = json_option(func)
     func = auth_options(func)
     func = common_session_options(func)
-    func = common_browser_options(func)
-    return func
+    return common_browser_options(func)
 
 
 def setup_command_options(func: F) -> F:  # type: ignore[explicit-any]
@@ -207,8 +203,7 @@ def setup_command_options(func: F) -> F:  # type: ignore[explicit-any]
     Combines: json_option, verbose_option.
     """
     func = verbose_option(func)
-    func = json_option(func)
-    return func
+    return json_option(func)
 
 
 def pack_command_params(func: F) -> F:  # type: ignore[explicit-any]

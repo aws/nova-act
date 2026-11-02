@@ -28,6 +28,7 @@ from nova_act.asyncio.tools.browser.default.util.agent_type import agent_type
 from nova_act.asyncio.tools.browser.default.util.element_helpers import viewport_dimensions
 from nova_act.asyncio.tools.browser.default.util.get_bbox_values import get_bbox_values
 from nova_act.asyncio.tools.browser.default.util.go_to_url import go_to_url
+from nova_act.asyncio.tools.browser.default.util.navigation_hooks import NavigationHooks
 from nova_act.asyncio.tools.browser.default.util.take_observation import take_observation
 from nova_act.asyncio.tools.browser.default.util.wait import (
     WAIT_FOR_PAGE_TO_SETTLE_CONFIG,
@@ -54,26 +55,47 @@ from nova_act.util.common_js_expressions import Expressions
 MAX_PAGE_EVALUATE_RETRIES = 3
 
 
-# Catch and throw the error stored in the playwright instance manager if present as it's more informative
-# Without this mechanism, the error for blocked call is reported as a generic failed page navigation in Playwright
-def _check_ssl_error(func: Callable[..., Any]) -> Callable[..., Any]:  # type: ignore[explicit-any]
+# Re-raise the more informative error captured by the navigation route hooks (SSL certificate
+# validation, the state guardrail, or the file:// allowlist). Without this, a blocked call surfaces
+# only as a generic failed page navigation from Playwright.
+def _surface_navigation_errors(func: Callable[..., Any]) -> Callable[..., Any]:  # type: ignore[explicit-any]
     @functools.wraps(func)
     async def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:  # type: ignore[explicit-any]
         if not hasattr(self, "_playwright_manager") or not self._playwright_manager.started:
             raise ClientNotStarted("Client is not started before actuation")
 
-        await self._playwright_manager.setup_ssl_validation_hook(self._playwright_manager.context)
+        # Ensure the navigation route hooks are installed (SSL first, then the guardrail, then the
+        # file:// allowlist so it runs first). Idempotent and re-installed after any teardown.
+        await self._navigation_hooks.setup(self._playwright_manager.context)
         try:
-            return await func(self, *args, **kwargs)
+            result = await func(self, *args, **kwargs)
         except Exception:
-            ssl_error = self._playwright_manager.safe_site_validation_error
+            # Always consume the take-once blocks, even if we end up raising a different error, so a
+            # block recorded during this actuation cannot leak into the next one.
+            ssl_error = self._navigation_hooks.ssl_error
+            file_access_error = self._navigation_hooks.take_file_access_error()
+            guardrail_error = self._navigation_hooks.take_guardrail_error()
             if ssl_error and isinstance(ssl_error, (InvalidURL, InvalidCertificate)):
                 raise ssl_error
+            if isinstance(file_access_error, InvalidURL):
+                raise file_access_error
+            if guardrail_error is not None:
+                raise guardrail_error
             raise
+        else:
+            # A navigation may have been aborted by a hook without the call itself raising (e.g. a
+            # click or page-initiated redirect that triggered navigation). Surface any recorded block.
+            file_access_error = self._navigation_hooks.take_file_access_error()
+            guardrail_error = self._navigation_hooks.take_guardrail_error()
+            if isinstance(file_access_error, InvalidURL):
+                raise file_access_error
+            if guardrail_error is not None:
+                raise guardrail_error
+            return result
         finally:
-            # Clear any SSL error and disable hook
-            self._playwright_manager.clear_ssl_error()
-            await self._playwright_manager.disable_ssl_validation_hook()
+            # Tear down both navigation hooks; this also resets the stored SSL error for the next call
+            # (the guardrail error is take-once and was already consumed above).
+            await self._navigation_hooks.disable()
 
     return wrapper
 
@@ -88,7 +110,15 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
         save_dom: bool = False,
     ):
         self._playwright_manager = PlaywrightInstanceManager(playwright_options)
-        self._state_guardrail = state_guardrail
+        # The navigation-time enforcement (SSL validation, the state guardrail, and the file://
+        # allowlist) is an actuation concern, so the actuator owns the hooks and drives them around
+        # each action; the manager just owns the browser context they operate on.
+        self._navigation_hooks = NavigationHooks(
+            ignore_https_errors=playwright_options.ignore_https_errors,
+            skip_ssl_precheck=playwright_options.skip_ssl_precheck,
+            state_guardrail=state_guardrail,
+            allowed_file_open_paths=playwright_options.security_options.allowed_file_open_paths,
+        )
         self._save_dom = save_dom
 
     async def start(self, **kwargs: Any) -> None:  # type: ignore[explicit-any]
@@ -102,10 +132,13 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
 
     async def lock_context(self) -> None:
         if self._playwright_manager.started:
-            await self._playwright_manager.setup_ssl_validation_hook(self._playwright_manager.context)
+            await self._navigation_hooks.setup(self._playwright_manager.context)
+        self._navigation_hooks.resume_guardrail()
 
     async def unlock_context(self) -> None:
-        await self._playwright_manager.disable_ssl_validation_hook(force=True)
+        await self._navigation_hooks.disable(force=True)
+        # Hand control to the human: stop enforcing the state guardrail for the duration.
+        self._navigation_hooks.suspend_guardrail()
 
     @property
     def started(self, **kwargs: Any) -> bool:  # type: ignore[explicit-any]
@@ -118,7 +151,7 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
     def pages(self) -> list[Page]:
         return self._playwright_manager.context.pages
 
-    @_check_ssl_error
+    @_surface_navigation_errors
     async def agent_click(
         self,
         box: str,
@@ -130,14 +163,14 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
         await agent_click(bbox, self._playwright_manager.main_page, click_type or "left", click_options)
         return None
 
-    @_check_ssl_error
+    @_surface_navigation_errors
     async def agent_hover(self, box: str) -> JsonValue:
         """Hovers on the center of the specified box."""
         bbox = parse_bbox_string(box)
         await agent_hover(bbox, self._playwright_manager.main_page)
         return None
 
-    @_check_ssl_error
+    @_surface_navigation_errors
     async def agent_scroll(self, direction: ScrollDirection, box: str, value: float | None = None) -> JsonValue:
         """Scrolls the element in the specified box in the specified direction.
 
@@ -147,13 +180,15 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
         await agent_scroll(self._playwright_manager.main_page, direction, bbox, value)
         return None
 
-    @_check_ssl_error
+    @_surface_navigation_errors
     async def agent_type(self, value: str, box: str, pressEnter: bool = False) -> JsonValue:
         """Types the specified value into the element at the center of the
         specified box.
 
         If desired, the agent can press enter after typing the string.
         """
+        if self._secrets:
+            value = self._secrets.resolve(value)
         bbox = parse_bbox_string(box)
         await agent_type(
             bbox,
@@ -165,16 +200,17 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
         )
         return None
 
-    @_check_ssl_error
+    @_surface_navigation_errors
     async def go_to_url(self, url: str) -> JsonValue:
         """Navigates to the specified URL."""
 
         try:
+            # The state guardrail is enforced by the navigation hook on the context, so it is not
+            # passed here; go_to_url only validates the URL format and SSL.
             await go_to_url(
                 url,
                 self._playwright_manager.main_page,
                 allowed_file_open_paths=self._playwright_manager.security_options.allowed_file_open_paths,
-                state_guardrail=self._state_guardrail,
             )
         except InvalidURL as e:
             raise ValueError(str(e)) from e
@@ -194,7 +230,7 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
         """Used when the task requested by the user is not possible."""
         return value
 
-    @_check_ssl_error
+    @_surface_navigation_errors
     async def wait(self, seconds: float) -> JsonValue:
         """Pauses execution for the specified number of seconds."""
         if seconds < 0:
@@ -205,13 +241,13 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
             await asyncio.sleep(seconds)
         return None
 
-    @_check_ssl_error
+    @_surface_navigation_errors
     async def wait_for_page_to_settle(self) -> JsonValue:
         """Ensure the browser page is ready for the next Action."""
         await wait_for_page_to_settle(self._playwright_manager.main_page, WAIT_FOR_PAGE_TO_SETTLE_CONFIG)
         return None
 
-    @_check_ssl_error
+    @_surface_navigation_errors
     async def take_observation(self) -> BrowserObservation:
         """Take an observation of the existing browser state."""
 
@@ -220,14 +256,17 @@ class DefaultNovaLocalBrowserActuator(BrowserActuatorBase, PlaywrightPageManager
 
         for attempt in range(MAX_PAGE_EVALUATE_RETRIES):
             try:
-                dimensions = await self._playwright_manager.main_page.evaluate(Expressions.GET_VIEWPORT_SIZE.value)
-                user_agent = await self._playwright_manager.main_page.evaluate(Expressions.GET_USER_AGENT.value)
+                # Page.evaluate has no timeout, so a stalled renderer blocks it forever (and act(timeout) cannot
+                # interrupt it). Locator.evaluate is bounded by the page's default timeout, like the screenshot.
+                root = self._playwright_manager.main_page.locator(":root")
+                dimensions = await root.evaluate(Expressions.GET_VIEWPORT_SIZE.value)
+                user_agent = await root.evaluate(Expressions.GET_USER_AGENT.value)
                 break
             except Exception as e:
                 await wait_for_page_to_settle(self._playwright_manager.main_page, WAIT_FOR_PAGE_TO_SETTLE_CONFIG)
                 if attempt == MAX_PAGE_EVALUATE_RETRIES - 1:  # Last attempt
                     # Cast it as RuntimeError but also surface the original cause.
-                    raise RuntimeError(f"{type(e).__str__}: {e}") from e
+                    raise RuntimeError(f"{type(e).__name__}: {e}") from e
 
         # At this point, dimensions and user_agent are guaranteed to be set
         # because either the try block succeeded or an exception was raised

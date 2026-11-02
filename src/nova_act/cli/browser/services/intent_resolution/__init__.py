@@ -27,7 +27,7 @@ from nova_act.cli.browser.services.intent_resolution.resolver import (
 )
 from nova_act.cli.browser.services.intent_resolution.snapshot import (
     SnapshotElement,
-    flatten_snapshot,
+    snapshot_elements,
 )
 
 __all__ = [
@@ -38,7 +38,7 @@ __all__ = [
     "SnapshotElement",
     "detect_format",
     "exact_match",
-    "flatten_snapshot",
     "resolve",
+    "snapshot_elements",
     "token_set_match",
 ]

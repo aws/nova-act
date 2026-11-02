@@ -370,7 +370,7 @@ class AgentCoreBrowserSessionProvider(BrowserSessionProvider):
                     kwargs["nextToken"] = next_token
                 response = client.list_browser_profiles(**kwargs)
                 summaries = cast(
-                    list[dict[str, object]],
+                    "list[dict[str, object]]",
                     response.get("profileSummaries", []),
                 )
                 for summary in summaries:

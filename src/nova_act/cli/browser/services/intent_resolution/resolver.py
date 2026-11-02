@@ -27,7 +27,7 @@ from nova_act.cli.browser.services.intent_resolution.matching import (
 )
 from nova_act.cli.browser.services.intent_resolution.snapshot import (
     SnapshotElement,
-    flatten_snapshot,
+    snapshot_elements,
 )
 
 if TYPE_CHECKING:
@@ -72,7 +72,7 @@ def _filter_by_command(elements: list[SnapshotElement], command_type: str) -> li
     return elements
 
 
-def resolve(target: str, command_type: str, page: "Page") -> ResolvedTarget:
+def resolve(target: str, command_type: str, page: Page) -> ResolvedTarget:
     """Resolve agent intent to a fast or smart path.
 
     Args:
@@ -88,8 +88,7 @@ def resolve(target: str, command_type: str, page: "Page") -> ResolvedTarget:
     if fmt:
         if fmt.kind == "snapshot_ref":
             # Need snapshot to look up the ref
-            tree = page.accessibility.snapshot()
-            elements = flatten_snapshot(tree)
+            elements = snapshot_elements(page)
             for elem in elements:
                 if elem.ref.lower() == fmt.value.lower():
                     return ResolvedTarget(path=ResolutionPath.FAST, element=elem, confidence=100.0, match_method="ref")
@@ -98,8 +97,7 @@ def resolve(target: str, command_type: str, page: "Page") -> ResolvedTarget:
         return ResolvedTarget(path=ResolutionPath.FAST, confidence=100.0, match_method="selector")
 
     # Tier 2 & 3: Need snapshot
-    tree = page.accessibility.snapshot()
-    elements = flatten_snapshot(tree)
+    elements = snapshot_elements(page)
     filtered = _filter_by_command(elements, command_type)
 
     # Tier 2: Exact match

@@ -15,8 +15,6 @@ import dataclasses
 import time
 
 # using dataclasses for end states
-from typing import Dict
-
 # using attrs to finely control mutability of types
 from attrs import (
     define,

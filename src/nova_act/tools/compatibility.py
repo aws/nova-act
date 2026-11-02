@@ -72,7 +72,7 @@ def callable_tool(tool: Union["ActionType", MCPAgentTool]) -> "ActionType":
 
             # Return the result
             try:
-                return cast(JsonValue, mcp_tool_result["structuredContent"]["result"])
+                return cast("JsonValue", mcp_tool_result["structuredContent"]["result"])
             except LookupError:  # pragma: no cover
                 _LOGGER.warning(
                     f"MCP Tool '{tool.tool_name}' returned result without structured content. "
@@ -81,8 +81,7 @@ def callable_tool(tool: Union["ActionType", MCPAgentTool]) -> "ActionType":
                 return safe_mcp_tool_result_text(mcp_tool_result)
 
         return cast("ActionType", mcp_tool)
-    else:
-        return tool
+    return tool
 
 
 def safe_tool_spec(tool_spec: ToolSpec) -> ToolSpec:
@@ -118,4 +117,4 @@ class NovaToolSpec(BaseModel):
 
     def to_strands(self) -> ToolSpec:
         """Dump to a Strands ToolSpec."""
-        return cast(ToolSpec, self.model_dump(by_alias=True))
+        return cast("ToolSpec", self.model_dump(by_alias=True))

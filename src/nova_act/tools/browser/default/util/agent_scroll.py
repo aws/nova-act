@@ -222,12 +222,10 @@ def get_scroll_element_bboxes_at(page: Page, bbox: BboxTLBR, direction: ScrollDi
         _LOGGER.warning(f"Could not find element at point {point}.")
         return
 
-    dimensions = [
+    return [
         ScrollElement(BboxTLBR(elt["top"], elt["left"], elt["bottom"], elt["right"]), bool(elt["opaque"]))
         for elt in dimension_dicts
     ]
-
-    return dimensions
 
 
 def scroll(delta: float, direction: ScrollDirection, page: Page) -> None:
@@ -245,12 +243,10 @@ def calculate_scroll_amount(dimensions: DimensionsDict, direction: ScrollDirecti
     if value is None:
         if direction == "up" or direction == "down":
             return dimensions["height"] * 0.75
-        elif direction == "left" or direction == "right":
+        if direction == "left" or direction == "right":
             return dimensions["width"] * 0.75
-        else:
-            raise ValueError(f"Invalid direction {direction}")
-    else:
-        return value
+        raise ValueError(f"Invalid direction {direction}")
+    return value
 
 
 def agent_scroll(

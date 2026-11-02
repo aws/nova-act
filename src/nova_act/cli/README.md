@@ -715,6 +715,7 @@ For full CLI functionality including deployment and execution:
         "iam:CreateRole",
         "iam:GetRole",
         "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy",
         "iam:AttachRolePolicy"
       ],
       "Resource": "arn:aws:iam::*:role/nova-act-*"

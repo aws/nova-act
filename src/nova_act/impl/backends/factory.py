@@ -13,7 +13,7 @@
 # limitations under the License.
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, NamedTuple, Optional, Union
+from typing import TYPE_CHECKING, NamedTuple, Union
 
 
 from nova_act.impl.backends.starburst.backend import StarburstBackend
@@ -66,7 +66,7 @@ class BackendFactory:
 
     @staticmethod
     def _validate_auth(
-        api_key: Optional[str],
+        api_key: str | None,
     ) -> None:
         """Validate auth parameters."""
         provided_auths = [
@@ -85,6 +85,6 @@ class BackendFactory:
                 ]
             )
             raise AuthError(_message)
-        elif len(active_auths) > 1:
+        if len(active_auths) > 1:
             strategies = [strategy for _, strategy in active_auths]
             raise AuthError(f"Only one auth strategy allowed, got: {strategies}")

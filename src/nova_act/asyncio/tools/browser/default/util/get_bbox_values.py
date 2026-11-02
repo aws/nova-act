@@ -12,14 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import importlib.resources
-from typing import Tuple
 
 from playwright.async_api import Page
 
 from nova_act.types.api.step import BboxTLWH
 
 
-async def get_bbox_values(page: Page) -> Tuple[dict[int, BboxTLWH], str]:
+async def get_bbox_values(page: Page) -> tuple[dict[int, BboxTLWH], str]:
     """
     Get the bounding box values for all elements on the page and generate a new HTML DOM
     with nova-act-id attributes added to elements that pass the filtering conditions.

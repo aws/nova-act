@@ -17,7 +17,7 @@ import functools
 import os
 from contextvars import ContextVar
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Callable, Type, Union
+from typing import TYPE_CHECKING, Any, Callable, Union
 
 from boto3 import Session
 from botocore.config import Config
@@ -288,7 +288,7 @@ class Workflow:
             if has_env_api_key:
                 raise AuthError(get_api_key_error_message_for_workflow())
             # AuthError: No authentication credentials found (neither API key nor AWS credentials)
-            elif not has_any_aws_credentials:
+            if not has_any_aws_credentials:
                 raise AuthError(get_no_authentication_error())
 
         if nova_act_api_key is None:
@@ -331,7 +331,7 @@ class Workflow:
         return self
 
     def __exit__(
-        self, exc_type: Type[BaseException] | None, exc_value: BaseException | None, traceback: BaseException | None
+        self, exc_type: type[BaseException] | None, exc_value: BaseException | None, traceback: BaseException | None
     ) -> None:
         """Exit the workflow context and update the workflow run status.
 

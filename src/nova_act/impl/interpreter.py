@@ -105,14 +105,12 @@ class NovaActInterpreter:
         if isinstance(arg, dict):
             if arg.get("kind") == "ObjectExpression":
                 return NovaActInterpreter._parse_object_expression(arg)
-            elif (value := arg.get("value")) is not None:
+            if (value := arg.get("value")) is not None:
                 if arg.get("kind") == "Str" or isinstance(value, str):
-                    result = safe_string(value)
-                    return result
-                elif arg.get("kind") == "Number":
+                    return safe_string(value)
+                if arg.get("kind") == "Number":
                     return value
-                else:
-                    return value
+                return value
         return str(arg)
 
     # Handle "pressEnter" sub program

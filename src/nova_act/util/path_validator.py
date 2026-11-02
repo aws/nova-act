@@ -104,7 +104,20 @@ def _validate_file_access_path(candidate_path: str, allowed_paths: list[str], op
         for allowed_path in allowed_paths:
             try:
                 normalized_allowed = _normalize_path(allowed_path)
-                if _is_path_allowed(normalized_candidate_path, str(normalized_allowed)):
+                allowed_path_str = str(normalized_allowed)
+                if _is_path_allowed(normalized_candidate_path, allowed_path_str):
+                    # The lexical check above does not resolve symlinks, so a symlink that sits inside
+                    # an allowed location but points outside it would pass. Resolve symlinks on both
+                    # sides and re-check containment: the real candidate must still be within the real
+                    # allowed root (the leading non-wildcard portion of the pattern). This covers the
+                    # directory (``/dir/*``) and glob (``/dir/*.ext``, ``/dir/*/file``) patterns as
+                    # well as exact-file patterns. Both sides are resolved so a legitimately symlinked
+                    # allowed location (for example /tmp -> /private/tmp) still matches.
+                    # Pass the normalized candidate (home-expanded and made absolute): os.path.realpath
+                    # does not expand ``~``, so handing it the raw candidate would resolve a ``~/...``
+                    # path relative to the cwd and wrongly reject an otherwise-allowed path.
+                    if not _real_path_within_allowed_root(str(normalized_candidate_path), allowed_path_str):
+                        continue
                     return
             except Exception:
                 # Skip invalid patterns in the allowlist
@@ -227,6 +240,57 @@ def _normalize_path(path: str) -> Path:
     path = os.path.normpath(os.path.abspath(os.path.expanduser(path)))
 
     return Path(path)
+
+
+def _allowed_root_prefix(allowed_path_str: str) -> str:
+    """Return the leading portion of a normalized allowed pattern that contains no wildcard.
+
+    This is the fixed directory (or exact file) the pattern is anchored to, used as the containment
+    root for the symlink resolve-and-recheck. Examples: ``/dir/*`` and ``/dir/*.ext`` and
+    ``/dir/*/file.txt`` all anchor to ``/dir``; an exact file ``/dir/file.txt`` anchors to itself.
+
+    Args:
+        allowed_path_str: The normalized allowed pattern.
+
+    Returns:
+        The leading wildcard-free path prefix (at least the filesystem root).
+    """
+    root_parts: list[str] = []
+    for part in Path(allowed_path_str).parts:
+        if "*" in part:
+            break
+        root_parts.append(part)
+    return str(Path(*root_parts)) if root_parts else os.sep
+
+
+def _real_path_within_allowed_root(candidate_path: str, allowed_path_str: str) -> bool:
+    """Re-check containment after resolving symbolic links on both sides.
+
+    ``_is_path_allowed`` matches lexically and does not resolve symlinks, so a symlink inside an
+    allowed location whose target lies outside it would pass. This gate resolves the real target of
+    both the candidate and the allowed root (via ``os.path.realpath``) and confirms the real
+    candidate is still contained within (or, for an exact-file pattern, equal to) the real allowed
+    root. Both sides are resolved so an allowed location that is itself reached through a symlink
+    still matches.
+
+    Args:
+        candidate_path: The normalized candidate path (home-expanded and absolute, but not yet
+            symlink-resolved). It must be home-expanded because ``os.path.realpath`` does not expand
+            ``~``.
+        allowed_path_str: The normalized allowed pattern that matched lexically.
+
+    Returns:
+        True if the resolved candidate is still within the resolved allowed root, False otherwise.
+    """
+    real_candidate = Path(os.path.realpath(candidate_path))
+    real_allowed_root = os.path.realpath(_allowed_root_prefix(allowed_path_str))
+    try:
+        # relative_to returns "." for an exact match (exact-file pattern) and a subpath for a
+        # directory/glob pattern; a target outside the root raises ValueError.
+        real_candidate.relative_to(real_allowed_root)
+        return True
+    except ValueError:
+        return False
 
 
 def _is_path_allowed(candidate_file_path: Path, allowed_path_str: str) -> bool:
