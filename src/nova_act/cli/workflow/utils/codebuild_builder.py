@@ -66,7 +66,7 @@ class CodeBuildImageBuilder(ImageBuilder):
         self.account_id = account_id
         self.role_arn = role_arn
         self.codebuild_client = CodeBuildClient(session=session, region=region)
-        self.s3_client = S3Client(session=session, region=region)
+        self.s3_client = S3Client(session=session, region=region, account_id=account_id)
         self.bucket_manager = BucketManager(session=session, region=region, account_id=account_id)
 
     def build_and_push(self, build_dir: Path, image_tag: str, agent_name: str) -> ImageBuildResult:

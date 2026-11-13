@@ -28,7 +28,7 @@ class BucketManager:
     def __init__(self, session: Session | None, region: str, account_id: str):
         self.region = region
         self.account_id = account_id
-        self.s3_client = S3Client(session=session, region=region)
+        self.s3_client = S3Client(session=session, region=region, account_id=account_id)
 
     def _default_bucket_exists(self) -> bool:
         """Check if default bucket exists directly."""

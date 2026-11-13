@@ -100,3 +100,15 @@ class BrowserProcessDead(SessionError):
     """Raised when the browser process for a session is no longer running."""
 
     pass
+
+
+class BucketOwnershipError(NovaActCLIError):
+    """Raised when an S3 bucket exists but is owned by a different account.
+
+    Guards against S3 bucket-squatting: the default bucket name is derived from
+    the account id and region (``nova-act-<account>-<region>``), which is
+    predictable. If a third party pre-creates that bucket in their own account,
+    the tool must refuse to use it rather than silently write to it.
+    """
+
+    pass

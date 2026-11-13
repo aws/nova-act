@@ -368,7 +368,7 @@ class WorkflowManager:
             if custom_bucket_name:
                 info(f"Checking S3 bucket '{custom_bucket_name}'...")
                 # Validate custom bucket exists
-                s3_client = S3Client(session=self.session, region=self.region)
+                s3_client = S3Client(session=self.session, region=self.region, account_id=self.account_id)
                 if s3_client.bucket_exists(bucket_name=custom_bucket_name):
                     logger.info(f"Skipping creating existing custom S3 bucket: {custom_bucket_name}")
                     success("[OK] Using existing S3 bucket")
