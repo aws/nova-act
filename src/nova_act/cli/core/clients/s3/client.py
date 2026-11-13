@@ -18,28 +18,64 @@ import logging
 from boto3 import Session
 from botocore.exceptions import ClientError
 
+from nova_act.cli.core.exceptions import BucketOwnershipError
+
 logger = logging.getLogger(__name__)
 
 
 class S3Client:
-    """Client for S3 bucket operations."""
+    """Client for S3 bucket operations.
 
-    def __init__(self, session: Session | None, region: str):
+    Every call that acts on a bucket asserts ``ExpectedBucketOwner`` so the
+    client only ever touches buckets owned by ``account_id`` (the caller's own
+    account). This prevents bucket-squatting on the predictable default bucket
+    name ``nova-act-<account>-<region>``: a bucket of that name pre-created in
+    another account is rejected, not adopted.
+    """
+
+    def __init__(self, session: Session | None, region: str, account_id: str):
         self.region = region
+        self.account_id = account_id
         self.session = session or Session()
         self.client = self.session.client("s3", region_name=region)
 
     def bucket_exists(self, bucket_name: str) -> bool:
-        """Check if bucket exists and is accessible."""
+        """Check whether the bucket exists and is owned by this account.
+
+        Args:
+            bucket_name: The bucket to check.
+
+        Returns:
+            True if the bucket exists and is owned by ``account_id``; False if
+            it does not exist (safe to create).
+
+        Raises:
+            BucketOwnershipError: If the bucket exists but is owned by a
+                different account (or access is forbidden). The caller must not
+                treat this as "absent" and create/use the bucket.
+        """
         try:
-            self.client.head_bucket(Bucket=bucket_name)
+            self.client.head_bucket(Bucket=bucket_name, ExpectedBucketOwner=self.account_id)
             return True
-        except ClientError:
-            return False
+        except ClientError as e:
+            status = e.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+            code = e.response.get("Error", {}).get("Code")
+            # Bucket does not exist -> safe to create.
+            if status == 404 or code in ("404", "NoSuchBucket", "NotFound"):
+                return False
+            # Bucket exists but is not owned by this account (ExpectedBucketOwner
+            # mismatch returns 403), or access is otherwise forbidden. Never
+            # adopt it -- this is the bucket-squatting guard.
+            if status == 403 or code in ("403", "AccessDenied", "Forbidden"):
+                raise BucketOwnershipError(
+                    f"S3 bucket '{bucket_name}': ownership could not be verified for this account "
+                    f"(possible name collision or permissions issues)."
+                ) from e
+            raise
 
     def get_bucket_location(self, bucket_name: str) -> str:
         """Get bucket region."""
-        response = self.client.get_bucket_location(Bucket=bucket_name)
+        response = self.client.get_bucket_location(Bucket=bucket_name, ExpectedBucketOwner=self.account_id)
         region = response.get("LocationConstraint")
         return region or "us-east-1"
 
@@ -66,6 +102,7 @@ class S3Client:
         """Block all public access to the bucket."""
         self.client.put_public_access_block(
             Bucket=bucket_name,
+            ExpectedBucketOwner=self.account_id,
             PublicAccessBlockConfiguration={
                 "BlockPublicAcls": True,
                 "IgnorePublicAcls": True,
@@ -78,6 +115,7 @@ class S3Client:
         """Enable server-side encryption for the bucket."""
         self.client.put_bucket_encryption(
             Bucket=bucket_name,
+            ExpectedBucketOwner=self.account_id,
             ServerSideEncryptionConfiguration={
                 "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}]
             },
@@ -85,10 +123,19 @@ class S3Client:
 
     def _enable_versioning(self, bucket_name: str) -> None:
         """Enable versioning for the bucket."""
-        self.client.put_bucket_versioning(Bucket=bucket_name, VersioningConfiguration={"Status": "Enabled"})
+        self.client.put_bucket_versioning(
+            Bucket=bucket_name,
+            ExpectedBucketOwner=self.account_id,
+            VersioningConfiguration={"Status": "Enabled"},
+        )
 
     def upload_file(self, bucket: str, key: str, file_path: str) -> None:
-        """Upload a file to S3."""
+        """Upload a file to S3, asserting the destination bucket's owner."""
         logger.info(f"Uploading {file_path} to s3://{bucket}/{key}")
-        self.client.upload_file(Filename=file_path, Bucket=bucket, Key=key)
+        self.client.upload_file(
+            Filename=file_path,
+            Bucket=bucket,
+            Key=key,
+            ExtraArgs={"ExpectedBucketOwner": self.account_id},
+        )
         logger.info(f"Upload complete: s3://{bucket}/{key}")
