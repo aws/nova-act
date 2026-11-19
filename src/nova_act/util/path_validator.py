@@ -264,14 +264,19 @@ def _allowed_root_prefix(allowed_path_str: str) -> str:
 
 
 def _real_path_within_allowed_root(candidate_path: str, allowed_path_str: str) -> bool:
-    """Re-check containment after resolving symbolic links on both sides.
+    """Re-check the allowlist after resolving symbolic links on both sides.
 
     ``_is_path_allowed`` matches lexically and does not resolve symlinks, so a symlink inside an
     allowed location whose target lies outside it would pass. This gate resolves the real target of
-    both the candidate and the allowed root (via ``os.path.realpath``) and confirms the real
-    candidate is still contained within (or, for an exact-file pattern, equal to) the real allowed
-    root. Both sides are resolved so an allowed location that is itself reached through a symlink
-    still matches.
+    both the candidate and the allowed root (via ``os.path.realpath``), rebuilds the allowed pattern
+    on the resolved root, and re-runs the full pattern match against the resolved candidate.
+
+    Re-matching the full pattern (rather than only checking containment under the resolved root)
+    matters for glob patterns: with ``/dir/*.txt`` a symlink ``/dir/a.txt -> /dir/secret.key`` is
+    contained in ``/dir`` but its real target no longer matches ``*.txt``, so it must be rejected.
+    Both sides are resolved so an allowed location that is itself reached through a symlink (for
+    example ``/tmp -> /private/tmp``) still matches, and an exact-file pattern that itself names a
+    symlink still matches (both sides resolve to the same target).
 
     Args:
         candidate_path: The normalized candidate path (home-expanded and absolute, but not yet
@@ -280,17 +285,19 @@ def _real_path_within_allowed_root(candidate_path: str, allowed_path_str: str) -
         allowed_path_str: The normalized allowed pattern that matched lexically.
 
     Returns:
-        True if the resolved candidate is still within the resolved allowed root, False otherwise.
+        True if the resolved candidate still satisfies the allowed pattern rebuilt on the resolved
+        root, False otherwise.
     """
     real_candidate = Path(os.path.realpath(candidate_path))
-    real_allowed_root = os.path.realpath(_allowed_root_prefix(allowed_path_str))
-    try:
-        # relative_to returns "." for an exact match (exact-file pattern) and a subpath for a
-        # directory/glob pattern; a target outside the root raises ValueError.
-        real_candidate.relative_to(real_allowed_root)
-        return True
-    except ValueError:
-        return False
+
+    # Resolve the pattern's fixed (wildcard-free) root, then rebuild the pattern on that resolved
+    # root so the wildcard tail (e.g. ``*.txt``) is preserved and re-applied to the real candidate.
+    allowed_root = _allowed_root_prefix(allowed_path_str)
+    real_allowed_root = os.path.realpath(allowed_root)
+    tail = "" if allowed_path_str == allowed_root else os.path.relpath(allowed_path_str, allowed_root)
+    resolved_pattern = real_allowed_root if tail in ("", os.curdir) else os.path.join(real_allowed_root, tail)
+
+    return _is_path_allowed(real_candidate, resolved_pattern)
 
 
 def _is_path_allowed(candidate_file_path: Path, allowed_path_str: str) -> bool:
